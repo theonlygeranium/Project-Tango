@@ -10,13 +10,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v0.1.10
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: 136.25.112.246
           username: z121532
+          port: 22
           key: ${{ secrets.SCHUBERT_SSH_KEY }}
+          timeout: 60s
           script: |
             cd /opt/Project-Tango
             git pull origin main
