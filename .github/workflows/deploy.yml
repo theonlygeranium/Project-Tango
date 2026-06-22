@@ -1,0 +1,23 @@
+name: Deploy to Schubert
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: 136.25.112.246
+          username: z121532
+          key: ${{ secrets.SCHUBERT_SSH_KEY }}
+          script: |
+            cd /opt/Project-Tango
+            git pull origin main
+            bash scripts/deploy.sh
