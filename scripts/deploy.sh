@@ -5,9 +5,13 @@ DEPLOY_LOG=/opt/Project-Tango/logs/deploy.log
 mkdir -p /opt/Project-Tango/logs
 echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Starting deployment..." >> "$DEPLOY_LOG"
 
-# Install/update Python backend dependencies
-cd /opt/Project-Tango/backend
-pip install -q -r requirements.txt >> "$DEPLOY_LOG" 2>&1
+# Install/update Python backend dependencies using the project venv
+VENV_PIP=/opt/Project-Tango/backend/venv/bin/pip
+if [ -x "$VENV_PIP" ]; then
+  "$VENV_PIP" install -q -r /opt/Project-Tango/backend/requirements.txt >> "$DEPLOY_LOG" 2>&1
+else
+  echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] WARNING: venv not found at $VENV_PIP, skipping pip install" >> "$DEPLOY_LOG"
+fi
 
 # Build Next.js frontend
 cd /opt/Project-Tango/frontend
@@ -15,7 +19,6 @@ npm ci --silent >> "$DEPLOY_LOG" 2>&1
 npm run build >> "$DEPLOY_LOG" 2>&1
 
 # Restart systemd services
-cd /opt/Project-Tango
 systemctl restart tango-backend
 systemctl restart tango-web
 
