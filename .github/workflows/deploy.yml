@@ -12,31 +12,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Write and validate SSH key
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
+      - name: Write SSH key
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SCHUBERT_SSH_KEY }}" > ~/.ssh/deploy_key
+          printf '%s' "${{ secrets.SCHUBERT_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          echo "--- Key fingerprint ---"
-          ssh-keygen -l -f ~/.ssh/deploy_key || echo "KEY VALIDATION FAILED"
-          echo "--- Key header ---"
-          head -1 ~/.ssh/deploy_key
-          echo "--- Key footer ---"
-          tail -1 ~/.ssh/deploy_key
-          echo "--- Key line count ---"
-          wc -l ~/.ssh/deploy_key
+          ssh-keygen -l -f ~/.ssh/deploy_key
 
-      - name: Check host connectivity
+      - name: Deploy via Tailscale SSH
         run: |
-          echo "--- Testing TCP connectivity to 136.25.112.246:22 ---"
-          nc -zv -w 10 136.25.112.246 22 || echo "HOST UNREACHABLE on port 22"
-          echo "--- Attempting ssh-keyscan ---"
-          timeout 15 ssh-keyscan -H 136.25.112.246 >> ~/.ssh/known_hosts && echo "keyscan OK" || echo "keyscan FAILED"
-
-      - name: Deploy via SSH
-        run: |
-          ssh -vvv -i ~/.ssh/deploy_key \
+          ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout=30 \
-            z121532@136.25.112.246 \
+            z121532@100.86.47.6 \
             "cd /opt/Project-Tango && git pull origin main && bash scripts/deploy.sh"
