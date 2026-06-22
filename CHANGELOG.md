@@ -10,3 +10,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial project scaffolding provisioned by WRITER Agent via Schubert Project Provisioning playbook.
 - Foundation files: README, CHANGELOG, AGENTS.md, CONTINUITY.md.
 - Docker configuration and GitHub Actions CD pipeline.
+- Confluence knowledge base pages created and linked in AGENTS.md.

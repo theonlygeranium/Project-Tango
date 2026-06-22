@@ -19,12 +19,12 @@ Provide users with ready-to-use, specialized voice agents for diverse tasks (the
 
 **Confluence Space:** https://schubertlife.atlassian.net/wiki/spaces/tango/overview?homepageId=116064523
 **Confluence Page IDs:**
-- Overview: [PLACEHOLDER]
-- Architecture: [PLACEHOLDER]
-- Development Guide: [PLACEHOLDER]
-- API Reference: [PLACEHOLDER]
-- Runbooks: [PLACEHOLDER]
-- Design System: [PLACEHOLDER]
+- Overview: 114950670
+- Architecture: 116195403
+- Development Guide: 115474658
+- API Reference: 114360755
+- Runbooks: 115474679
+- Design System: 114590131
 
 ---
 
