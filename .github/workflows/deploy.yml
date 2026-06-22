@@ -12,19 +12,39 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install and connect Tailscale
+      - name: Install Tailscale
+        continue-on-error: true
         run: |
+          set -x
           curl -fsSL https://tailscale.com/install.sh | sudo sh
-          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --timeout=30s
-          echo "Tailscale status:"
-          sudo tailscale status
+          echo "Install exit: $?"
 
-      - name: Write SSH key
+      - name: Start Tailscale daemon
+        continue-on-error: true
+        run: |
+          set -x
+          sudo tailscaled --state=/tmp/tailscaled.state &
+          sleep 3
+          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --accept-routes --timeout=30s || echo "TAILSCALE UP EXIT: $?"
+          sudo tailscale status || echo "STATUS FAILED"
+
+      - name: Validate SSH key
+        continue-on-error: true
         run: |
           mkdir -p ~/.ssh
           printf '%s' "${{ secrets.SCHUBERT_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keygen -l -f ~/.ssh/deploy_key
+          echo "Key line count: $(wc -l < ~/.ssh/deploy_key)"
+          echo "Key first line: $(head -1 ~/.ssh/deploy_key)"
+          echo "Key last line: $(tail -1 ~/.ssh/deploy_key)"
+          ssh-keygen -l -f ~/.ssh/deploy_key && echo "KEY VALID" || echo "KEY INVALID"
+
+      - name: Test connectivity to Schubert
+        continue-on-error: true
+        run: |
+          echo "Pinging 100.86.47.6 via Tailscale:"
+          ping -c 3 100.86.47.6 || echo "PING FAILED"
+          nc -zv -w 10 100.86.47.6 22 || echo "PORT 22 UNREACHABLE"
 
       - name: Deploy via Tailscale SSH
         run: |
