@@ -30,4 +30,4 @@ jobs:
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout=30 \
             z121532@100.86.47.6 \
-            "cd /opt/Project-Tango && git pull origin main && bash scripts/deploy.sh"
+            "cd /opt/Project-Tango && sudo git pull origin main && sudo bash scripts/deploy.sh"
