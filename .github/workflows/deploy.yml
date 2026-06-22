@@ -12,17 +12,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH key
+      - name: Write and validate SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SCHUBERT_SSH_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.SCHUBERT_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H 136.25.112.246 >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
+          echo "--- Key fingerprint ---"
+          ssh-keygen -l -f ~/.ssh/deploy_key || echo "KEY VALIDATION FAILED"
+          echo "--- Key header ---"
+          head -1 ~/.ssh/deploy_key
+          echo "--- Key footer ---"
+          tail -1 ~/.ssh/deploy_key
+          echo "--- Key line count ---"
+          wc -l ~/.ssh/deploy_key
+
+      - name: Check host connectivity
+        run: |
+          echo "--- Testing TCP connectivity to 136.25.112.246:22 ---"
+          nc -zv -w 10 136.25.112.246 22 || echo "HOST UNREACHABLE on port 22"
+          echo "--- Attempting ssh-keyscan ---"
+          timeout 15 ssh-keyscan -H 136.25.112.246 >> ~/.ssh/known_hosts && echo "keyscan OK" || echo "keyscan FAILED"
 
       - name: Deploy via SSH
         run: |
-          ssh -i ~/.ssh/deploy_key \
+          ssh -vvv -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout=30 \
             z121532@136.25.112.246 \
