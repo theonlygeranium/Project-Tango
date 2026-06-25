@@ -71,6 +71,15 @@
   and persisted in conversation history.
 - Each agent prompt now receives the actual runtime LiteLLM alias, so personas
   answer model-identity questions from the routed alias instead of guessing.
+- Follow-up log review on 2026-06-25 found that the latest long Tita session was
+  intentionally routed through `writer/palmyra-x5-voice` by the frontend model
+  override. Model overrides are now per-call only: the frontend starts on
+  `Persona default` and resets the model selector to `Persona default` whenever
+  the persona changes, so Tita returns to `local/qwen3-fast` unless explicitly
+  overridden for that call.
+- The same Tita review found occasional late Tagalog STT finals and split user
+  phrases, so Pinoy Pride sessions now apply LiveKit endpointing
+  `min_delay=0.7` while the other personas keep the SDK default.
 
 Live inspection on 2026-06-22 confirmed the v1.2 LiteLLM aliases exist in
 `/opt/polyglot/services/litellm/litellm_config.yaml`.

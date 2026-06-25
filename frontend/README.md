@@ -22,4 +22,6 @@ NEXT_PUBLIC_CONN_DETAILS_ENDPOINT=http://localhost:8030/api/connection-details
 ```
 
 The persona selector sends the selected persona ID as the `persona` query parameter. The
-backend returns LiveKit connection details with persona metadata already embedded in the token.
+model selector can add an allowlisted `llm_model` override for a single call, but overrides
+are not restored from browser storage and reset to `Persona default` when the persona changes.
+The backend returns LiveKit connection details with persona metadata already embedded in the token.

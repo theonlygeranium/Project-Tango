@@ -49,6 +49,7 @@ LIVEKIT_URL = os.getenv("LIVEKIT_URL")
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
 TANGO_AGENT_NAME = os.getenv("TANGO_AGENT_NAME", "tango-agent")
+TAGALOG_ENDPOINTING_MIN_DELAY = 0.7
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -108,6 +109,12 @@ def _room_name(persona: Persona, requested_room: str | None = None) -> str:
     if requested_room:
         return requested_room
     return f"tango_{persona.id}_{uuid.uuid4().hex[:10]}"
+
+
+def _turn_handling_for_persona(persona: Persona) -> dict[str, Any]:
+    if persona.stt_language == "tl":
+        return {"endpointing": {"min_delay": TAGALOG_ENDPOINTING_MIN_DELAY}}
+    return {}
 
 
 def _json_object(value: str | None) -> dict[str, Any]:
@@ -501,15 +508,18 @@ async def entrypoint(ctx: Any) -> None:
     persona = get_persona(participant_context.get("persona_id") or _persona_id_from_job_context(ctx))
     llm_model = resolve_llm_model(persona, participant_context.get("llm_model"))
     room_name = getattr(getattr(ctx, "room", None), "name", "unknown")
+    turn_handling = _turn_handling_for_persona(persona)
+    endpointing_min_delay = turn_handling.get("endpointing", {}).get("min_delay", "default")
 
     logger.info(
-        "Starting Tango agent room=%s persona_id=%s model=%s default_model=%s voice_id=%s stt_language=%s llm_base_url=%s",
+        "Starting Tango agent room=%s persona_id=%s model=%s default_model=%s voice_id=%s stt_language=%s endpointing_min_delay=%s llm_base_url=%s",
         room_name,
         persona.id,
         llm_model,
         persona.llm_model,
         persona.voice_id,
         persona.stt_language,
+        endpointing_min_delay,
         LITELLM_BASE_URL,
     )
 
@@ -554,6 +564,7 @@ async def entrypoint(ctx: Any) -> None:
             streaming_latency=3,
             auto_mode=True,
         ),
+        turn_handling=turn_handling,
         use_tts_aligned_transcript=True,
     )
 

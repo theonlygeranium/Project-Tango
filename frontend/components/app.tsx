@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Room, RoomEvent } from 'livekit-client';
 import { motion } from 'motion/react';
 import { RoomAudioRenderer, RoomContext, StartAudio } from '@livekit/components-react';
@@ -10,12 +10,7 @@ import { SessionView } from '@/components/session-view';
 import { Toaster } from '@/components/ui/sonner';
 import { Welcome } from '@/components/welcome';
 import useConnectionDetails from '@/hooks/useConnectionDetails';
-import {
-  DEFAULT_LLM_MODEL_SELECTION_ID,
-  LLM_MODEL_STORAGE_KEY,
-  type LlmModelSelectionId,
-  isLlmModelSelectionId,
-} from '@/lib/llm-models';
+import { DEFAULT_LLM_MODEL_SELECTION_ID, type LlmModelSelectionId } from '@/lib/llm-models';
 import {
   DEFAULT_PERSONA_ID,
   PERSONA_STORAGE_KEY,
@@ -40,21 +35,6 @@ function readStoredPersonaId(): PersonaId {
   }
 }
 
-function readStoredLlmModelId(): LlmModelSelectionId {
-  if (typeof window === 'undefined') {
-    return DEFAULT_LLM_MODEL_SELECTION_ID;
-  }
-
-  try {
-    const storedLlmModelId = window.localStorage.getItem(LLM_MODEL_STORAGE_KEY);
-    return isLlmModelSelectionId(storedLlmModelId)
-      ? storedLlmModelId
-      : DEFAULT_LLM_MODEL_SELECTION_ID;
-  } catch {
-    return DEFAULT_LLM_MODEL_SELECTION_ID;
-  }
-}
-
 interface AppProps {
   appConfig: AppConfig;
 }
@@ -76,7 +56,6 @@ export function App({ appConfig }: AppProps) {
 
   useEffect(() => {
     setSelectedPersonaId(readStoredPersonaId());
-    setSelectedLlmModelId(readStoredLlmModelId());
     setPreferencesReady(true);
   }, []);
 
@@ -89,16 +68,6 @@ export function App({ appConfig }: AppProps) {
       }
     }
   }, [preferencesReady, selectedPersonaId]);
-
-  useEffect(() => {
-    if (preferencesReady) {
-      try {
-        window.localStorage.setItem(LLM_MODEL_STORAGE_KEY, selectedLlmModelId);
-      } catch {
-        // Storage can be unavailable in restricted browser contexts.
-      }
-    }
-  }, [preferencesReady, selectedLlmModelId]);
 
   useEffect(() => {
     const onDisconnected = () => {
@@ -211,6 +180,10 @@ export function App({ appConfig }: AppProps) {
   ]);
 
   const { startButtonText } = appConfig;
+  const handlePersonaChange = useCallback((personaId: PersonaId) => {
+    setSelectedPersonaId(personaId);
+    setSelectedLlmModelId(DEFAULT_LLM_MODEL_SELECTION_ID);
+  }, []);
 
   return (
     <>
@@ -218,7 +191,7 @@ export function App({ appConfig }: AppProps) {
         key="welcome"
         startButtonText={startButtonText}
         selectedPersonaId={selectedPersonaId}
-        onPersonaChange={setSelectedPersonaId}
+        onPersonaChange={handlePersonaChange}
         selectedLlmModelId={selectedLlmModelId}
         onLlmModelChange={setSelectedLlmModelId}
         onStartCall={() => {
