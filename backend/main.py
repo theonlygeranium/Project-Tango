@@ -41,6 +41,7 @@ LITELLM_MASTER_KEY = os.getenv("LITELLM_MASTER_KEY", "dummy")
 LIVEKIT_URL = os.getenv("LIVEKIT_URL")
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
+TANGO_AGENT_NAME = os.getenv("TANGO_AGENT_NAME", "tango-agent")
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -430,19 +431,19 @@ def _usage_total_tokens(usage: Any) -> int:
 
 async def _dispatch_agent(room_name: str) -> None:
     """Explicitly dispatch the registered LiveKit worker to this room.
-    
-    In livekit-agents 1.x workers do NOT auto-join rooms on participant connect.
-    The backend must call create_dispatch() after every token issuance.
+
+    The worker has an agent_name, so LiveKit will not auto-dispatch it to every
+    room. The frontend calls this endpoint after the participant joins.
     """
     try:
         from livekit import api as _lkapi
         async with _lkapi.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET) as _client:
             await _client.agent_dispatch.create_dispatch(
-                _lkapi.CreateAgentDispatchRequest(room=room_name, agent_name="")
+                _lkapi.CreateAgentDispatchRequest(room=room_name, agent_name=TANGO_AGENT_NAME)
             )
-        logger.info("Agent dispatched room=%s", room_name)
+        logger.info("Agent dispatched room=%s agent_name=%s", room_name, TANGO_AGENT_NAME)
     except Exception:
-        logger.exception("Agent dispatch failed room=%s", room_name)
+        logger.exception("Agent dispatch failed room=%s agent_name=%s", room_name, TANGO_AGENT_NAME)
 
 
 @app.post("/api/dispatch")
@@ -613,6 +614,7 @@ if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
+            agent_name=TANGO_AGENT_NAME,
             shutdown_process_timeout=15.0,
         )
     )

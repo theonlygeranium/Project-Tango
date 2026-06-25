@@ -118,16 +118,30 @@ export function App({ appConfig }: AppProps) {
           return;
         }
 
-        // Dispatch agent into room AFTER participant has joined
-        // Dispatch agent into room AFTER participant has joined
         try {
-          const _apiBase = 'https://tango-api.schubert.life';
-          await fetch(_apiBase + '/api/dispatch', {
+          const apiBase = 'https://tango-api.schubert.life';
+          const dispatchResponse = await fetch(apiBase + '/api/dispatch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ room_name: connectionDetails.roomName }),
           });
-        } catch {}
+          if (!dispatchResponse.ok) {
+            throw new Error(`Dispatch failed with HTTP ${dispatchResponse.status}`);
+          }
+        } catch (error) {
+          if (aborted) {
+            return;
+          }
+
+          const dispatchError = error instanceof Error ? error : new Error(String(error));
+          toastAlert({
+            title: 'Agent dispatch failed. Retrying...',
+            description: dispatchError.message,
+          });
+          refreshConnectionDetails();
+          setSessionStarted(false);
+          return;
+        }
 
         try {
           await room.localParticipant.setMicrophoneEnabled(true, undefined, {
