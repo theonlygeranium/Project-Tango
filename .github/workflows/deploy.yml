@@ -25,6 +25,14 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keygen -l -f ~/.ssh/deploy_key && echo "KEY VALID"
 
+      - name: Write frontend .env.local on Schubert
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=30 \
+            z121532@100.86.47.6 \
+            "printf 'NEXT_PUBLIC_LIVEKIT_URL=wss://project-tango-0xs3szq3.livekit.cloud\nNEXT_PUBLIC_SITE_URL=https://project-tango.schubert.life\nNEXT_PUBLIC_API_BASE_URL=https://tango-api.schubert.life\nNEXT_PUBLIC_CONN_DETAILS_ENDPOINT=https://tango-api.schubert.life/api/connection-details\n' > /opt/Project-Tango/frontend/.env.local"
+
       - name: Deploy via Tailscale SSH
         run: |
           ssh -i ~/.ssh/deploy_key \
