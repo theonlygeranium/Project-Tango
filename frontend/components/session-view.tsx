@@ -16,6 +16,11 @@ import { ChatMessageView } from '@/components/livekit/chat/chat-message-view';
 import { MediaTiles } from '@/components/livekit/media-tiles';
 import useChatAndTranscription from '@/hooks/useChatAndTranscription';
 import { useDebugMode } from '@/hooks/useDebug';
+import {
+  DEFAULT_LLM_MODEL_SELECTION_ID,
+  type LlmModelSelectionId,
+  getLlmModelOption,
+} from '@/lib/llm-models';
 import { type PersonaId, getPersona } from '@/lib/personas';
 import type { AppConfig } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -41,6 +46,7 @@ function readCaptionsEnabled() {
 interface SessionViewProps {
   appConfig: AppConfig;
   selectedPersonaId: PersonaId;
+  selectedLlmModelId: LlmModelSelectionId;
   disabled: boolean;
   sessionStarted: boolean;
 }
@@ -48,6 +54,7 @@ interface SessionViewProps {
 export const SessionView = ({
   appConfig,
   selectedPersonaId,
+  selectedLlmModelId,
   disabled,
   sessionStarted,
   ref,
@@ -60,6 +67,11 @@ export const SessionView = ({
   const { messages, send } = useChatAndTranscription();
   const room = useRoomContext();
   const selectedPersona = getPersona(selectedPersonaId);
+  const selectedModel = getLlmModelOption(
+    selectedLlmModelId === DEFAULT_LLM_MODEL_SELECTION_ID
+      ? selectedPersona.defaultLlmModel
+      : selectedLlmModelId
+  );
 
   useDebugMode();
 
@@ -196,7 +208,7 @@ export const SessionView = ({
               )}
             >
               <span className="rounded-full border border-white/15 bg-black/50 px-3 py-1 font-mono text-[0.65rem] font-bold tracking-wider text-white/70 uppercase backdrop-blur-md">
-                Talking with {selectedPersona.displayName}
+                {selectedPersona.displayName} / {selectedModel.shortLabel}
               </span>
             </div>
             {appConfig.isPreConnectBufferEnabled && (

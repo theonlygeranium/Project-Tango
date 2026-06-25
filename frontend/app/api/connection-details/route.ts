@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { AccessToken, type AccessTokenOptions, type VideoGrant } from 'livekit-server-sdk';
+import { type LlmModelId, isLlmModelId } from '@/lib/llm-models';
 import { DEFAULT_PERSONA_ID, type PersonaId, getPersona } from '@/lib/personas';
 
 // NOTE: you are expected to define the following environment variables in `.env.local`:
@@ -16,6 +17,7 @@ export type ConnectionDetails = {
   roomName: string;
   participantName: string;
   participantToken: string;
+  llmModel: string;
   persona: ReturnType<typeof getPersona>;
 };
 
@@ -25,6 +27,11 @@ function parsePersonaId(request: NextRequest): PersonaId {
     request.nextUrl.searchParams.get('persona') ??
     DEFAULT_PERSONA_ID;
   return getPersona(persona).id;
+}
+
+function parseLlmModel(request: NextRequest): LlmModelId | undefined {
+  const llmModel = request.nextUrl.searchParams.get('llm_model');
+  return isLlmModelId(llmModel) ? llmModel : undefined;
 }
 
 function maskClientIp(rawIp: string | null) {
@@ -74,6 +81,7 @@ export async function GET(request: NextRequest) {
 
     // Generate participant token
     const persona = getPersona(parsePersonaId(request));
+    const llmModel = parseLlmModel(request) ?? persona.defaultLlmModel;
     const participantName = 'Project Tango User';
     const participantIdentity = `tango_user_${crypto.randomUUID().slice(0, 8)}`;
     const roomName = `tango_${persona.id}_${crypto.randomUUID().slice(0, 10)}`;
@@ -85,11 +93,13 @@ export async function GET(request: NextRequest) {
           persona_id: persona.id,
           persona: persona.id,
           display_name: persona.displayName,
+          llm_model: llmModel,
           history: historyContext(request),
         }),
         attributes: {
           'tango.persona': persona.id,
           'tango.display_name': persona.displayName,
+          'tango.llm_model': llmModel,
         },
       },
       roomName
@@ -101,6 +111,7 @@ export async function GET(request: NextRequest) {
       roomName,
       participantToken: participantToken,
       participantName,
+      llmModel,
       persona,
     };
     const headers = new Headers({

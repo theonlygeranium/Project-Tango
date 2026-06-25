@@ -2,9 +2,11 @@
 
 import React, { useEffect, useRef } from 'react';
 import { FaReact } from 'react-icons/fa';
+import { LlmModelSelector } from '@/components/LlmModelSelector';
 import { PersonaSelector } from '@/components/PersonaSelector';
 import { TippingButton } from '@/components/TippingButton';
 import { Button } from '@/components/ui/button';
+import { type LlmModelSelectionId } from '@/lib/llm-models';
 import { type PersonaId } from '@/lib/personas';
 
 interface AnimatedSquaresProps {
@@ -150,12 +152,25 @@ interface WelcomeProps {
   disabled: boolean;
   startButtonText: string;
   selectedPersonaId: PersonaId;
+  selectedLlmModelId: LlmModelSelectionId;
   onPersonaChange: (personaId: PersonaId) => void;
+  onLlmModelChange: (llmModelId: LlmModelSelectionId) => void;
   onStartCall: () => void;
 }
 
 export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
-  ({ disabled, startButtonText, selectedPersonaId, onPersonaChange, onStartCall }, ref) => {
+  (
+    {
+      disabled,
+      startButtonText,
+      selectedPersonaId,
+      selectedLlmModelId,
+      onPersonaChange,
+      onLlmModelChange,
+      onStartCall,
+    },
+    ref
+  ) => {
     function handleTipComplete(): void {
       // Show a thank you message or perform any desired action after tipping
       console.log('Tip animation finished! Thanks for the tip!');
@@ -191,6 +206,15 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
             <PersonaSelector
               selectedPersonaId={selectedPersonaId}
               onPersonaChange={onPersonaChange}
+              disabled={disabled}
+            />
+          </div>
+
+          <div className="pointer-events-auto flex w-full flex-col items-center gap-2">
+            <span className="text-foreground/60 font-mono text-xs font-bold uppercase">Model</span>
+            <LlmModelSelector
+              selectedLlmModelId={selectedLlmModelId}
+              onLlmModelChange={onLlmModelChange}
               disabled={disabled}
             />
           </div>

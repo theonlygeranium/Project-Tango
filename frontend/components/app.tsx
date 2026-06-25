@@ -11,6 +11,12 @@ import { Toaster } from '@/components/ui/sonner';
 import { Welcome } from '@/components/welcome';
 import useConnectionDetails from '@/hooks/useConnectionDetails';
 import {
+  DEFAULT_LLM_MODEL_SELECTION_ID,
+  LLM_MODEL_STORAGE_KEY,
+  type LlmModelSelectionId,
+  isLlmModelSelectionId,
+} from '@/lib/llm-models';
+import {
   DEFAULT_PERSONA_ID,
   PERSONA_STORAGE_KEY,
   type PersonaId,
@@ -34,6 +40,21 @@ function readStoredPersonaId(): PersonaId {
   }
 }
 
+function readStoredLlmModelId(): LlmModelSelectionId {
+  if (typeof window === 'undefined') {
+    return DEFAULT_LLM_MODEL_SELECTION_ID;
+  }
+
+  try {
+    const storedLlmModelId = window.localStorage.getItem(LLM_MODEL_STORAGE_KEY);
+    return isLlmModelSelectionId(storedLlmModelId)
+      ? storedLlmModelId
+      : DEFAULT_LLM_MODEL_SELECTION_ID;
+  } catch {
+    return DEFAULT_LLM_MODEL_SELECTION_ID;
+  }
+}
+
 interface AppProps {
   appConfig: AppConfig;
 }
@@ -43,26 +64,41 @@ export function App({ appConfig }: AppProps) {
   const [sessionStarted, setSessionStarted] = useState(false);
   const [canPlayAudio, setCanPlayAudio] = useState(room.canPlaybackAudio);
   const [selectedPersonaId, setSelectedPersonaId] = useState<PersonaId>(DEFAULT_PERSONA_ID);
-  const [personaStorageReady, setPersonaStorageReady] = useState(false);
+  const [selectedLlmModelId, setSelectedLlmModelId] = useState<LlmModelSelectionId>(
+    DEFAULT_LLM_MODEL_SELECTION_ID
+  );
+  const [preferencesReady, setPreferencesReady] = useState(false);
   const { connectionDetails, refreshConnectionDetails } = useConnectionDetails(
     selectedPersonaId,
-    personaStorageReady
+    selectedLlmModelId,
+    preferencesReady && sessionStarted
   );
 
   useEffect(() => {
     setSelectedPersonaId(readStoredPersonaId());
-    setPersonaStorageReady(true);
+    setSelectedLlmModelId(readStoredLlmModelId());
+    setPreferencesReady(true);
   }, []);
 
   useEffect(() => {
-    if (personaStorageReady) {
+    if (preferencesReady) {
       try {
         window.localStorage.setItem(PERSONA_STORAGE_KEY, selectedPersonaId);
       } catch {
         // Storage can be unavailable in restricted browser contexts.
       }
     }
-  }, [personaStorageReady, selectedPersonaId]);
+  }, [preferencesReady, selectedPersonaId]);
+
+  useEffect(() => {
+    if (preferencesReady) {
+      try {
+        window.localStorage.setItem(LLM_MODEL_STORAGE_KEY, selectedLlmModelId);
+      } catch {
+        // Storage can be unavailable in restricted browser contexts.
+      }
+    }
+  }, [preferencesReady, selectedLlmModelId]);
 
   useEffect(() => {
     const onDisconnected = () => {
@@ -183,6 +219,8 @@ export function App({ appConfig }: AppProps) {
         startButtonText={startButtonText}
         selectedPersonaId={selectedPersonaId}
         onPersonaChange={setSelectedPersonaId}
+        selectedLlmModelId={selectedLlmModelId}
+        onLlmModelChange={setSelectedLlmModelId}
         onStartCall={() => {
           void room
             .startAudio()
@@ -209,6 +247,7 @@ export function App({ appConfig }: AppProps) {
           key="session-view"
           appConfig={appConfig}
           selectedPersonaId={selectedPersonaId}
+          selectedLlmModelId={selectedLlmModelId}
           disabled={!sessionStarted}
           sessionStarted={sessionStarted}
           initial={{ opacity: 0 }}

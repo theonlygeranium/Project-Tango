@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ConnectionDetails } from '@/app/api/connection-details/route';
+import {
+  DEFAULT_LLM_MODEL_SELECTION_ID,
+  type LlmModelSelectionId,
+  llmModelRequestValue,
+} from '@/lib/llm-models';
 import { DEFAULT_PERSONA_ID, type PersonaId } from '@/lib/personas';
 
-export default function useConnectionDetails(personaId: PersonaId = DEFAULT_PERSONA_ID, enabled = true) {
+export default function useConnectionDetails(
+  personaId: PersonaId = DEFAULT_PERSONA_ID,
+  llmModelSelectionId: LlmModelSelectionId = DEFAULT_LLM_MODEL_SELECTION_ID,
+  enabled = true
+) {
   // Generate room connection details, including:
   //   - A random Room name
   //   - A random Participant name
@@ -22,6 +31,10 @@ export default function useConnectionDetails(personaId: PersonaId = DEFAULT_PERS
       (apiBaseUrl ? `${apiBaseUrl.replace(/\/$/, '')}/api/connection-details` : '/api/connection-details');
     const url = new URL(endpoint, window.location.origin);
     url.searchParams.set('persona_id', personaId);
+    const llmModel = llmModelRequestValue(llmModelSelectionId);
+    if (llmModel) {
+      url.searchParams.set('llm_model', llmModel);
+    }
     fetch(url.toString())
       .then((res) => res.json())
       .then((data) => {
@@ -30,7 +43,7 @@ export default function useConnectionDetails(personaId: PersonaId = DEFAULT_PERS
       .catch((error) => {
         console.error('Error fetching connection details:', error);
       });
-  }, [personaId]);
+  }, [personaId, llmModelSelectionId]);
 
   useEffect(() => {
     if (enabled) { fetchConnectionDetails(); }

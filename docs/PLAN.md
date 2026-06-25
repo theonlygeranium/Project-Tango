@@ -65,6 +65,10 @@
 - Tita now uses persona-specific Deepgram Nova-3 Tagalog STT (`language="tl"`)
   for the current Tagalog/Filipino test pass. Damian, Chris, and Nathaniel
   remain on `en-US`.
+- The welcome screen now has an allowlisted LLM switcher for `Persona default`,
+  `local/qwen3-fast`, and `writer/palmyra-x5-voice`. The selected alias is
+  included in token metadata/attributes, validated again by the worker, logged,
+  and persisted in conversation history.
 
 Live inspection on 2026-06-22 confirmed the v1.2 LiteLLM aliases exist in
 `/opt/polyglot/services/litellm/litellm_config.yaml`.

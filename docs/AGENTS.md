@@ -90,6 +90,11 @@ the LiveKit token metadata, participant attributes, and generated room name. The
 use that persona to choose the ElevenLabs voice, LiteLLM model string, Deepgram STT language, and
 system prompt.
 
+The frontend may request a specific LiteLLM alias through `llm_model`, but the backend must validate
+that value against the allowlist in `backend/personas.py`. Unknown model strings must fall back to
+the persona default. Do not expose arbitrary model names to LiveKit token metadata or the OpenAI
+plugin constructor.
+
 ## Validation Floor
 
 Run these before marking the bootstrap complete:
@@ -103,6 +108,8 @@ Run these before marking the bootstrap complete:
 7. Confirm backend logs show `http://localhost:4000`, not `api.openai.com`.
 8. Confirm Therapy logs show `local/qwen3-fast`.
 9. Switch to Chris and confirm logs show `writer/palmyra-x5-voice`.
-10. Confirm `deploy/tango-backend.service`, `deploy/tango-web.service`, and
+10. Select Chris with the local model switcher option and confirm logs show
+    `local/qwen3-fast`.
+11. Confirm `deploy/tango-backend.service`, `deploy/tango-web.service`, and
     `deploy/Caddyfile.tango-api` exist and are deploy-safe.
-11. Run `bash -n deploy/schubert-preflight.sh`.
+12. Run `bash -n deploy/schubert-preflight.sh`.

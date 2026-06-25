@@ -11,6 +11,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
+import { LLM_MODEL_OPTIONS } from '@/lib/llm-models';
 import { getPersona } from '@/lib/personas';
 import { cn } from '@/lib/utils';
 
@@ -85,6 +86,14 @@ function formatDuration(seconds: number | null) {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${remainingSeconds}s`;
+}
+
+function formatModel(modelId: string | null) {
+  if (!modelId) {
+    return 'Unknown model';
+  }
+
+  return LLM_MODEL_OPTIONS.find((option) => option.id === modelId)?.shortLabel ?? modelId;
 }
 
 export function HistoryPanel({ hidden = false }: HistoryPanelProps) {
@@ -234,6 +243,9 @@ export function HistoryPanel({ hidden = false }: HistoryPanelProps) {
                       <span className="text-muted-foreground block truncate text-xs">
                         {formatSessionTime(session.started_at)}
                       </span>
+                      <span className="text-muted-foreground block truncate font-mono text-[0.65rem] uppercase">
+                        {formatModel(session.llm_model)}
+                      </span>
                     </span>
                     <span className="text-muted-foreground shrink-0 text-right font-mono text-[0.68rem] uppercase">
                       <span className="block">{formatDuration(session.duration_secs)}</span>
@@ -261,6 +273,9 @@ export function HistoryPanel({ hidden = false }: HistoryPanelProps) {
                     <p className="truncate text-sm font-semibold">{selectedSession.persona_name}</p>
                     <p className="text-muted-foreground truncate text-xs">
                       {formatSessionTime(selectedSession.started_at)}
+                    </p>
+                    <p className="text-muted-foreground truncate font-mono text-[0.65rem] uppercase">
+                      {formatModel(selectedSession.llm_model)}
                     </p>
                   </div>
                 </div>

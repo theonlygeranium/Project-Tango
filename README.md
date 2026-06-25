@@ -55,6 +55,11 @@ Tita uses Deepgram Nova-3 Tagalog transcription (`tl`) so spoken Tagalog and
 Filipino are recognized during the current test pass; the other personas stay
 on English (`en-US`).
 
+The welcome screen also includes an allowlisted model switcher. `Persona default`
+uses the persona table above; `Schubert Local Qwen3` forces `local/qwen3-fast`,
+and `Writer Palmyra X5` forces `writer/palmyra-x5-voice`. The backend rejects
+unknown model strings and never calls Ollama directly.
+
 ## Media Controls
 
 The microphone, camera, and screen-share controls are inherited from the AURA LiveKit
@@ -98,7 +103,9 @@ Open `http://localhost:3006`.
 7. Confirm backend logs show `http://localhost:4000`, not `api.openai.com`.
 8. Confirm Therapy uses `local/qwen3-fast`.
 9. Switch to Chris and confirm model routing changes to `writer/palmyra-x5-voice`.
-10. Confirm deploy artifacts exist in `deploy/`.
-11. Run `bash -n deploy/schubert-preflight.sh`.
+10. Select Chris with `Schubert Local Qwen3` and confirm backend logs show
+    `model=local/qwen3-fast`.
+11. Confirm deploy artifacts exist in `deploy/`.
+12. Run `bash -n deploy/schubert-preflight.sh`.
 
 Read `docs/AGENTS.md` before making further changes.

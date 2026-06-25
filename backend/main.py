@@ -28,7 +28,14 @@ from history import (
     mask_client_ip,
     record_turn,
 )
-from personas import DEFAULT_PERSONA_ID, Persona, get_persona, list_personas
+from personas import (
+    DEFAULT_PERSONA_ID,
+    Persona,
+    get_persona,
+    list_llm_models,
+    list_personas,
+    resolve_llm_model,
+)
 
 dotenv_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
@@ -79,6 +86,7 @@ class TokenRequest(BaseModel):
     participant_attributes: dict[str, str] = Field(default_factory=dict)
     persona_id: str | None = None
     persona: str | None = None
+    llm_model: str | None = None
     room_config: dict[str, Any] | None = None
 
 
@@ -136,6 +144,7 @@ def _request_history_context(request: Request | None) -> dict[str, str]:
 
 def _token_metadata(
     persona: Persona,
+    llm_model: str,
     existing_metadata: str | None = None,
     history_context: dict[str, str] | None = None,
 ) -> str:
@@ -144,6 +153,7 @@ def _token_metadata(
         {
             "persona_id": persona.id,
             "display_name": persona.display_name,
+            "llm_model": llm_model,
         }
     )
     if history_context:
@@ -151,17 +161,19 @@ def _token_metadata(
     return json.dumps(payload)
 
 
-def _token_attributes(persona: Persona, request: TokenRequest) -> dict[str, str]:
+def _token_attributes(persona: Persona, request: TokenRequest, llm_model: str) -> dict[str, str]:
     return {
         **request.participant_attributes,
         "tango.persona": persona.id,
         "tango.display_name": persona.display_name,
+        "tango.llm_model": llm_model,
     }
 
 
 def create_participant_token(
     request: TokenRequest,
     persona: Persona,
+    llm_model: str,
     room_name: str,
     history_context: dict[str, str] | None = None,
 ) -> str:
@@ -173,8 +185,10 @@ def create_participant_token(
     token = token.with_identity(
         request.participant_identity or f"tango_user_{uuid.uuid4().hex[:8]}"
     ).with_name(request.participant_name or "Project Tango User")
-    token = token.with_metadata(_token_metadata(persona, request.participant_metadata, history_context))
-    token = token.with_attributes(_token_attributes(persona, request))
+    token = token.with_metadata(
+        _token_metadata(persona, llm_model, request.participant_metadata, history_context)
+    )
+    token = token.with_attributes(_token_attributes(persona, request, llm_model))
     token = token.with_grants(
         api.VideoGrants(
             room_join=True,
@@ -192,16 +206,18 @@ def create_participant_token(
 
 def connection_details(request: TokenRequest, http_request: Request | None = None) -> dict[str, Any]:
     persona = get_persona(request.persona_id or request.persona)
+    llm_model = resolve_llm_model(persona, request.llm_model)
     room_name = _room_name(persona, request.room_name)
     history_context = _request_history_context(http_request)
-    participant_token = create_participant_token(request, persona, room_name, history_context)
+    participant_token = create_participant_token(request, persona, llm_model, room_name, history_context)
     persona_payload = persona.public_dict()
 
     logger.info(
-        "Issued Tango token room=%s persona_id=%s model=%s voice_id=%s llm_base_url=%s",
+        "Issued Tango token room=%s persona_id=%s model=%s requested_model=%s voice_id=%s llm_base_url=%s",
         room_name,
         persona.id,
-        persona.llm_model,
+        llm_model,
+        request.llm_model,
         persona.voice_id,
         LITELLM_BASE_URL,
     )
@@ -215,6 +231,8 @@ def connection_details(request: TokenRequest, http_request: Request | None = Non
         "roomName": room_name,
         "participant_name": request.participant_name or "Project Tango User",
         "participantName": request.participant_name or "Project Tango User",
+        "llm_model": llm_model,
+        "llmModel": llm_model,
         "persona": persona_payload,
     }
 
@@ -226,6 +244,7 @@ async def health() -> dict[str, Any]:
         "service": "project-tango-backend",
         "litellm_base_url": LITELLM_BASE_URL,
         "personas": [persona["id"] for persona in list_personas()],
+        "llm_models": [model["id"] for model in list_llm_models()],
     }
 
 
@@ -236,7 +255,11 @@ async def healthz() -> str:
 
 @app.get("/api/personas")
 async def personas() -> dict[str, Any]:
-    return {"default_persona_id": DEFAULT_PERSONA_ID, "personas": list_personas()}
+    return {
+        "default_persona_id": DEFAULT_PERSONA_ID,
+        "personas": list_personas(),
+        "llm_models": list_llm_models(),
+    }
 
 
 @app.get("/api/connection-details")
@@ -244,10 +267,11 @@ async def get_connection_details(
     request: Request,
     persona: str | None = None,
     persona_id: str | None = None,
+    llm_model: str | None = None,
     room_name: str | None = None,
 ) -> dict[str, Any]:
     details = connection_details(
-        TokenRequest(persona_id=persona_id or persona, room_name=room_name),
+        TokenRequest(persona_id=persona_id or persona, llm_model=llm_model, room_name=room_name),
         http_request=request,
     )
     return details
@@ -355,6 +379,10 @@ def _history_context_from_participant(participant: Any | None) -> dict[str, str]
     persona_id = payload.get("persona_id") or attributes.get("tango.persona")
     if isinstance(persona_id, str):
         context["persona_id"] = persona_id
+
+    llm_model = payload.get("llm_model") or attributes.get("tango.llm_model")
+    if isinstance(llm_model, str):
+        context["llm_model"] = llm_model
 
     client_ip = history_context.get("client_ip") or attributes.get("tango.client_ip")
     if isinstance(client_ip, str):
@@ -471,12 +499,14 @@ async def entrypoint(ctx: Any) -> None:
     participant = await ctx.wait_for_participant()
     participant_context = _history_context_from_participant(participant)
     persona = get_persona(participant_context.get("persona_id") or _persona_id_from_job_context(ctx))
+    llm_model = resolve_llm_model(persona, participant_context.get("llm_model"))
     room_name = getattr(getattr(ctx, "room", None), "name", "unknown")
 
     logger.info(
-        "Starting Tango agent room=%s persona_id=%s model=%s voice_id=%s stt_language=%s llm_base_url=%s",
+        "Starting Tango agent room=%s persona_id=%s model=%s default_model=%s voice_id=%s stt_language=%s llm_base_url=%s",
         room_name,
         persona.id,
+        llm_model,
         persona.llm_model,
         persona.voice_id,
         persona.stt_language,
@@ -489,7 +519,7 @@ async def entrypoint(ctx: Any) -> None:
             persona_id=persona.id,
             persona_name=persona.display_name,
             livekit_room=room_name,
-            llm_model=persona.llm_model,
+            llm_model=llm_model,
             user_agent=participant_context.get("user_agent"),
             client_ip=participant_context.get("client_ip"),
         )
@@ -514,7 +544,7 @@ async def entrypoint(ctx: Any) -> None:
         llm=openai.LLM(
             base_url=LITELLM_BASE_URL,
             api_key=LITELLM_MASTER_KEY,
-            model=persona.llm_model,
+            model=llm_model,
         ),
         tts=elevenlabs.TTS(
             model="eleven_flash_v2_5",
@@ -602,7 +632,7 @@ async def entrypoint(ctx: Any) -> None:
         if "timeout" in error_text or "504" in error_text:
             logger.warning(
                 "LLM timeout on %s; LiteLLM may fall back to cloud. persona=%s",
-                persona.llm_model,
+                llm_model,
                 persona.display_name,
             )
         raise

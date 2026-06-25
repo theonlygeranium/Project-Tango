@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+LLM_MODEL_LABELS: dict[str, str] = {
+    "local/qwen3-fast": "Schubert Local Qwen3",
+    "writer/palmyra-x5-voice": "Writer Palmyra X5",
+}
+ALLOWED_LLM_MODELS = frozenset(LLM_MODEL_LABELS)
+
 
 @dataclass(frozen=True)
 class Persona:
@@ -21,6 +27,8 @@ class Persona:
             "label": self.label,
             "display_name": self.display_name,
             "role_description": self.role_description,
+            "llm_model": self.llm_model,
+            "stt_language": self.stt_language,
         }
 
 
@@ -125,6 +133,22 @@ def get_persona(persona_id: str | None) -> Persona:
     if persona_id and persona_id in TANGO_PERSONAS:
         return TANGO_PERSONAS[persona_id]
     return TANGO_PERSONAS[DEFAULT_PERSONA_ID]
+
+
+def resolve_llm_model(persona: Persona, requested_model: str | None = None) -> str:
+    if requested_model in ALLOWED_LLM_MODELS:
+        return str(requested_model)
+    return persona.llm_model
+
+
+def list_llm_models() -> list[dict[str, str]]:
+    return [
+        {
+            "id": model_id,
+            "label": label,
+        }
+        for model_id, label in LLM_MODEL_LABELS.items()
+    ]
 
 
 def list_personas() -> list[dict[str, str]]:
