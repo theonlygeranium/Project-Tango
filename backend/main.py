@@ -1,1 +1,610 @@
-ZnJvbSBfX2Z1dHVyZV9fIGltcG9ydCBhbm5vdGF0aW9ucwoKaW1wb3J0IGFzeW5jaW8KaW1wb3J0IGpzb24KaW1wb3J0IGxvZ2dpbmcKaW1wb3J0IG9zCmltcG9ydCB1dWlkCmZyb20gY29udGV4dGxpYiBpbXBvcnQgYXN5bmNjb250ZXh0bWFuYWdlcgpmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKZnJvbSB0eXBpbmcgaW1wb3J0IEFueQoKZnJvbSBkb3RlbnYgaW1wb3J0IGxvYWRfZG90ZW52CmZyb20gZmFzdGFwaSBpbXBvcnQgRmFzdEFQSSwgSFRUUEV4Y2VwdGlvbiwgUmVxdWVzdApmcm9tIGZhc3RhcGkubWlkZGxld2FyZS5jb3JzIGltcG9ydCBDT1JTTWlkZGxld2FyZQpmcm9tIGZhc3RhcGkucmVzcG9uc2VzIGltcG9ydCBKU09OUmVzcG9uc2UsIFBsYWluVGV4dFJlc3BvbnNlCmZyb20gcHlkYW50aWMgaW1wb3J0IEJhc2VNb2RlbCwgRmllbGQKZnJvbSBzbG93YXBpIGltcG9ydCBMaW1pdGVyLCBfcmF0ZV9saW1pdF9leGNlZWRlZF9oYW5kbGVyCmZyb20gc2xvd2FwaS5lcnJvcnMgaW1wb3J0IFJhdGVMaW1pdEV4Y2VlZGVkCmZyb20gc2xvd2FwaS5taWRkbGV3YXJlIGltcG9ydCBTbG93QVBJTWlkZGxld2FyZQpmcm9tIHNsb3dhcGkudXRpbCBpbXBvcnQgZ2V0X3JlbW90ZV9hZGRyZXNzCgpmcm9tIGRiIGltcG9ydCBjbG9zZV9wb29sLCBnZXRfcG9vbApmcm9tIGhpc3RvcnkgaW1wb3J0ICgKICAgIGNsb3NlX3Nlc3Npb24sCiAgICBjcmVhdGVfc2Vzc2lvbiwKICAgIGdldF9zZXNzaW9uX3R1cm5zLAogICAgZ2V0X3Nlc3Npb25zLAogICAgbWFza19jbGllbnRfaXAsCiAgICByZWNvcmRfdHVybiwKKQpmcm9tIHBlcnNvbmFzIGltcG9ydCBERUZBVUxUX1BFUlNPTkFfSUQsIFBlcnNvbmEsIGdldF9wZXJzb25hLCBsaXN0X3BlcnNvbmFzCgpkb3RlbnZfcGF0aCA9IFBhdGgoX19maWxlX18pLnBhcmVudCAvICIuZW52Igpsb2FkX2RvdGVudihkb3RlbnZfcGF0aD1kb3RlbnZfcGF0aCkKCmxvZ2dpbmcuYmFzaWNDb25maWcobGV2ZWw9bG9nZ2luZy5JTkZPLCBmb3JtYXQ9IiUoYXNjdGltZSlzICUobGV2ZWxuYW1lKXMgJShuYW1lKXM6ICUobWVzc2FnZSlzIikKbG9nZ2VyID0gbG9nZ2luZy5nZXRMb2dnZXIoInByb2plY3QtdGFuZ28iKQoKTElURUxMTV9CQVNFX1VSTCA9IG9zLmdldGVudigiTElURUxMTV9CQVNFX1VSTCIsICJodHRwOi8vbG9jYWxob3N0OjQwMDAiKQpMSVRFTExNX01BU1RFUl9LRVkgPSBvcy5nZXRlbnYoIkxJVEVMTE1fTUFTVEVSX0tFWSIsICJkdW1teSIpCkxJVkVLSVRfVVJMID0gb3MuZ2V0ZW52KCJMSVZFS0lUX1VSTCIpCkxJVkVLSVRfQVBJX0tFWSA9IG9zLmdldGVudigiTElWRUtJVF9BUElfS0VZIikKTElWRUtJVF9BUElfU0VDUkVUID0gb3MuZ2V0ZW52KCJMSVZFS0lUX0FQSV9TRUNSRVQiKQoKbGltaXRlciA9IExpbWl0ZXIoa2V5X2Z1bmM9Z2V0X3JlbW90ZV9hZGRyZXNzKQoKCkBhc3luY2NvbnRleHRtYW5hZ2VyCmFzeW5jIGRlZiBsaWZlc3BhbihfOiBGYXN0QVBJKToKICAgIGF3YWl0IGdldF9wb29sKCkKICAgIHRyeToKICAgICAgICB5aWVsZAogICAgZmluYWxseToKICAgICAgICBhd2FpdCBjbG9zZV9wb29sKCkKCgphcHAgPSBGYXN0QVBJKHRpdGxlPSJQcm9qZWN0IFRhbmdvIEJhY2tlbmQiLCB2ZXJzaW9uPSIwLjEuMCIsIGxpZmVzcGFuPWxpZmVzcGFuKQphcHAuc3RhdGUubGltaXRlciA9IGxpbWl0ZXIKYXBwLmFkZF9leGNlcHRpb25faGFuZGxlcihSYXRlTGltaXRFeGNlZWRlZCwgX3JhdGVfbGltaXRfZXhjZWVkZWRfaGFuZGxlcikKYXBwLmFkZF9taWRkbGV3YXJlKFNsb3dBUElNaWRkbGV3YXJlKQphcHAuYWRkX21pZGRsZXdhcmUoCiAgICBDT1JTTWlkZGxld2FyZSwKICAgIGFsbG93X29yaWdpbnM9b3MuZ2V0ZW52KAogICAgICAgICJUQU5HT19DT1JTX09SSUdJTlMiLAogICAgICAgICJodHRwOi8vbG9jYWxob3N0OjMwMDYsaHR0cDovLzEyNy4wLjAuMTozMDA2IiwKICAgICkuc3BsaXQoIiwiKSwKICAgIGFsbG93X2NyZWRlbnRpYWxzPVRydWUsCiAgICBhbGxvd19tZXRob2RzPVsiR0VUIiwgIlBPU1QiLCAiT1BUSU9OUyJdLAogICAgYWxsb3dfaGVhZGVycz1bIioiXSwKKQoKCmNsYXNzIFRva2VuUmVxdWVzdChCYXNlTW9kZWwpOgogICAgcm9vbV9uYW1lOiBzdHIgfCBOb25lID0gTm9uZQogICAgcGFydGljaXBhbnRfaWRlbnRpdHk6IHN0ciB8IE5vbmUgPSBOb25lCiAgICBwYXJ0aWNpcGFudF9uYW1lOiBzdHIgfCBOb25lID0gTm9uZQogICAgcGFydGljaXBhbnRfbWV0YWRhdGE6IHN0ciB8IE5vbmUgPSBOb25lCiAgICBwYXJ0aWNpcGFudF9hdHRyaWJ1dGVzOiBkaWN0W3N0ciwgc3RyXSA9IEZpZWxkKGRlZmF1bHRfZmFjdG9yeT1kaWN0KQogICAgcGVyc29uYV9pZDogc3RyIHwgTm9uZSA9IE5vbmUKICAgIHBlcnNvbmE6IHN0ciB8IE5vbmUgPSBOb25lCiAgICByb29tX2NvbmZpZzogZGljdFtzdHIsIEFueV0gfCBOb25lID0gTm9uZQoKCmRlZiBfcmVxdWlyZV9saXZla2l0X2VudigpIC0+IE5vbmU6CiAgICBtaXNzaW5nID0gWwogICAgICAgIG5hbWUKICAgICAgICBmb3IgbmFtZSwgdmFsdWUgaW4gewogICAgICAgICAgICAiTElWRUtJVF9VUkwiOiBMSVZFS0lUX1VSTCwKICAgICAgICAgICAgIkxJVkVLSVRfQVBJX0tFWSI6IExJVkVLSVRfQVBJX0tFWSwKICAgICAgICAgICAgIkxJVkVLSVRfQVBJX1NFQ1JFVCI6IExJVkVLSVRfQVBJX1NFQ1JFVCwKICAgICAgICB9Lml0ZW1zKCkKICAgICAgICBpZiBub3QgdmFsdWUKICAgIF0KICAgIGlmIG1pc3Npbmc6CiAgICAgICAgcmFpc2UgSFRUUEV4Y2VwdGlvbihzdGF0dXNfY29kZT01MDAsIGRldGFpbD1mIk1pc3NpbmcgZW52aXJvbm1lbnQgdmFyaWFibGVzOiB7JywgJy5qb2luKG1pc3NpbmcpfSIpCgoKZGVmIF9yb29tX25hbWUocGVyc29uYTogUGVyc29uYSwgcmVxdWVzdGVkX3Jvb206IHN0ciB8IE5vbmUgPSBOb25lKSAtPiBzdHI6CiAgICBpZiByZXF1ZXN0ZWRfcm9vbToKICAgICAgICByZXR1cm4gcmVxdWVzdGVkX3Jvb20KICAgIHJldHVybiBmInRhbmdvX3twZXJzb25hLmlkfV97dXVpZC51dWlkNCgpLmhleFs6MTBdfSIKCgpkZWYgX2pzb25fb2JqZWN0KHZhbHVlOiBzdHIgfCBOb25lKSAtPiBkaWN0W3N0ciwgQW55XToKICAgIGlmIG5vdCB2YWx1ZToKICAgICAgICByZXR1cm4ge30KCiAgICB0cnk6CiAgICAgICAgcGFyc2VkID0ganNvbi5sb2Fkcyh2YWx1ZSkKICAgIGV4Y2VwdCAoVHlwZUVycm9yLCBqc29uLkpTT05EZWNvZGVFcnJvcik6CiAgICAgICAgcmV0dXJuIHsiY2xpZW50X21ldGFkYXRhIjogdmFsdWV9CgogICAgcmV0dXJuIHBhcnNlZCBpZiBpc2luc3RhbmNlKHBhcnNlZCwgZGljdCkgZWxzZSB7ImNsaWVudF9tZXRhZGF0YSI6IHZhbHVlfQoKCmRlZiBfcmVxdWVzdF9oaXN0b3J5X2NvbnRleHQocmVxdWVzdDogUmVxdWVzdCB8IE5vbmUpIC0+IGRpY3Rbc3RyLCBzdHJdOgogICAgaWYgcmVxdWVzdCBpcyBOb25lOgogICAgICAgIHJldHVybiB7fQoKICAgIHJhd19pcCA9ICgKICAgICAgICByZXF1ZXN0LmhlYWRlcnMuZ2V0KCJDRi1Db25uZWN0aW5nLUlQIikKICAgICAgICBvciByZXF1ZXN0LmhlYWRlcnMuZ2V0KCJYLUZvcndhcmRlZC1Gb3IiKQogICAgICAgIG9yIChyZXF1ZXN0LmNsaWVudC5ob3N0IGlmIHJlcXVlc3QuY2xpZW50IGVsc2UgTm9uZSkKICAgICkKICAgIG1hc2tlZF9pcCA9IG1hc2tfY2xpZW50X2lwKHJhd19pcCkKICAgIHVzZXJfYWdlbnQgPSByZXF1ZXN0LmhlYWRlcnMuZ2V0KCJ1c2VyLWFnZW50IikKCiAgICBjb250ZXh0OiBkaWN0W3N0ciwgc3RyXSA9IHt9CiAgICBpZiBtYXNrZWRfaXA6CiAgICAgICAgY29udGV4dFsiY2xpZW50X2lwIl0gPSBtYXNrZWRfaXAKICAgIGlmIHVzZXJfYWdlbnQ6CiAgICAgICAgY29udGV4dFsidXNlcl9hZ2VudCJdID0gdXNlcl9hZ2VudFs6NTEyXQogICAgcmV0dXJuIGNvbnRleHQKCgpkZWYgX3Rva2VuX21ldGFkYXRhKAogICAgcGVyc29uYTogUGVyc29uYSwKICAgIGV4aXN0aW5nX21ldGFkYXRhOiBzdHIgfCBOb25lID0gTm9uZSwKICAgIGhpc3RvcnlfY29udGV4dDogZGljdFtzdHIsIHN0cl0gfCBOb25lID0gTm9uZSwKKSAtPiBzdHI6CiAgICBwYXlsb2FkID0gX2pzb25fb2JqZWN0KGV4aXN0aW5nX21ldGFkYXRhKQogICAgcGF5bG9hZC51cGRhdGUoCiAgICAgICAgewogICAgICAgICAgICAicGVyc29uYV9pZCI6IHBlcnNvbmEuaWQsCiAgICAgICAgICAgICJkaXNwbGF5X25hbWUiOiBwZXJzb25hLmRpc3BsYXlfbmFtZSwKICAgICAgICB9CiAgICApCiAgICBpZiBoaXN0b3J5X2NvbnRleHQ6CiAgICAgICAgcGF5bG9hZFsiaGlzdG9yeSJdID0gaGlzdG9yeV9jb250ZXh0CiAgICByZXR1cm4ganNvbi5kdW1wcyhwYXlsb2FkKQoKCmRlZiBfdG9rZW5fYXR0cmlidXRlcyhwZXJzb25hOiBQZXJzb25hLCByZXF1ZXN0OiBUb2tlblJlcXVlc3QpIC0+IGRpY3Rbc3RyLCBzdHJdOgogICAgcmV0dXJuIHsKICAgICAgICAqKnJlcXVlc3QucGFydGljaXBhbnRfYXR0cmlidXRlcywKICAgICAgICAidGFuZ28ucGVyc29uYSI6IHBlcnNvbmEuaWQsCiAgICAgICAgInRhbmdvLmRpc3BsYXlfbmFtZSI6IHBlcnNvbmEuZGlzcGxheV9uYW1lLAogICAgfQoKCmRlZiBjcmVhdGVfcGFydGljaXBhbnRfdG9rZW4oCiAgICByZXF1ZXN0OiBUb2tlblJlcXVlc3QsCiAgICBwZXJzb25hOiBQZXJzb25hLAogICAgcm9vbV9uYW1lOiBzdHIsCiAgICBoaXN0b3J5X2NvbnRleHQ6IGRpY3Rbc3RyLCBzdHJdIHwgTm9uZSA9IE5vbmUsCikgLT4gc3RyOgogICAgX3JlcXVpcmVfbGl2ZWtpdF9lbnYoKQoKICAgIGZyb20gbGl2ZWtpdCBpbXBvcnQgYXBpCgogICAgdG9rZW4gPSBhcGkuQWNjZXNzVG9rZW4oTElWRUtJVF9BUElfS0VZLCBMSVZFS0lUX0FQSV9TRUNSRVQpCiAgICB0b2tlbiA9IHRva2VuLndpdGhfaWRlbnRpdHkoCiAgICAgICAgcmVxdWVzdC5wYXJ0aWNpcGFudF9pZGVudGl0eSBvciBmInRhbmdvX3VzZXJfe3V1aWQudXVpZDQoKS5oZXhbOjhdfSIKICAgICkud2l0aF9uYW1lKHJlcXVlc3QucGFydGljaXBhbnRfbmFtZSBvciAiUHJvamVjdCBUYW5nbyBVc2VyIikKICAgIHRva2VuID0gdG9rZW4ud2l0aF9tZXRhZGF0YShfdG9rZW5fbWV0YWRhdGEocGVyc29uYSwgcmVxdWVzdC5wYXJ0aWNpcGFudF9tZXRhZGF0YSwgaGlzdG9yeV9jb250ZXh0KSkKICAgIHRva2VuID0gdG9rZW4ud2l0aF9hdHRyaWJ1dGVzKF90b2tlbl9hdHRyaWJ1dGVzKHBlcnNvbmEsIHJlcXVlc3QpKQogICAgdG9rZW4gPSB0b2tlbi53aXRoX2dyYW50cygKICAgICAgICBhcGkuVmlkZW9HcmFudHMoCiAgICAgICAgICAgIHJvb21fam9pbj1UcnVlLAogICAgICAgICAgICByb29tPXJvb21fbmFtZSwKICAgICAgICAgICAgY2FuX3B1Ymxpc2g9VHJ1ZSwKICAgICAgICAgICAgY2FuX3B1Ymxpc2hfZGF0YT1UcnVlLAogICAgICAgICAgICBjYW5fc3Vic2NyaWJlPVRydWUsCiAgICAgICAgKQogICAgKQogICAgaWYgcmVxdWVzdC5yb29tX2NvbmZpZzoKICAgICAgICB0b2tlbiA9IHRva2VuLndpdGhfcm9vbV9jb25maWcocmVxdWVzdC5yb29tX2NvbmZpZykKCiAgICByZXR1cm4gdG9rZW4udG9fand0KCkKCgpkZWYgY29ubmVjdGlvbl9kZXRhaWxzKHJlcXVlc3Q6IFRva2VuUmVxdWVzdCwgaHR0cF9yZXF1ZXN0OiBSZXF1ZXN0IHwgTm9uZSA9IE5vbmUpIC0+IGRpY3Rbc3RyLCBBbnldOgogICAgcGVyc29uYSA9IGdldF9wZXJzb25hKHJlcXVlc3QucGVyc29uYV9pZCBvciByZXF1ZXN0LnBlcnNvbmEpCiAgICByb29tX25hbWUgPSBfcm9vbV9uYW1lKHBlcnNvbmEsIHJlcXVlc3Qucm9vbV9uYW1lKQogICAgaGlzdG9yeV9jb250ZXh0ID0gX3JlcXVlc3RfaGlzdG9yeV9jb250ZXh0KGh0dHBfcmVxdWVzdCkKICAgIHBhcnRpY2lwYW50X3Rva2VuID0gY3JlYXRlX3BhcnRpY2lwYW50X3Rva2VuKHJlcXVlc3QsIHBlcnNvbmEsIHJvb21fbmFtZSwgaGlzdG9yeV9jb250ZXh0KQogICAgcGVyc29uYV9wYXlsb2FkID0gcGVyc29uYS5wdWJsaWNfZGljdCgpCgogICAgbG9nZ2VyLmluZm8oCiAgICAgICAgIklzc3VlZCBUYW5nbyB0b2tlbiByb29tPSVzIHBlcnNvbmFfaWQ9JXMgbW9kZWw9JXMgdm9pY2VfaWQ9JXMgbGxtX2Jhc2VfdXJsPSVzIiwKICAgICAgICByb29tX25hbWUsCiAgICAgICAgcGVyc29uYS5pZCwKICAgICAgICBwZXJzb25hLmxsbV9tb2RlbCwKICAgICAgICBwZXJzb25hLnZvaWNlX2lkLAogICAgICAgIExJVEVMTE1fQkFTRV9VUkwsCiAgICApCgogICAgcmV0dXJuIHsKICAgICAgICAic2VydmVyX3VybCI6IExJVkVLSVRfVVJMLAogICAgICAgICJwYXJ0aWNpcGFudF90b2tlbiI6IHBhcnRpY2lwYW50X3Rva2VuLAogICAgICAgICJzZXJ2ZXJVcmwiOiBMSVZFS0lUX1VSTCwKICAgICAgICAicGFydGljaXBhbnRUb2tlbiI6IHBhcnRpY2lwYW50X3Rva2VuLAogICAgICAgICJyb29tX25hbWUiOiByb29tX25hbWUsCiAgICAgICAgInJvb21OYW1lIjogcm9vbV9uYW1lLAogICAgICAgICJwYXJ0aWNpcGFudF9uYW1lIjogcmVxdWVzdC5wYXJ0aWNpcGFudF9uYW1lIG9yICJQcm9qZWN0IFRhbmdvIFVzZXIiLAogICAgICAgICJwYXJ0aWNpcGFudE5hbWUiOiByZXF1ZXN0LnBhcnRpY2lwYW50X25hbWUgb3IgIlByb2plY3QgVGFuZ28gVXNlciIsCiAgICAgICAgInBlcnNvbmEiOiBwZXJzb25hX3BheWxvYWQsCiAgICB9CgoKQGFwcC5nZXQoIi9oZWFsdGgiKQphc3luYyBkZWYgaGVhbHRoKCkgLT4gZGljdFtzdHIsIEFueV06CiAgICByZXR1cm4gewogICAgICAgICJzdGF0dXMiOiAib2siLAogICAgICAgICJzZXJ2aWNlIjogInByb2plY3QtdGFuZ28tYmFja2VuZCIsCiAgICAgICAgImxpdGVsbG1fYmFzZV91cmwiOiBMSVRFTExNX0JBU0VfVVJMLAogICAgICAgICJwZXJzb25hcyI6IFtwZXJzb25hWyJpZCJdIGZvciBwZXJzb25hIGluIGxpc3RfcGVyc29uYXMoKV0sCiAgICB9CgoKQGFwcC5nZXQoIi9oZWFsdGh6IiwgcmVzcG9uc2VfY2xhc3M9UGxhaW5UZXh0UmVzcG9uc2UpCmFzeW5jIGRlZiBoZWFsdGh6KCkgLT4gc3RyOgogICAgcmV0dXJuICJvayIKCgpAYXBwLmdldCgiL2FwaS9wZXJzb25hcyIpCmFzeW5jIGRlZiBwZXJzb25hcygpIC0+IGRpY3Rbc3RyLCBBbnldOgogICAgcmV0dXJuIHsiZGVmYXVsdF9wZXJzb25hX2lkIjogREVGQVVMVF9QRVJTT05BX0lELCAicGVyc29uYXMiOiBsaXN0X3BlcnNvbmFzKCl9CgoKQGFwcC5nZXQoIi9hcGkvY29ubmVjdGlvbi1kZXRhaWxzIikKYXN5bmMgZGVmIGdldF9jb25uZWN0aW9uX2RldGFpbHMoCiAgICByZXF1ZXN0OiBSZXF1ZXN0LAogICAgcGVyc29uYTogc3RyIHwgTm9uZSA9IE5vbmUsCiAgICBwZXJzb25hX2lkOiBzdHIgfCBOb25lID0gTm9uZSwKICAgIHJvb21fbmFtZTogc3RyIHwgTm9uZSA9IE5vbmUsCikgLT4gZGljdFtzdHIsIEFueV06CiAgICBkZXRhaWxzID0gY29ubmVjdGlvbl9kZXRhaWxzKAogICAgICAgIFRva2VuUmVxdWVzdChwZXJzb25hX2lkPXBlcnNvbmFfaWQgb3IgcGVyc29uYSwgcm9vbV9uYW1lPXJvb21fbmFtZSksCiAgICAgICAgaHR0cF9yZXF1ZXN0PXJlcXVlc3QsCiAgICApCiAgICBhc3luY2lvLmNyZWF0ZV90YXNrKF9kaXNwYXRjaF9hZ2VudChkZXRhaWxzWyJyb29tX25hbWUiXSkpCiAgICByZXR1cm4gZGV0YWlscwoKCkBhcHAucG9zdCgiL2FwaS9jb25uZWN0aW9uLWRldGFpbHMiLCBzdGF0dXNfY29kZT0yMDEpCkBhcHAucG9zdCgiL2dldFRva2VuIiwgc3RhdHVzX2NvZGU9MjAxKQphc3luYyBkZWYgcG9zdF9jb25uZWN0aW9uX2RldGFpbHMocmVxdWVzdDogUmVxdWVzdCkgLT4gZGljdFtzdHIsIEFueV06CiAgICBib2R5ID0gYXdhaXQgcmVxdWVzdC5qc29uKCkKICAgIGRldGFpbHMgPSBjb25uZWN0aW9uX2RldGFpbHMoVG9rZW5SZXF1ZXN0KCoqYm9keSksIGh0dHBfcmVxdWVzdD1yZXF1ZXN0KQogICAgYXN5bmNpby5jcmVhdGVfdGFzayhfZGlzcGF0Y2hfYWdlbnQoZGV0YWlsc1sicm9vbV9uYW1lIl0pKQogICAgcmV0dXJuIGRldGFpbHMKCgpkZWYgX2FwaV9kYXRhYmFzZV9lcnJvcigpIC0+IEpTT05SZXNwb25zZToKICAgIHJldHVybiBKU09OUmVzcG9uc2UoeyJlcnJvciI6ICJEYXRhYmFzZSBlcnJvciJ9LCBzdGF0dXNfY29kZT01MDApCgoKZGVmIF9zZXJpYWxpemVfdGltZSh2YWx1ZTogQW55KSAtPiBzdHIgfCBOb25lOgogICAgcmV0dXJuIHZhbHVlLmlzb2Zvcm1hdCgpIGlmIGhhc2F0dHIodmFsdWUsICJpc29mb3JtYXQiKSBlbHNlIE5vbmUKCgpkZWYgX3NlcmlhbGl6ZV9zZXNzaW9uKHJvdzogZGljdFtzdHIsIEFueV0pIC0+IGRpY3Rbc3RyLCBBbnldOgogICAgcmV0dXJuIHsKICAgICAgICAqKnJvdywKICAgICAgICAiaWQiOiBzdHIocm93WyJpZCJdKSwKICAgICAgICAic3RhcnRlZF9hdCI6IF9zZXJpYWxpemVfdGltZShyb3cuZ2V0KCJzdGFydGVkX2F0IikpLAogICAgICAgICJlbmRlZF9hdCI6IF9zZXJpYWxpemVfdGltZShyb3cuZ2V0KCJlbmRlZF9hdCIpKSwKICAgIH0KCgpkZWYgX3NlcmlhbGl6ZV90dXJuKHJvdzogZGljdFtzdHIsIEFueV0pIC0+IGRpY3Rbc3RyLCBBbnldOgogICAgcmV0dXJuIHsKICAgICAgICAqKnJvdywKICAgICAgICAicmVjb3JkZWRfYXQiOiBfc2VyaWFsaXplX3RpbWUocm93LmdldCgicmVjb3JkZWRfYXQiKSksCiAgICB9CgoKQGFwcC5nZXQoIi9hcGkvaGlzdG9yeSIpCkBsaW1pdGVyLmxpbWl0KCIzMC9taW51dGUiKQphc3luYyBkZWYgaGlzdG9yeV9lbmRwb2ludChyZXF1ZXN0OiBSZXF1ZXN0LCBsaW1pdDogaW50ID0gMjAsIG9mZnNldDogaW50ID0gMCkgLT4gQW55OgogICAgZGVsIHJlcXVlc3QKICAgIHRyeToKICAgICAgICBib3VuZGVkX2xpbWl0ID0gbWluKG1heChsaW1pdCwgMSksIDEwMCkKICAgICAgICBib3VuZGVkX29mZnNldCA9IG1heChvZmZzZXQsIDApCiAgICAgICAgc2Vzc2lvbnMgPSBhd2FpdCBnZXRfc2Vzc2lvbnMobGltaXQ9Ym91bmRlZF9saW1pdCwgb2Zmc2V0PWJvdW5kZWRfb2Zmc2V0KQogICAgICAgIHJldHVybiB7CiAgICAgICAgICAgICJzZXNzaW9ucyI6IFtfc2VyaWFsaXplX3Nlc3Npb24oc2Vzc2lvbikgZm9yIHNlc3Npb24gaW4gc2Vzc2lvbnNdLAogICAgICAgICAgICAibGltaXQiOiBib3VuZGVkX2xpbWl0LAogICAgICAgICAgICAib2Zmc2V0IjogYm91bmRlZF9vZmZzZXQsCiAgICAgICAgfQogICAgZXhjZXB0IEV4Y2VwdGlvbjoKICAgICAgICBsb2dnZXIuZXhjZXB0aW9uKCJIaXN0b3J5IHNlc3Npb25zIHF1ZXJ5IGZhaWxlZC4iKQogICAgICAgIHJldHVybiBfYXBpX2RhdGFiYXNlX2Vycm9yKCkKCgpAYXBwLmdldCgiL2FwaS9oaXN0b3J5L3tzZXNzaW9uX2lkfSIpCkBsaW1pdGVyLmxpbWl0KCIzMC9taW51dGUiKQphc3luYyBkZWYgaGlzdG9yeV9kZXRhaWxfZW5kcG9pbnQocmVxdWVzdDogUmVxdWVzdCwgc2Vzc2lvbl9pZDogc3RyKSAtPiBBbnk6CiAgICBkZWwgcmVxdWVzdAogICAgdHJ5OgogICAgICAgIHBhcnNlZF9zZXNzaW9uX2lkID0gc3RyKHV1aWQuVVVJRChzZXNzaW9uX2lkKSkKICAgIGV4Y2VwdCBWYWx1ZUVycm9yOgogICAgICAgIHJhaXNlIEhUVFBFeGNlcHRpb24oc3RhdHVzX2NvZGU9NDAwLCBkZXRhaWw9IkludmFsaWQgc2Vzc2lvbiBpZCIpIGZyb20gTm9uZQoKICAgIHRyeToKICAgICAgICB0dXJucyA9IGF3YWl0IGdldF9zZXNzaW9uX3R1cm5zKHBhcnNlZF9zZXNzaW9uX2lkKQogICAgICAgIHJldHVybiB7CiAgICAgICAgICAgICJzZXNzaW9uX2lkIjogcGFyc2VkX3Nlc3Npb25faWQsCiAgICAgICAgICAgICJ0dXJucyI6IFtfc2VyaWFsaXplX3R1cm4odHVybikgZm9yIHR1cm4gaW4gdHVybnNdLAogICAgICAgIH0KICAgIGV4Y2VwdCBFeGNlcHRpb246CiAgICAgICAgbG9nZ2VyLmV4Y2VwdGlvbigiSGlzdG9yeSBkZXRhaWwgcXVlcnkgZmFpbGVkIHNlc3Npb25faWQ9JXMiLCBwYXJzZWRfc2Vzc2lvbl9pZCkKICAgICAgICByZXR1cm4gX2FwaV9kYXRhYmFzZV9lcnJvcigpCgoKZGVmIF9wZXJzb25hX2lkX2Zyb21fam9iX2NvbnRleHQoY3R4OiBBbnkpIC0+IHN0ciB8IE5vbmU6CiAgICBzb3VyY2VzID0gWwogICAgICAgIGdldGF0dHIoZ2V0YXR0cihjdHgsICJqb2IiLCBOb25lKSwgIm1ldGFkYXRhIiwgTm9uZSksCiAgICAgICAgZ2V0YXR0cihnZXRhdHRyKGN0eCwgInJvb20iLCBOb25lKSwgIm1ldGFkYXRhIiwgTm9uZSksCiAgICBdCiAgICBmb3Igc291cmNlIGluIHNvdXJjZXM6CiAgICAgICAgcGFyc2VkID0gX2pzb25fb2JqZWN0KHNvdXJjZSkKICAgICAgICBwZXJzb25hX2lkID0gcGFyc2VkLmdldCgicGVyc29uYV9pZCIpIG9yIHBhcnNlZC5nZXQoInBlcnNvbmEiKQogICAgICAgIGlmIGlzaW5zdGFuY2UocGVyc29uYV9pZCwgc3RyKToKICAgICAgICAgICAgcmV0dXJuIHBlcnNvbmFfaWQKCiAgICByb29tX25hbWUgPSBnZXRhdHRyKGdldGF0dHIoY3R4LCAicm9vbSIsIE5vbmUpLCAibmFtZSIsICIiKQogICAgaWYgcm9vbV9uYW1lLnN0YXJ0c3dpdGgoInRhbmdvXyIpOgogICAgICAgIHBhcnRzID0gcm9vbV9uYW1lLnNwbGl0KCJfIikKICAgICAgICBpZiBsZW4ocGFydHMpID49IDI6CiAgICAgICAgICAgIHJldHVybiBwYXJ0c1sxXQogICAgcmV0dXJuIE5vbmUKCgpkZWYgX2hpc3RvcnlfY29udGV4dF9mcm9tX3BhcnRpY2lwYW50KHBhcnRpY2lwYW50OiBBbnkgfCBOb25lKSAtPiBkaWN0W3N0ciwgc3RyXToKICAgIGlmIHBhcnRpY2lwYW50IGlzIE5vbmU6CiAgICAgICAgcmV0dXJuIHt9CgogICAgcGF5bG9hZCA9IF9qc29uX29iamVjdChnZXRhdHRyKHBhcnRpY2lwYW50LCAibWV0YWRhdGEiLCBOb25lKSkKICAgIGhpc3RvcnlfcGF5bG9hZCA9IHBheWxvYWQuZ2V0KCJoaXN0b3J5IikKICAgIGhpc3RvcnlfY29udGV4dCA9IGhpc3RvcnlfcGF5bG9hZCBpZiBpc2luc3RhbmNlKGhpc3RvcnlfcGF5bG9hZCwgZGljdCkgZWxzZSB7fQogICAgYXR0cmlidXRlcyA9IGdldGF0dHIocGFydGljaXBhbnQsICJhdHRyaWJ1dGVzIiwge30pIG9yIHt9CgogICAgY29udGV4dDogZGljdFtzdHIsIHN0cl0gPSB7fQogICAgcGVyc29uYV9pZCA9IHBheWxvYWQuZ2V0KCJwZXJzb25hX2lkIikgb3IgYXR0cmlidXRlcy5nZXQoInRhbmdvLnBlcnNvbmEiKQogICAgaWYgaXNpbnN0YW5jZShwZXJzb25hX2lkLCBzdHIpOgogICAgICAgIGNvbnRleHRbInBlcnNvbmFfaWQiXSA9IHBlcnNvbmFfaWQKCiAgICBjbGllbnRfaXAgPSBoaXN0b3J5X2NvbnRleHQuZ2V0KCJjbGllbnRfaXAiKSBvciBhdHRyaWJ1dGVzLmdldCgidGFuZ28uY2xpZW50X2lwIikKICAgIGlmIGlzaW5zdGFuY2UoY2xpZW50X2lwLCBzdHIpOgogICAgICAgIG1hc2tlZF9pcCA9IG1hc2tfY2xpZW50X2lwKGNsaWVudF9pcCkKICAgICAgICBpZiBtYXNrZWRfaXA6CiAgICAgICAgICAgIGNvbnRleHRbImNsaWVudF9pcCJdID0gbWFza2VkX2lwCgogICAgdXNlcl9hZ2VudCA9IGhpc3RvcnlfY29udGV4dC5nZXQoInVzZXJfYWdlbnQiKSBvciBhdHRyaWJ1dGVzLmdldCgidGFuZ28udXNlcl9hZ2VudCIpCiAgICBpZiBpc2luc3RhbmNlKHVzZXJfYWdlbnQsIHN0cik6CiAgICAgICAgY29udGV4dFsidXNlcl9hZ2VudCJdID0gdXNlcl9hZ2VudFs6NTEyXQoKICAgIHJldHVybiBjb250ZXh0CgoKZGVmIF9jaGF0X21lc3NhZ2VfdGV4dChpdGVtOiBBbnkpIC0+IHN0cjoKICAgIHRleHRfY29udGVudCA9IGdldGF0dHIoaXRlbSwgInRleHRfY29udGVudCIsIE5vbmUpCiAgICBpZiBpc2luc3RhbmNlKHRleHRfY29udGVudCwgc3RyKToKICAgICAgICByZXR1cm4gdGV4dF9jb250ZW50CgogICAgY29udGVudCA9IGdldGF0dHIoaXRlbSwgImNvbnRlbnQiLCBOb25lKQogICAgaWYgbm90IGlzaW5zdGFuY2UoY29udGVudCwgbGlzdCk6CiAgICAgICAgcmV0dXJuICIiCgogICAgcGFydHM6IGxpc3Rbc3RyXSA9IFtdCiAgICBmb3IgcGFydCBpbiBjb250ZW50OgogICAgICAgIGlmIGlzaW5zdGFuY2UocGFydCwgc3RyKToKICAgICAgICAgICAgcGFydHMuYXBwZW5kKHBhcnQpCiAgICAgICAgZWxpZiBoYXNhdHRyKHBhcnQsICJ0ZXh0Iik6CiAgICAgICAgICAgIHRleHQgPSBnZXRhdHRyKHBhcnQsICJ0ZXh0IikKICAgICAgICAgICAgaWYgaXNpbnN0YW5jZSh0ZXh0LCBzdHIpOgogICAgICAgICAgICAgICAgcGFydHMuYXBwZW5kKHRleHQpCiAgICByZXR1cm4gIlxuIi5qb2luKHBhcnRzKQoKCmRlZiBfbWVzc2FnZV90b2tlbl9jb3VudChpdGVtOiBBbnkpIC0+IGludDoKICAgIG1ldHJpY3MgPSBnZXRhdHRyKGl0ZW0sICJtZXRyaWNzIiwge30pIG9yIHt9CiAgICBpZiBub3QgaGFzYXR0cihtZXRyaWNzLCAiZ2V0Iik6CiAgICAgICAgcmV0dXJuIDAKCiAgICBmb3Iga2V5IGluICgidG90YWxfdG9rZW5zIiwgImNvbXBsZXRpb25fdG9rZW5zIiwgInByb21wdF90b2tlbnMiKToKICAgICAgICB2YWx1ZSA9IG1ldHJpY3MuZ2V0KGtleSkKICAgICAgICBpZiBpc2luc3RhbmNlKHZhbHVlLCBpbnQpOgogICAgICAgICAgICByZXR1cm4gbWF4KHZhbHVlLCAwKQogICAgcmV0dXJuIDAKCgpkZWYgX21lc3NhZ2VfbGF0ZW5jeV9tcyhpdGVtOiBBbnkpIC0+IGludCB8IE5vbmU6CiAgICBtZXRyaWNzID0gZ2V0YXR0cihpdGVtLCAibWV0cmljcyIsIHt9KSBvciB7fQogICAgaWYgbm90IGhhc2F0dHIobWV0cmljcywgImdldCIpOgogICAgICAgIHJldHVybiBOb25lCgogICAgZm9yIGtleSBpbiAoImUyZV9sYXRlbmN5IiwgInR0c19ub2RlX3R0ZmIiLCAibGxtX25vZGVfdHRmdCIpOgogICAgICAgIHZhbHVlID0gbWV0cmljcy5nZXQoa2V5KQogICAgICAgIGlmIGlzaW5zdGFuY2UodmFsdWUsIGludCB8IGZsb2F0KSBhbmQgdmFsdWUgPj0gMDoKICAgICAgICAgICAgcmV0dXJuIGludCh2YWx1ZSAqIDEwMDApCiAgICByZXR1cm4gTm9uZQoKCmRlZiBfdXNhZ2VfdG90YWxfdG9rZW5zKHVzYWdlOiBBbnkpIC0+IGludDoKICAgIHRvdGFsID0gMAogICAgZm9yIG1vZGVsX3VzYWdlIGluIGdldGF0dHIodXNhZ2UsICJtb2RlbF91c2FnZSIsIFtdKSBvciBbXToKICAgICAgICB0b3RhbF90b2tlbnMgPSBnZXRhdHRyKG1vZGVsX3VzYWdlLCAidG90YWxfdG9rZW5zIiwgTm9uZSkKICAgICAgICBpZiBpc2luc3RhbmNlKHRvdGFsX3Rva2VucywgaW50KToKICAgICAgICAgICAgdG90YWwgKz0gbWF4KHRvdGFsX3Rva2VucywgMCkKICAgICAgICAgICAgY29udGludWUKCiAgICAgICAgZm9yIGZpZWxkX25hbWUgaW4gKCJpbnB1dF90b2tlbnMiLCAib3V0cHV0X3Rva2VucyIsICJwcm9tcHRfdG9rZW5zIiwgImNvbXBsZXRpb25fdG9rZW5zIik6CiAgICAgICAgICAgIHZhbHVlID0gZ2V0YXR0cihtb2RlbF91c2FnZSwgZmllbGRfbmFtZSwgTm9uZSkKICAgICAgICAgICAgaWYgaXNpbnN0YW5jZSh2YWx1ZSwgaW50KToKICAgICAgICAgICAgICAgIHRvdGFsICs9IG1heCh2YWx1ZSwgMCkKICAgIHJldHVybiB0b3RhbAoKCgphc3luYyBkZWYgX2Rpc3BhdGNoX2FnZW50KHJvb21fbmFtZTogc3RyKSAtPiBOb25lOgogICAgIiIiRXhwbGljaXRseSBkaXNwYXRjaCB0aGUgcmVnaXN0ZXJlZCBMaXZlS2l0IHdvcmtlciB0byB0aGlzIHJvb20uCiAgICAKICAgIEluIGxpdmVraXQtYWdlbnRzIDEueCB3b3JrZXJzIGRvIE5PVCBhdXRvLWpvaW4gcm9vbXMgb24gcGFydGljaXBhbnQgY29ubmVjdC4KICAgIFRoZSBiYWNrZW5kIG11c3QgY2FsbCBjcmVhdGVfZGlzcGF0Y2goKSBhZnRlciBldmVyeSB0b2tlbiBpc3N1YW5jZS4KICAgICIiIgogICAgdHJ5OgogICAgICAgIGZyb20gbGl2ZWtpdCBpbXBvcnQgYXBpIGFzIF9sa2FwaQogICAgICAgIGFzeW5jIHdpdGggX2xrYXBpLkxpdmVLaXRBUEkoTElWRUtJVF9VUkwsIExJVkVLSVRfQVBJX0tFWSwgTElWRUtJVF9BUElfU0VDUkVUKSBhcyBfY2xpZW50OgogICAgICAgICAgICBhd2FpdCBfY2xpZW50LmFnZW50X2Rpc3BhdGNoLmNyZWF0ZV9kaXNwYXRjaCgKICAgICAgICAgICAgICAgIF9sa2FwaS5DcmVhdGVBZ2VudERpc3BhdGNoUmVxdWVzdChyb29tX25hbWU9cm9vbV9uYW1lLCBhZ2VudF9uYW1lPSIiKQogICAgICAgICAgICApCiAgICAgICAgbG9nZ2VyLmluZm8oIkFnZW50IGRpc3BhdGNoZWQgcm9vbT0lcyIsIHJvb21fbmFtZSkKICAgIGV4Y2VwdCBFeGNlcHRpb246CiAgICAgICAgbG9nZ2VyLmV4Y2VwdGlvbigiQWdlbnQgZGlzcGF0Y2ggZmFpbGVkIHJvb209JXMiLCByb29tX25hbWUpCgphc3luYyBkZWYgZW50cnlwb2ludChjdHg6IEFueSkgLT4gTm9uZToKICAgIGZyb20gamFydmlzX2FnZW50IGltcG9ydCBKYXJ2aXMKICAgIGZyb20gbGl2ZWtpdC5hZ2VudHMgaW1wb3J0ICgKICAgICAgICBBZ2VudFNlc3Npb24sCiAgICAgICAgQXV0b1N1YnNjcmliZSwKICAgICAgICBDbG9zZUV2ZW50LAogICAgICAgIENvbnZlcnNhdGlvbkl0ZW1BZGRlZEV2ZW50LAogICAgICAgIFNlc3Npb25Vc2FnZVVwZGF0ZWRFdmVudCwKICAgICkKICAgIGZyb20gbGl2ZWtpdC5hZ2VudHMubGxtIGltcG9ydCBDaGF0TWVzc2FnZQogICAgZnJvbSBsaXZla2l0LnBsdWdpbnMgaW1wb3J0IGRlZXBncmFtLCBlbGV2ZW5sYWJzLCBvcGVuYWksIHNpbGVybwoKICAgIGF3YWl0IGN0eC5jb25uZWN0KGF1dG9fc3Vic2NyaWJlPUF1dG9TdWJzY3JpYmUuQVVESU9fT05MWSkKICAgIHBhcnRpY2lwYW50ID0gYXdhaXQgY3R4LndhaXRfZm9yX3BhcnRpY2lwYW50KCkKICAgIHBhcnRpY2lwYW50X2NvbnRleHQgPSBfaGlzdG9yeV9jb250ZXh0X2Zyb21fcGFydGljaXBhbnQocGFydGljaXBhbnQpCiAgICBwZXJzb25hID0gZ2V0X3BlcnNvbmEocGFydGljaXBhbnRfY29udGV4dC5nZXQoInBlcnNvbmFfaWQiKSBvciBfcGVyc29uYV9pZF9mcm9tX2pvYl9jb250ZXh0KGN0eCkpCiAgICByb29tX25hbWUgPSBnZXRhdHRyKGdldGF0dHIoY3R4LCAicm9vbSIsIE5vbmUpLCAibmFtZSIsICJ1bmtub3duIikKCiAgICBsb2dnZXIuaW5mbygKICAgICAgICAiU3RhcnRpbmcgVGFuZ28gYWdlbnQgcm9vbT0lcyBwZXJzb25hX2lkPSVzIG1vZGVsPSVzIHZvaWNlX2lkPSVzIGxsbV9iYXNlX3VybD0lcyIsCiAgICAgICAgcm9vbV9uYW1lLAogICAgICAgIHBlcnNvbmEuaWQsCiAgICAgICAgcGVyc29uYS5sbG1fbW9kZWwsCiAgICAgICAgcGVyc29uYS52b2ljZV9pZCwKICAgICAgICBMSVRFTExNX0JBU0VfVVJMLAogICAgKQoKICAgIGhpc3Rvcnlfc2Vzc2lvbl9pZDogc3RyIHwgTm9uZSA9IE5vbmUKICAgIHRyeToKICAgICAgICBoaXN0b3J5X3Nlc3Npb25faWQgPSBhd2FpdCBjcmVhdGVfc2Vzc2lvbigKICAgICAgICAgICAgcGVyc29uYV9pZD1wZXJzb25hLmlkLAogICAgICAgICAgICBwZXJzb25hX25hbWU9cGVyc29uYS5kaXNwbGF5X25hbWUsCiAgICAgICAgICAgIGxpdmVraXRfcm9vbT1yb29tX25hbWUsCiAgICAgICAgICAgIGxsbV9tb2RlbD1wZXJzb25hLmxsbV9tb2RlbCwKICAgICAgICAgICAgdXNlcl9hZ2VudD1wYXJ0aWNpcGFudF9jb250ZXh0LmdldCgidXNlcl9hZ2VudCIpLAogICAgICAgICAgICBjbGllbnRfaXA9cGFydGljaXBhbnRfY29udGV4dC5nZXQoImNsaWVudF9pcCIpLAogICAgICAgICkKICAgICAgICBsb2dnZXIuaW5mbygKICAgICAgICAgICAgIlRhbmdvIGhpc3Rvcnkgc2Vzc2lvbiBjcmVhdGVkIHNlc3Npb25faWQ9JXMgcm9vbT0lcyBwZXJzb25hX2lkPSVzIiwKICAgICAgICAgICAgaGlzdG9yeV9zZXNzaW9uX2lkLAogICAgICAgICAgICByb29tX25hbWUsCiAgICAgICAgICAgIHBlcnNvbmEuaWQsCiAgICAgICAgKQogICAgZXhjZXB0IEV4Y2VwdGlvbjoKICAgICAgICBsb2dnZXIuZXhjZXB0aW9uKCJDb3VsZCBub3QgY3JlYXRlIFRhbmdvIGhpc3Rvcnkgc2Vzc2lvbjsgdm9pY2Ugc2Vzc2lvbiB3aWxsIGNvbnRpbnVlLiIpCgogICAgc2Vzc2lvbiA9IEFnZW50U2Vzc2lvbigKICAgICAgICB2YWQ9c2lsZXJvLlZBRC5sb2FkKCksCiAgICAgICAgc3R0PWRlZXBncmFtLlNUVCgKICAgICAgICAgICAgbW9kZWw9Im5vdmEtMyIsCiAgICAgICAgICAgIGxhbmd1YWdlPSJlbi1VUyIsCiAgICAgICAgICAgIGludGVyaW1fcmVzdWx0cz1UcnVlLAogICAgICAgICAgICBlbmRwb2ludGluZ19tcz0zMDAsCiAgICAgICAgICAgIHNtYXJ0X2Zvcm1hdD1UcnVlLAogICAgICAgICksCiAgICAgICAgbGxtPW9wZW5haS5MTE0oCiAgICAgICAgICAgIGJhc2VfdXJsPUxJVEVMTE1fQkFTRV9VUkwsCiAgICAgICAgICAgIGFwaV9rZXk9TElURUxMTV9NQVNURVJfS0VZLAogICAgICAgICAgICBtb2RlbD1wZXJzb25hLmxsbV9tb2RlbCwKICAgICAgICApLAogICAgICAgIHR0cz1lbGV2ZW5sYWJzLlRUUygKICAgICAgICAgICAgbW9kZWw9ImVsZXZlbl9mbGFzaF92Ml81IiwKICAgICAgICAgICAgdm9pY2VfaWQ9cGVyc29uYS52b2ljZV9pZCwKICAgICAgICAgICAgYXBpX2tleT1vcy5nZXRlbnYoIkVMRVZFTkxBQlNfQVBJX0tFWSIpLAogICAgICAgICAgICB2b2ljZV9zZXR0aW5ncz1lbGV2ZW5sYWJzLlZvaWNlU2V0dGluZ3MoKipwZXJzb25hLnZvaWNlX3NldHRpbmdzKSwKICAgICAgICAgICAgb3B0aW1pemVfc3RyZWFtaW5nX2xhdGVuY3k9MywKICAgICAgICAgICAgYXV0b19tb2RlPVRydWUsCiAgICAgICAgKSwKICAgICAgICB1c2VfdHRzX2FsaWduZWRfdHJhbnNjcmlwdD1UcnVlLAogICAgKQoKICAgIHNlc3Npb25fdHVybnM6IGxpc3RbZGljdFtzdHIsIEFueV1dID0gW10KICAgIGNsb3NlX2Vycm9yX2NvZGU6IHN0ciB8IE5vbmUgPSBOb25lCiAgICB0b3RhbF90b2tlbnMgPSAwCiAgICBoaXN0b3J5X2ZsdXNoZWQgPSBGYWxzZQogICAgaGlzdG9yeV9mbHVzaF9sb2NrID0gYXN5bmNpby5Mb2NrKCkKCiAgICBAc2Vzc2lvbi5vbigiY29udmVyc2F0aW9uX2l0ZW1fYWRkZWQiKQogICAgZGVmIG9uX2NvbnZlcnNhdGlvbl9pdGVtX2FkZGVkKGV2OiBDb252ZXJzYXRpb25JdGVtQWRkZWRFdmVudCkgLT4gTm9uZToKICAgICAgICBpZiBub3QgaXNpbnN0YW5jZShldi5pdGVtLCBDaGF0TWVzc2FnZSk6CiAgICAgICAgICAgIHJldHVybgogICAgICAgIGlmIGdldGF0dHIoZXYuaXRlbSwgImludGVycnVwdGVkIiwgRmFsc2UpOgogICAgICAgICAgICByZXR1cm4KCiAgICAgICAgcm9sZSA9IGdldGF0dHIoZXYuaXRlbSwgInJvbGUiLCBOb25lKQogICAgICAgIHNwZWFrZXIgPSAiYWdlbnQiIGlmIHJvbGUgPT0gImFzc2lzdGFudCIgZWxzZSByb2xlCiAgICAgICAgaWYgc3BlYWtlciBub3QgaW4geyJ1c2VyIiwgImFnZW50In06CiAgICAgICAgICAgIHJldHVybgoKICAgICAgICByZWNvcmRfdHVybigKICAgICAgICAgICAgc2Vzc2lvbl90dXJucywKICAgICAgICAgICAgbGVuKHNlc3Npb25fdHVybnMpLAogICAgICAgICAgICBzcGVha2VyLAogICAgICAgICAgICBfY2hhdF9tZXNzYWdlX3RleHQoZXYuaXRlbSksCiAgICAgICAgICAgIHRva2Vuc191c2VkPV9tZXNzYWdlX3Rva2VuX2NvdW50KGV2Lml0ZW0pLAogICAgICAgICAgICBsYXRlbmN5X21zPV9tZXNzYWdlX2xhdGVuY3lfbXMoZXYuaXRlbSksCiAgICAgICAgKQoKICAgIEBzZXNzaW9uLm9uKCJzZXNzaW9uX3VzYWdlX3VwZGF0ZWQiKQogICAgZGVmIG9uX3Nlc3Npb25fdXNhZ2VfdXBkYXRlZChldjogU2Vzc2lvblVzYWdlVXBkYXRlZEV2ZW50KSAtPiBOb25lOgogICAgICAgIG5vbmxvY2FsIHRvdGFsX3Rva2VucwogICAgICAgIHRvdGFsX3Rva2VucyA9IF91c2FnZV90b3RhbF90b2tlbnMoZXYudXNhZ2UpCgogICAgYXN5bmMgZGVmIGZsdXNoX2hpc3RvcnkoKSAtPiBOb25lOgogICAgICAgIG5vbmxvY2FsIGhpc3RvcnlfZmx1c2hlZCwgdG90YWxfdG9rZW5zCiAgICAgICAgYXN5bmMgd2l0aCBoaXN0b3J5X2ZsdXNoX2xvY2s6CiAgICAgICAgICAgIGlmIGhpc3RvcnlfZmx1c2hlZCBvciBoaXN0b3J5X3Nlc3Npb25faWQgaXMgTm9uZToKICAgICAgICAgICAgICAgIHJldHVybgoKICAgICAgICAgICAgdG90YWxfdG9rZW5zID0gdG90YWxfdG9rZW5zIG9yIF91c2FnZV90b3RhbF90b2tlbnMoZ2V0YXR0cihzZXNzaW9uLCAidXNhZ2UiLCBOb25lKSkKICAgICAgICAgICAgdHJ5OgogICAgICAgICAgICAgICAgYXdhaXQgY2xvc2Vfc2Vzc2lvbigKICAgICAgICAgICAgICAgICAgICBoaXN0b3J5X3Nlc3Npb25faWQsCiAgICAgICAgICAgICAgICAgICAgdHVybnM9c2Vzc2lvbl90dXJucywKICAgICAgICAgICAgICAgICAgICB0b3RhbF90b2tlbnM9dG90YWxfdG9rZW5zLAogICAgICAgICAgICAgICAgICAgIGVycm9yX2NvZGU9Y2xvc2VfZXJyb3JfY29kZSwKICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgZXhjZXB0IEV4Y2VwdGlvbjoKICAgICAgICAgICAgICAgIGxvZ2dlci5leGNlcHRpb24oIkNvdWxkIG5vdCBmbHVzaCBUYW5nbyBoaXN0b3J5IHNlc3Npb24gc2Vzc2lvbl9pZD0lcyIsIGhpc3Rvcnlfc2Vzc2lvbl9pZCkKICAgICAgICAgICAgICAgIHJldHVybgoKICAgICAgICAgICAgaGlzdG9yeV9mbHVzaGVkID0gVHJ1ZQogICAgICAgICAgICBsb2dnZXIuaW5mbygKICAgICAgICAgICAgICAgICJUYW5nbyBoaXN0b3J5IHNlc3Npb24gZmx1c2hlZCBzZXNzaW9uX2lkPSVzIHR1cm5zPSVkIHRvdGFsX3Rva2Vucz0lZCIsCiAgICAgICAgICAgICAgICBoaXN0b3J5X3Nlc3Npb25faWQsCiAgICAgICAgICAgICAgICBsZW4oc2Vzc2lvbl90dXJucyksCiAgICAgICAgICAgICAgICB0b3RhbF90b2tlbnMsCiAgICAgICAgICAgICkKCiAgICBAc2Vzc2lvbi5vbigiY2xvc2UiKQogICAgZGVmIG9uX2Nsb3NlKGV2OiBDbG9zZUV2ZW50KSAtPiBOb25lOgogICAgICAgIG5vbmxvY2FsIGNsb3NlX2Vycm9yX2NvZGUKICAgICAgICBpZiBldi5lcnJvciBpcyBub3QgTm9uZToKICAgICAgICAgICAgY2xvc2VfZXJyb3JfY29kZSA9IHN0cihldi5yZWFzb24pCiAgICAgICAgbG9nZ2VyLmluZm8oIlRhbmdvIGFnZW50IHNlc3Npb24gY2xvc2VkIHJlYXNvbj0lcyB0dXJucz0lZCIsIGV2LnJlYXNvbiwgbGVuKHNlc3Npb25fdHVybnMpKQogICAgICAgIGFzeW5jaW8uY3JlYXRlX3Rhc2soZmx1c2hfaGlzdG9yeSgpKQoKICAgIGN0eC5hZGRfc2h1dGRvd25fY2FsbGJhY2soZmx1c2hfaGlzdG9yeSkKCiAgICB0cnk6CiAgICAgICAgYXdhaXQgc2Vzc2lvbi5zdGFydChhZ2VudD1KYXJ2aXMocGVyc29uYSksIHJvb209Y3R4LnJvb20pCiAgICBleGNlcHQgRXhjZXB0aW9uIGFzIGV4YzoKICAgICAgICBlcnJvcl90ZXh0ID0gc3RyKGV4YykubG93ZXIoKQogICAgICAgIGlmICJ0aW1lb3V0IiBpbiBlcnJvcl90ZXh0IG9yICI1MDQiIGluIGVycm9yX3RleHQ6CiAgICAgICAgICAgIGxvZ2dlci53YXJuaW5nKAogICAgICAgICAgICAgICAgIkxMTSB0aW1lb3V0IG9uICVzOyBMaXRlTExNIG1heSBmYWxsIGJhY2sgdG8gY2xvdWQuIHBlcnNvbmE9JXMiLAogICAgICAgICAgICAgICAgcGVyc29uYS5sbG1fbW9kZWwsCiAgICAgICAgICAgICAgICBwZXJzb25hLmRpc3BsYXlfbmFtZSwKICAgICAgICAgICAgKQogICAgICAgIHJhaXNlCiAgICBsb2dnZXIuaW5mbygiVGFuZ28gYWdlbnQgc2Vzc2lvbiBzdGFydGVkLiIpCgoKaWYgX19uYW1lX18gPT0gIl9fbWFpbl9fIjoKICAgIGZyb20gbGl2ZWtpdC5hZ2VudHMgaW1wb3J0IFdvcmtlck9wdGlvbnMsIGNsaQoKICAgIGNsaS5ydW5fYXBwKAogICAgICAgIFdvcmtlck9wdGlvbnMoCiAgICAgICAgICAgIGVudHJ5cG9pbnRfZm5jPWVudHJ5cG9pbnQsCiAgICAgICAgICAgIHNodXRkb3duX3Byb2Nlc3NfdGltZW91dD0xNS4wLAogICAgICAgICkKICAgICkK
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import os
+import uuid
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, PlainTextResponse
+from pydantic import BaseModel, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
+
+from db import close_pool, get_pool
+from history import (
+    close_session,
+    create_session,
+    get_session_turns,
+    get_sessions,
+    mask_client_ip,
+    record_turn,
+)
+from personas import DEFAULT_PERSONA_ID, Persona, get_persona, list_personas
+
+dotenv_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=dotenv_path)
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger("project-tango")
+
+LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL", "http://localhost:4000")
+LITELLM_MASTER_KEY = os.getenv("LITELLM_MASTER_KEY", "dummy")
+LIVEKIT_URL = os.getenv("LIVEKIT_URL")
+LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
+LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
+
+limiter = Limiter(key_func=get_remote_address)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await get_pool()
+    try:
+        yield
+    finally:
+        await close_pool()
+
+
+app = FastAPI(title="Project Tango Backend", version="0.1.0", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv(
+        "TANGO_CORS_ORIGINS",
+        "http://localhost:3006,http://127.0.0.1:3006",
+    ).split(","),
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+
+
+class TokenRequest(BaseModel):
+    room_name: str | None = None
+    participant_identity: str | None = None
+    participant_name: str | None = None
+    participant_metadata: str | None = None
+    participant_attributes: dict[str, str] = Field(default_factory=dict)
+    persona_id: str | None = None
+    persona: str | None = None
+    room_config: dict[str, Any] | None = None
+
+
+def _require_livekit_env() -> None:
+    missing = [
+        name
+        for name, value in {
+            "LIVEKIT_URL": LIVEKIT_URL,
+            "LIVEKIT_API_KEY": LIVEKIT_API_KEY,
+            "LIVEKIT_API_SECRET": LIVEKIT_API_SECRET,
+        }.items()
+        if not value
+    ]
+    if missing:
+        raise HTTPException(status_code=500, detail=f"Missing environment variables: {', '.join(missing)}")
+
+
+def _room_name(persona: Persona, requested_room: str | None = None) -> str:
+    if requested_room:
+        return requested_room
+    return f"tango_{persona.id}_{uuid.uuid4().hex[:10]}"
+
+
+def _json_object(value: str | None) -> dict[str, Any]:
+    if not value:
+        return {}
+
+    try:
+        parsed = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return {"client_metadata": value}
+
+    return parsed if isinstance(parsed, dict) else {"client_metadata": value}
+
+
+def _request_history_context(request: Request | None) -> dict[str, str]:
+    if request is None:
+        return {}
+
+    raw_ip = (
+        request.headers.get("CF-Connecting-IP")
+        or request.headers.get("X-Forwarded-For")
+        or (request.client.host if request.client else None)
+    )
+    masked_ip = mask_client_ip(raw_ip)
+    user_agent = request.headers.get("user-agent")
+
+    context: dict[str, str] = {}
+    if masked_ip:
+        context["client_ip"] = masked_ip
+    if user_agent:
+        context["user_agent"] = user_agent[:512]
+    return context
+
+
+def _token_metadata(
+    persona: Persona,
+    existing_metadata: str | None = None,
+    history_context: dict[str, str] | None = None,
+) -> str:
+    payload = _json_object(existing_metadata)
+    payload.update(
+        {
+            "persona_id": persona.id,
+            "display_name": persona.display_name,
+        }
+    )
+    if history_context:
+        payload["history"] = history_context
+    return json.dumps(payload)
+
+
+def _token_attributes(persona: Persona, request: TokenRequest) -> dict[str, str]:
+    return {
+        **request.participant_attributes,
+        "tango.persona": persona.id,
+        "tango.display_name": persona.display_name,
+    }
+
+
+def create_participant_token(
+    request: TokenRequest,
+    persona: Persona,
+    room_name: str,
+    history_context: dict[str, str] | None = None,
+) -> str:
+    _require_livekit_env()
+
+    from livekit import api
+
+    token = api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+    token = token.with_identity(
+        request.participant_identity or f"tango_user_{uuid.uuid4().hex[:8]}"
+    ).with_name(request.participant_name or "Project Tango User")
+    token = token.with_metadata(_token_metadata(persona, request.participant_metadata, history_context))
+    token = token.with_attributes(_token_attributes(persona, request))
+    token = token.with_grants(
+        api.VideoGrants(
+            room_join=True,
+            room=room_name,
+            can_publish=True,
+            can_publish_data=True,
+            can_subscribe=True,
+        )
+    )
+    if request.room_config:
+        token = token.with_room_config(request.room_config)
+
+    return token.to_jwt()
+
+
+def connection_details(request: TokenRequest, http_request: Request | None = None) -> dict[str, Any]:
+    persona = get_persona(request.persona_id or request.persona)
+    room_name = _room_name(persona, request.room_name)
+    history_context = _request_history_context(http_request)
+    participant_token = create_participant_token(request, persona, room_name, history_context)
+    persona_payload = persona.public_dict()
+
+    logger.info(
+        "Issued Tango token room=%s persona_id=%s model=%s voice_id=%s llm_base_url=%s",
+        room_name,
+        persona.id,
+        persona.llm_model,
+        persona.voice_id,
+        LITELLM_BASE_URL,
+    )
+
+    return {
+        "server_url": LIVEKIT_URL,
+        "participant_token": participant_token,
+        "serverUrl": LIVEKIT_URL,
+        "participantToken": participant_token,
+        "room_name": room_name,
+        "roomName": room_name,
+        "participant_name": request.participant_name or "Project Tango User",
+        "participantName": request.participant_name or "Project Tango User",
+        "persona": persona_payload,
+    }
+
+
+@app.get("/health")
+async def health() -> dict[str, Any]:
+    return {
+        "status": "ok",
+        "service": "project-tango-backend",
+        "litellm_base_url": LITELLM_BASE_URL,
+        "personas": [persona["id"] for persona in list_personas()],
+    }
+
+
+@app.get("/healthz", response_class=PlainTextResponse)
+async def healthz() -> str:
+    return "ok"
+
+
+@app.get("/api/personas")
+async def personas() -> dict[str, Any]:
+    return {"default_persona_id": DEFAULT_PERSONA_ID, "personas": list_personas()}
+
+
+@app.get("/api/connection-details")
+async def get_connection_details(
+    request: Request,
+    persona: str | None = None,
+    persona_id: str | None = None,
+    room_name: str | None = None,
+) -> dict[str, Any]:
+    details = connection_details(
+        TokenRequest(persona_id=persona_id or persona, room_name=room_name),
+        http_request=request,
+    )
+    asyncio.create_task(_dispatch_agent(details["room_name"]))
+    return details
+
+
+@app.post("/api/connection-details", status_code=201)
+@app.post("/getToken", status_code=201)
+async def post_connection_details(request: Request) -> dict[str, Any]:
+    body = await request.json()
+    details = connection_details(TokenRequest(**body), http_request=request)
+    asyncio.create_task(_dispatch_agent(details["room_name"]))
+    return details
+
+
+def _api_database_error() -> JSONResponse:
+    return JSONResponse({"error": "Database error"}, status_code=500)
+
+
+def _serialize_time(value: Any) -> str | None:
+    return value.isoformat() if hasattr(value, "isoformat") else None
+
+
+def _serialize_session(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **row,
+        "id": str(row["id"]),
+        "started_at": _serialize_time(row.get("started_at")),
+        "ended_at": _serialize_time(row.get("ended_at")),
+    }
+
+
+def _serialize_turn(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **row,
+        "recorded_at": _serialize_time(row.get("recorded_at")),
+    }
+
+
+@app.get("/api/history")
+@limiter.limit("30/minute")
+async def history_endpoint(request: Request, limit: int = 20, offset: int = 0) -> Any:
+    del request
+    try:
+        bounded_limit = min(max(limit, 1), 100)
+        bounded_offset = max(offset, 0)
+        sessions = await get_sessions(limit=bounded_limit, offset=bounded_offset)
+        return {
+            "sessions": [_serialize_session(session) for session in sessions],
+            "limit": bounded_limit,
+            "offset": bounded_offset,
+        }
+    except Exception:
+        logger.exception("History sessions query failed.")
+        return _api_database_error()
+
+
+@app.get("/api/history/{session_id}")
+@limiter.limit("30/minute")
+async def history_detail_endpoint(request: Request, session_id: str) -> Any:
+    del request
+    try:
+        parsed_session_id = str(uuid.UUID(session_id))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session id") from None
+
+    try:
+        turns = await get_session_turns(parsed_session_id)
+        return {
+            "session_id": parsed_session_id,
+            "turns": [_serialize_turn(turn) for turn in turns],
+        }
+    except Exception:
+        logger.exception("History detail query failed session_id=%s", parsed_session_id)
+        return _api_database_error()
+
+
+def _persona_id_from_job_context(ctx: Any) -> str | None:
+    sources = [
+        getattr(getattr(ctx, "job", None), "metadata", None),
+        getattr(getattr(ctx, "room", None), "metadata", None),
+    ]
+    for source in sources:
+        parsed = _json_object(source)
+        persona_id = parsed.get("persona_id") or parsed.get("persona")
+        if isinstance(persona_id, str):
+            return persona_id
+
+    room_name = getattr(getattr(ctx, "room", None), "name", "")
+    if room_name.startswith("tango_"):
+        parts = room_name.split("_")
+        if len(parts) >= 2:
+            return parts[1]
+    return None
+
+
+def _history_context_from_participant(participant: Any | None) -> dict[str, str]:
+    if participant is None:
+        return {}
+
+    payload = _json_object(getattr(participant, "metadata", None))
+    history_payload = payload.get("history")
+    history_context = history_payload if isinstance(history_payload, dict) else {}
+    attributes = getattr(participant, "attributes", {}) or {}
+
+    context: dict[str, str] = {}
+    persona_id = payload.get("persona_id") or attributes.get("tango.persona")
+    if isinstance(persona_id, str):
+        context["persona_id"] = persona_id
+
+    client_ip = history_context.get("client_ip") or attributes.get("tango.client_ip")
+    if isinstance(client_ip, str):
+        masked_ip = mask_client_ip(client_ip)
+        if masked_ip:
+            context["client_ip"] = masked_ip
+
+    user_agent = history_context.get("user_agent") or attributes.get("tango.user_agent")
+    if isinstance(user_agent, str):
+        context["user_agent"] = user_agent[:512]
+
+    return context
+
+
+def _chat_message_text(item: Any) -> str:
+    text_content = getattr(item, "text_content", None)
+    if isinstance(text_content, str):
+        return text_content
+
+    content = getattr(item, "content", None)
+    if not isinstance(content, list):
+        return ""
+
+    parts: list[str] = []
+    for part in content:
+        if isinstance(part, str):
+            parts.append(part)
+        elif hasattr(part, "text"):
+            text = getattr(part, "text")
+            if isinstance(text, str):
+                parts.append(text)
+    return "\n".join(parts)
+
+
+def _message_token_count(item: Any) -> int:
+    metrics = getattr(item, "metrics", {}) or {}
+    if not hasattr(metrics, "get"):
+        return 0
+
+    for key in ("total_tokens", "completion_tokens", "prompt_tokens"):
+        value = metrics.get(key)
+        if isinstance(value, int):
+            return max(value, 0)
+    return 0
+
+
+def _message_latency_ms(item: Any) -> int | None:
+    metrics = getattr(item, "metrics", {}) or {}
+    if not hasattr(metrics, "get"):
+        return None
+
+    for key in ("e2e_latency", "tts_node_ttfb", "llm_node_ttft"):
+        value = metrics.get(key)
+        if isinstance(value, int | float) and value >= 0:
+            return int(value * 1000)
+    return None
+
+
+def _usage_total_tokens(usage: Any) -> int:
+    total = 0
+    for model_usage in getattr(usage, "model_usage", []) or []:
+        total_tokens = getattr(model_usage, "total_tokens", None)
+        if isinstance(total_tokens, int):
+            total += max(total_tokens, 0)
+            continue
+
+        for field_name in ("input_tokens", "output_tokens", "prompt_tokens", "completion_tokens"):
+            value = getattr(model_usage, field_name, None)
+            if isinstance(value, int):
+                total += max(value, 0)
+    return total
+
+
+
+async def _dispatch_agent(room_name: str) -> None:
+    """Explicitly dispatch the registered LiveKit worker to this room.
+    
+    In livekit-agents 1.x workers do NOT auto-join rooms on participant connect.
+    The backend must call create_dispatch() after every token issuance.
+    """
+    try:
+        from livekit import api as _lkapi
+        async with _lkapi.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET) as _client:
+            await _client.agent_dispatch.create_dispatch(
+                _lkapi.CreateAgentDispatchRequest(room_name=room_name, agent_name="")
+            )
+        logger.info("Agent dispatched room=%s", room_name)
+    except Exception:
+        logger.exception("Agent dispatch failed room=%s", room_name)
+
+async def entrypoint(ctx: Any) -> None:
+    from jarvis_agent import Jarvis
+    from livekit.agents import (
+        AgentSession,
+        AutoSubscribe,
+        CloseEvent,
+        ConversationItemAddedEvent,
+        SessionUsageUpdatedEvent,
+    )
+    from livekit.agents.llm import ChatMessage
+    from livekit.plugins import deepgram, elevenlabs, openai, silero
+
+    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+    participant = await ctx.wait_for_participant()
+    participant_context = _history_context_from_participant(participant)
+    persona = get_persona(participant_context.get("persona_id") or _persona_id_from_job_context(ctx))
+    room_name = getattr(getattr(ctx, "room", None), "name", "unknown")
+
+    logger.info(
+        "Starting Tango agent room=%s persona_id=%s model=%s voice_id=%s llm_base_url=%s",
+        room_name,
+        persona.id,
+        persona.llm_model,
+        persona.voice_id,
+        LITELLM_BASE_URL,
+    )
+
+    history_session_id: str | None = None
+    try:
+        history_session_id = await create_session(
+            persona_id=persona.id,
+            persona_name=persona.display_name,
+            livekit_room=room_name,
+            llm_model=persona.llm_model,
+            user_agent=participant_context.get("user_agent"),
+            client_ip=participant_context.get("client_ip"),
+        )
+        logger.info(
+            "Tango history session created session_id=%s room=%s persona_id=%s",
+            history_session_id,
+            room_name,
+            persona.id,
+        )
+    except Exception:
+        logger.exception("Could not create Tango history session; voice session will continue.")
+
+    session = AgentSession(
+        vad=silero.VAD.load(),
+        stt=deepgram.STT(
+            model="nova-3",
+            language="en-US",
+            interim_results=True,
+            endpointing_ms=300,
+            smart_format=True,
+        ),
+        llm=openai.LLM(
+            base_url=LITELLM_BASE_URL,
+            api_key=LITELLM_MASTER_KEY,
+            model=persona.llm_model,
+        ),
+        tts=elevenlabs.TTS(
+            model="eleven_flash_v2_5",
+            voice_id=persona.voice_id,
+            api_key=os.getenv("ELEVENLABS_API_KEY"),
+            voice_settings=elevenlabs.VoiceSettings(**persona.voice_settings),
+            optimize_streaming_latency=3,
+            auto_mode=True,
+        ),
+        use_tts_aligned_transcript=True,
+    )
+
+    session_turns: list[dict[str, Any]] = []
+    close_error_code: str | None = None
+    total_tokens = 0
+    history_flushed = False
+    history_flush_lock = asyncio.Lock()
+
+    @session.on("conversation_item_added")
+    def on_conversation_item_added(ev: ConversationItemAddedEvent) -> None:
+        if not isinstance(ev.item, ChatMessage):
+            return
+        if getattr(ev.item, "interrupted", False):
+            return
+
+        role = getattr(ev.item, "role", None)
+        speaker = "agent" if role == "assistant" else role
+        if speaker not in {"user", "agent"}:
+            return
+
+        record_turn(
+            session_turns,
+            len(session_turns),
+            speaker,
+            _chat_message_text(ev.item),
+            tokens_used=_message_token_count(ev.item),
+            latency_ms=_message_latency_ms(ev.item),
+        )
+
+    @session.on("session_usage_updated")
+    def on_session_usage_updated(ev: SessionUsageUpdatedEvent) -> None:
+        nonlocal total_tokens
+        total_tokens = _usage_total_tokens(ev.usage)
+
+    async def flush_history() -> None:
+        nonlocal history_flushed, total_tokens
+        async with history_flush_lock:
+            if history_flushed or history_session_id is None:
+                return
+
+            total_tokens = total_tokens or _usage_total_tokens(getattr(session, "usage", None))
+            try:
+                await close_session(
+                    history_session_id,
+                    turns=session_turns,
+                    total_tokens=total_tokens,
+                    error_code=close_error_code,
+                )
+            except Exception:
+                logger.exception("Could not flush Tango history session session_id=%s", history_session_id)
+                return
+
+            history_flushed = True
+            logger.info(
+                "Tango history session flushed session_id=%s turns=%d total_tokens=%d",
+                history_session_id,
+                len(session_turns),
+                total_tokens,
+            )
+
+    @session.on("close")
+    def on_close(ev: CloseEvent) -> None:
+        nonlocal close_error_code
+        if ev.error is not None:
+            close_error_code = str(ev.reason)
+        logger.info("Tango agent session closed reason=%s turns=%d", ev.reason, len(session_turns))
+        asyncio.create_task(flush_history())
+
+    ctx.add_shutdown_callback(flush_history)
+
+    try:
+        await session.start(agent=Jarvis(persona), room=ctx.room)
+    except Exception as exc:
+        error_text = str(exc).lower()
+        if "timeout" in error_text or "504" in error_text:
+            logger.warning(
+                "LLM timeout on %s; LiteLLM may fall back to cloud. persona=%s",
+                persona.llm_model,
+                persona.display_name,
+            )
+        raise
+    logger.info("Tango agent session started.")
+
+
+if __name__ == "__main__":
+    from livekit.agents import WorkerOptions, cli
+
+    cli.run_app(
+        WorkerOptions(
+            entrypoint_fnc=entrypoint,
+            shutdown_process_timeout=15.0,
+        )
+    )
