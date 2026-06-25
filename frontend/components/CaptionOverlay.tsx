@@ -87,7 +87,7 @@ export function CaptionOverlay({ enabled, messages, room, sessionStarted }: Capt
       <div
         role="status"
         aria-live="polite"
-        className="bg-background/90 pointer-events-auto flex max-h-[min(30svh,13rem)] w-full max-w-2xl flex-col gap-2 overflow-y-auto overscroll-contain rounded-lg border border-white/10 p-3 text-center shadow-2xl backdrop-blur-md md:max-h-[min(34svh,15rem)] md:p-4 dark:bg-black/70"
+        className="bg-background/90 pointer-events-auto flex max-h-[min(30svh,13rem)] w-full max-w-2xl flex-col gap-2 overflow-y-auto overscroll-contain rounded-lg border border-white/10 p-3 text-center shadow-2xl backdrop-blur-md [scrollbar-color:rgba(255,255,255,0.35)_transparent] [scrollbar-width:thin] md:max-h-[min(34svh,15rem)] md:p-4 dark:bg-black/70 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/30 [&::-webkit-scrollbar-track]:bg-transparent"
       >
         {agentTrack.text && (
           <p className="text-foreground text-sm leading-6 font-medium break-words whitespace-pre-wrap md:text-base md:leading-7">
