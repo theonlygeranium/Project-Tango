@@ -80,6 +80,13 @@
 - The same Tita review found occasional late Tagalog STT finals and split user
   phrases, so Pinoy Pride sessions now apply LiveKit endpointing
   `min_delay=0.7` while the other personas keep the SDK default.
+- Chris/local-Qwen review on 2026-06-25 confirmed `general-info` can be routed
+  through `local/qwen3-fast`, but the local route is slower than Palmyra for
+  longer spoken answers and shares Ollama with other Schubert workloads. Tango
+  now applies local-Qwen voice guidance that favors one or two short sentences
+  and applies endpointing `min_delay=0.6` for non-Tagalog local-Qwen sessions.
+  Do not fix local route contention by changing shared LiteLLM/Ollama config
+  from this repo; coordinate shared infra changes separately.
 
 Live inspection on 2026-06-22 confirmed the v1.2 LiteLLM aliases exist in
 `/opt/polyglot/services/litellm/litellm_config.yaml`.

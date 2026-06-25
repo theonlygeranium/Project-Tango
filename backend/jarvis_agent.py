@@ -12,6 +12,7 @@ from livekit.agents import Agent
 from personas import Persona
 
 logger = logging.getLogger("project-tango.agent")
+LOCAL_QWEN_MODEL = "local/qwen3-fast"
 
 
 TOOL_SOURCES: tuple[tuple[str, str], ...] = (
@@ -55,6 +56,14 @@ class Jarvis(Agent):
     def __init__(self, persona: Persona, llm_model: str):
         self.persona = persona
         self.llm_model = llm_model
+        local_model_guidance = ""
+        if llm_model == LOCAL_QWEN_MODEL:
+            local_model_guidance = (
+                "\n\nYou are currently running on Schubert's local Qwen route. "
+                "For this route, keep spoken replies especially tight: prefer one or two "
+                "short sentences, avoid long lists, and offer to expand instead of giving "
+                "the full explanation at once."
+            )
         super().__init__(
             instructions=(
                 f"{persona.system_prompt}\n\n"
@@ -64,6 +73,7 @@ class Jarvis(Agent):
                 f"Runtime model route: {llm_model}. If the user asks what model powers you, "
                 "answer with this exact Project Tango LiteLLM route. Do not claim to be "
                 "Palmyra unless the route is writer/palmyra-x5-voice."
+                f"{local_model_guidance}"
             ),
             tools=list(_load_tools()),
         )

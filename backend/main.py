@@ -49,6 +49,8 @@ LIVEKIT_URL = os.getenv("LIVEKIT_URL")
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
 TANGO_AGENT_NAME = os.getenv("TANGO_AGENT_NAME", "tango-agent")
+LOCAL_QWEN_MODEL = "local/qwen3-fast"
+LOCAL_QWEN_ENDPOINTING_MIN_DELAY = 0.6
 TAGALOG_ENDPOINTING_MIN_DELAY = 0.7
 
 limiter = Limiter(key_func=get_remote_address)
@@ -111,9 +113,11 @@ def _room_name(persona: Persona, requested_room: str | None = None) -> str:
     return f"tango_{persona.id}_{uuid.uuid4().hex[:10]}"
 
 
-def _turn_handling_for_persona(persona: Persona) -> dict[str, Any]:
+def _turn_handling_for_session(persona: Persona, llm_model: str) -> dict[str, Any]:
     if persona.stt_language == "tl":
         return {"endpointing": {"min_delay": TAGALOG_ENDPOINTING_MIN_DELAY}}
+    if llm_model == LOCAL_QWEN_MODEL:
+        return {"endpointing": {"min_delay": LOCAL_QWEN_ENDPOINTING_MIN_DELAY}}
     return {}
 
 
@@ -508,7 +512,7 @@ async def entrypoint(ctx: Any) -> None:
     persona = get_persona(participant_context.get("persona_id") or _persona_id_from_job_context(ctx))
     llm_model = resolve_llm_model(persona, participant_context.get("llm_model"))
     room_name = getattr(getattr(ctx, "room", None), "name", "unknown")
-    turn_handling = _turn_handling_for_persona(persona)
+    turn_handling = _turn_handling_for_session(persona, llm_model)
     endpointing_min_delay = turn_handling.get("endpointing", {}).get("min_delay", "default")
 
     logger.info(
