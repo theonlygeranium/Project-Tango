@@ -52,14 +52,18 @@ def _load_tools() -> tuple[Any, ...]:
 
 
 class Jarvis(Agent):
-    def __init__(self, persona: Persona):
+    def __init__(self, persona: Persona, llm_model: str):
         self.persona = persona
+        self.llm_model = llm_model
         super().__init__(
             instructions=(
                 f"{persona.system_prompt}\n\n"
                 "You are part of Project Tango, a voice-first AI companion running through "
                 "LiveKit WebRTC. Keep spoken answers natural, concise, and useful. When a "
-                "tool is unavailable on this Linux deployment, explain that limitation plainly."
+                "tool is unavailable on this Linux deployment, explain that limitation plainly.\n\n"
+                f"Runtime model route: {llm_model}. If the user asks what model powers you, "
+                "answer with this exact Project Tango LiteLLM route. Do not claim to be "
+                "Palmyra unless the route is writer/palmyra-x5-voice."
             ),
             tools=list(_load_tools()),
         )

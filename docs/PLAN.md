@@ -69,6 +69,8 @@
   `local/qwen3-fast`, and `writer/palmyra-x5-voice`. The selected alias is
   included in token metadata/attributes, validated again by the worker, logged,
   and persisted in conversation history.
+- Each agent prompt now receives the actual runtime LiteLLM alias, so personas
+  answer model-identity questions from the routed alias instead of guessing.
 
 Live inspection on 2026-06-22 confirmed the v1.2 LiteLLM aliases exist in
 `/opt/polyglot/services/litellm/litellm_config.yaml`.

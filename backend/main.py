@@ -626,7 +626,7 @@ async def entrypoint(ctx: Any) -> None:
     ctx.add_shutdown_callback(flush_history)
 
     try:
-        await session.start(agent=Jarvis(persona), room=ctx.room)
+        await session.start(agent=Jarvis(persona, llm_model=llm_model), room=ctx.room)
     except Exception as exc:
         error_text = str(exc).lower()
         if "timeout" in error_text or "504" in error_text:
