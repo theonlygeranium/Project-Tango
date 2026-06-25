@@ -1,0 +1,11 @@
+tango-api.schubert.life {
+	bind 192.168.86.77
+	tls internal
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+	}
+	respond /healthz "ok" 200
+	reverse_proxy 127.0.0.1:8030
+}

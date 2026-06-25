@@ -1,0 +1,20 @@
+[Unit]
+Description=Project Tango Next.js Frontend
+After=network-online.target tango-backend.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=z121532
+Group=z121532
+WorkingDirectory=/opt/Project-Tango/frontend/.next/standalone
+EnvironmentFile=/opt/Project-Tango/.env
+Environment=NODE_ENV=production
+Environment=PORT=3006
+Environment=HOSTNAME=127.0.0.1
+ExecStart=/usr/bin/node /opt/Project-Tango/frontend/.next/standalone/server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

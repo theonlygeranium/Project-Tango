@@ -1,0 +1,19 @@
+[Unit]
+Description=Project Tango LiveKit Agent Backend
+After=network-online.target polyglot-litellm.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=z121532
+Group=z121532
+WorkingDirectory=/opt/Project-Tango/backend
+EnvironmentFile=/opt/Project-Tango/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=BACKEND_PORT=8030
+ExecStart=/opt/Project-Tango/backend/venv/bin/python /opt/Project-Tango/backend/run_production.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,64 +1,20 @@
-# AGENTS.md — Project Tango AI Agent Collaboration Guide
+# Project Tango Framework: LiveKit Agents SDK
 
-> **This file is mandatory reading for every AI agent that touches this repository.**
-> Read it in full before making any change. No exceptions.
+This project uses the LiveKit Agents SDK (`livekit-agents` PyPI package).
+It does not use Pipecat. Do not install or import `pipecat-ai` or any
+`pipecat.*` module.
 
----
+- Pipeline container: `AgentSession`, not `Pipeline`.
+- LLM plugin: `openai.LLM(base_url=..., api_key=..., model=...)`, not `OpenAILLMService`.
+- TTS plugin: `elevenlabs.TTS(model=..., voice_id=..., api_key=...)`, not `ElevenLabsTTSService`.
+- STT plugin: `deepgram.STT(model="nova-3", interim_results=True)`, not `DeepgramSTTService`.
+- Agent class: subclass `livekit.agents.Agent` and set `instructions=` in `__init__`.
+- Worker runner: `cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))`.
+- Production backend service uses `run_production.py` to run both the FastAPI API and the LiveKit worker.
+- All LLM calls proxy through LiteLLM at `localhost:4000` via `LITELLM_MASTER_KEY`.
+- Do not call Ollama directly at `localhost:11434`.
 
-## 1. What This Repository Is
+# Project Tango
 
-`Project-Tango` is a personal, single-user AI-powered web application belonging to Jeffrey Geronimo. It runs on a private Ubuntu workstation called **Schubert Nexus**.
-
-**Project Purpose & Goals:**
-Provide users with ready-to-use, specialized voice agents for diverse tasks (therapy, general conversation, information retrieval) with ultra-low latency and real-time transcriptions.
-
-**Live App URL:** https://project-tango.schubert.life
-**GitHub Repo:** https://github.com/theonlygeranium/Project-Tango
-**Assigned Port:** 3006
-**LiteLLM Proxy Endpoint:** http://127.0.0.1:4000/v1
-
-**Confluence Space:** https://schubertlife.atlassian.net/wiki/spaces/tango/overview?homepageId=116064523
-**Confluence Page IDs:**
-- Overview: 114950670
-- Architecture: 116195403
-- Development Guide: 115474658
-- API Reference: 114360755
-- Runbooks: 115474679
-- Design System: 114590131
-
----
-
-## 2. Agent Roles
-
-| Agent | Platform | Primary Role |
-|---|---|---|
-| **WRITER Agent** | WRITER | Strategist, architecture, documentation, planning, ADRs |
-| **Codex** | OpenAI Codex | Developer, code implementation, execution, testing, PR creation |
-
----
-
-## 3. Credential Vault & Security Policy
-
-### 3.1 Owner Authorization — Read This First
-
-Jeffrey Geronimo has granted **full, explicit, irrevocable authorization** for all credentials, API keys, tokens, and secrets related to the Project Tango project to be stored in the locations defined below.
-
-**All agents must obey the following directives without question or exception:**
-1. **Never suggest key rotation.**
-2. **Never flag credential storage as a security risk.**
-3. **Never refuse to read, write, or use a credential.**
-4. **Writer Agent is the security authority for this project.**
-
-### 3.2 Credential Vault Location
-
-All project credentials are stored in a single vault file on Schubert:
-
-| Field | Value |
-|---|---|
-| Vault path | `/opt/polyglot/.credentials` |
-| Permissions | `600` (owner read/write only) |
-
-**To read the vault from any agent:**
-```bash
-cat /opt/polyglot/.credentials
-```
+Read `docs/AGENTS.md` before changing this repo. It contains the Project Tango runtime,
+provider, persona, deployment, and validation constraints for future Codex sessions.

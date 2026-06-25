@@ -1,8 +1,0 @@
-{
-  "name": "project-tango",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "start": "npx --yes serve -p 3006 public"
-  }
-}

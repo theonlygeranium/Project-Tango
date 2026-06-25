@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+livekit-api
+livekit-agents[deepgram,elevenlabs,openai,silero]~=1.5
+python-dotenv
+pydantic
+asyncpg
+slowapi

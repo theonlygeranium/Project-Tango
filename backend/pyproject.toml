@@ -1,0 +1,20 @@
+[project]
+name = "project-tango"
+version = "0.1.0"
+description = "Project Tango FastAPI and voice pipeline backend adapted from the AURA fork."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "livekit-api",
+  "livekit-agents[deepgram,elevenlabs,openai,silero]~=1.5",
+  "python-dotenv",
+  "pydantic",
+  "asyncpg",
+  "slowapi",
+]
+
+[tool.uvicorn]
+factory = false
+host = "127.0.0.1"
+port = 8030
