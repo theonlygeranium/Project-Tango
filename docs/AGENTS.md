@@ -78,16 +78,17 @@ Do not use `ollama/qwen3.6`, `ollama/qwen3.6:latest`, or `writer/palmyra` as Tan
 
 ## Personas
 
-| Persona | Display Name | ElevenLabs Voice ID | LiteLLM Alias |
-| --- | --- | --- | --- |
-| Therapy | Damian | `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` |
-| General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` |
-| Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` |
-| Pinoy Pride | Tita | `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` |
+| Persona | Display Name | ElevenLabs Voice ID | LiteLLM Alias | Deepgram STT Language |
+| --- | --- | --- | --- | --- |
+| Therapy | Damian | `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | `en-US` |
+| General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | `en-US` |
+| Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | `en-US` |
+| Pinoy Pride | Tita | `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` | `tl` |
 
 Persona selection starts in the frontend, is sent to `/api/connection-details`, and is encoded in
 the LiveKit token metadata, participant attributes, and generated room name. The backend worker must
-use that persona to choose the ElevenLabs voice, LiteLLM model string, and system prompt.
+use that persona to choose the ElevenLabs voice, LiteLLM model string, Deepgram STT language, and
+system prompt.
 
 ## Validation Floor
 

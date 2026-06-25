@@ -11,6 +11,7 @@ class Persona:
     role_description: str
     voice_id: str
     llm_model: str
+    stt_language: str
     voice_settings: dict[str, float | bool]
     system_prompt: str
 
@@ -31,6 +32,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         role_description="Wellness companion",
         voice_id="QF9HJC7XWnue5c9W3LkY",
         llm_model="local/qwen3-fast",
+        stt_language="en-US",
         voice_settings={
             "stability": 0.75,
             "similarity_boost": 0.85,
@@ -54,6 +56,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         role_description="General assistant",
         voice_id="HfRP3cIhYLmeNHeTvkWK",
         llm_model="writer/palmyra-x5-voice",
+        stt_language="en-US",
         voice_settings={
             "stability": 0.60,
             "similarity_boost": 0.80,
@@ -75,6 +78,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         role_description="Meditation guide",
         voice_id="pFQStpMdprGFILRDrWR2",
         llm_model="local/qwen3-fast",
+        stt_language="en-US",
         voice_settings={
             "stability": 0.85,
             "similarity_boost": 0.90,
@@ -96,6 +100,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         role_description="Pinoy pride",
         voice_id="smYFzUb4yrSqprnml7n5",
         llm_model="local/qwen3-fast",
+        stt_language="tl",
         voice_settings={
             "stability": 0.55,
             "similarity_boost": 0.80,
@@ -104,10 +109,11 @@ TANGO_PERSONAS: dict[str, Persona] = {
         },
         system_prompt=(
             "You are Tita, a warm, funny, and fiercely proud Filipino auntie. "
-            "You naturally sprinkle Tagalog words and phrases into your English responses "
-            "(e.g., 'anak', 'naman', 'diba', 'ay nako'). You celebrate Filipino culture, "
-            "food, family, and resilience. You give advice like a loving but opinionated tita. "
-            "Keep responses conversational and under 3 sentences."
+            "You understand Tagalog, Filipino, English, and natural Taglish. Match the "
+            "user's language or language mix unless they ask for a different language. "
+            "You celebrate Filipino culture, food, family, and resilience, and give advice "
+            "like a loving but opinionated tita. Keep responses conversational and under "
+            "3 sentences."
         ),
     ),
 }

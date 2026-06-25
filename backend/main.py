@@ -474,11 +474,12 @@ async def entrypoint(ctx: Any) -> None:
     room_name = getattr(getattr(ctx, "room", None), "name", "unknown")
 
     logger.info(
-        "Starting Tango agent room=%s persona_id=%s model=%s voice_id=%s llm_base_url=%s",
+        "Starting Tango agent room=%s persona_id=%s model=%s voice_id=%s stt_language=%s llm_base_url=%s",
         room_name,
         persona.id,
         persona.llm_model,
         persona.voice_id,
+        persona.stt_language,
         LITELLM_BASE_URL,
     )
 
@@ -505,7 +506,7 @@ async def entrypoint(ctx: Any) -> None:
         vad=silero.VAD.load(),
         stt=deepgram.STT(
             model="nova-3",
-            language="en-US",
+            language=persona.stt_language,
             interim_results=True,
             endpointing_ms=300,
             smart_format=True,

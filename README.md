@@ -41,16 +41,19 @@ Do not deploy new LiteLLM or Ollama services for this repo. LLM calls go through
 
 ## Personas
 
-| Persona | Display Name | Voice ID | LiteLLM Alias |
-| --- | --- | --- | --- |
-| Therapy | Damian | `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` |
-| General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` |
-| Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` |
-| Pinoy Pride | Tita | `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` |
+| Persona | Display Name | Voice ID | LiteLLM Alias | STT Language |
+| --- | --- | --- | --- | --- |
+| Therapy | Damian | `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | `en-US` |
+| General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | `en-US` |
+| Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | `en-US` |
+| Pinoy Pride | Tita | `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` | `tl` |
 
 The frontend sends the selected persona to `/api/connection-details`. The backend encodes
 that selection into LiveKit token metadata and room naming so the worker can load the
 correct system prompt, ElevenLabs voice, and LiteLLM model.
+Tita uses Deepgram Nova-3 Tagalog transcription (`tl`) so spoken Tagalog and
+Filipino are recognized during the current test pass; the other personas stay
+on English (`en-US`).
 
 ## Media Controls
 

@@ -62,6 +62,9 @@
   per-persona `VoiceSettings`, `streaming_latency=3`, `auto_mode=True`, and
   `use_speaker_boost=False` for all personas. Deepgram Flux and unsupported
   `utterance_end_ms` remain deferred.
+- Tita now uses persona-specific Deepgram Nova-3 Tagalog STT (`language="tl"`)
+  for the current Tagalog/Filipino test pass. Damian, Chris, and Nathaniel
+  remain on `en-US`.
 
 Live inspection on 2026-06-22 confirmed the v1.2 LiteLLM aliases exist in
 `/opt/polyglot/services/litellm/litellm_config.yaml`.
