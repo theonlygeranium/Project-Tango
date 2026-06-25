@@ -119,7 +119,15 @@ export function App({ appConfig }: AppProps) {
         }
 
         // Dispatch agent into room AFTER participant has joined
-        try { const _ab=process.env.NEXT_PUBLIC_API_BASE_URL??''; await fetch(_ab+'/api/dispatch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room_name:connectionDetails.roomName})}); } catch {}
+        // Dispatch agent into room AFTER participant has joined
+        try {
+          const _apiBase = 'https://tango-api.schubert.life';
+          await fetch(_apiBase + '/api/dispatch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ room_name: connectionDetails.roomName }),
+          });
+        } catch {}
 
         try {
           await room.localParticipant.setMicrophoneEnabled(true, undefined, {
