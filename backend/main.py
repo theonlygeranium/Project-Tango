@@ -249,7 +249,6 @@ async def get_connection_details(
         TokenRequest(persona_id=persona_id or persona, room_name=room_name),
         http_request=request,
     )
-    asyncio.create_task(_dispatch_agent(details["room_name"]))
     return details
 
 
@@ -258,7 +257,6 @@ async def get_connection_details(
 async def post_connection_details(request: Request) -> dict[str, Any]:
     body = await request.json()
     details = connection_details(TokenRequest(**body), http_request=request)
-    asyncio.create_task(_dispatch_agent(details["room_name"]))
     return details
 
 
@@ -445,6 +443,16 @@ async def _dispatch_agent(room_name: str) -> None:
         logger.info("Agent dispatched room=%s", room_name)
     except Exception:
         logger.exception("Agent dispatch failed room=%s", room_name)
+
+
+@app.post("/api/dispatch")
+async def dispatch_agent_to_room(request: Request) -> dict:
+    body = await request.json()
+    rn = body.get("room_name")
+    if not rn or not isinstance(rn, str):
+        raise HTTPException(status_code=400, detail="room_name required")
+    asyncio.create_task(_dispatch_agent(rn))
+    return {"dispatched": True, "room_name": rn}
 
 async def entrypoint(ctx: Any) -> None:
     from jarvis_agent import Jarvis
