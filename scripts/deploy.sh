@@ -18,6 +18,16 @@ cd /opt/Project-Tango/frontend
 npm ci --silent >> "$DEPLOY_LOG" 2>&1
 npm run build >> "$DEPLOY_LOG" 2>&1
 
+# Copy static assets into standalone output (required for Next.js standalone mode)
+# Without this, _next/static/* returns 404 and the app has no CSS or JS chunks.
+cp -r /opt/Project-Tango/frontend/.next/static \
+       /opt/Project-Tango/frontend/.next/standalone/.next/static >> "$DEPLOY_LOG" 2>&1
+if [ -d /opt/Project-Tango/frontend/public ]; then
+  cp -r /opt/Project-Tango/frontend/public \
+         /opt/Project-Tango/frontend/.next/standalone/public >> "$DEPLOY_LOG" 2>&1
+fi
+echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Static assets copied to standalone dir." >> "$DEPLOY_LOG"
+
 # Restart systemd services
 systemctl restart tango-backend
 systemctl restart tango-web
