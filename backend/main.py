@@ -440,7 +440,7 @@ async def _dispatch_agent(room_name: str) -> None:
         from livekit import api as _lkapi
         async with _lkapi.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET) as _client:
             await _client.agent_dispatch.create_dispatch(
-                _lkapi.CreateAgentDispatchRequest(room_name=room_name, agent_name="")
+                _lkapi.CreateAgentDispatchRequest(room=room_name, agent_name="")
             )
         logger.info("Agent dispatched room=%s", room_name)
     except Exception:
