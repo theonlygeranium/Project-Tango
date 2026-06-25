@@ -52,6 +52,14 @@ The frontend sends the selected persona to `/api/connection-details`. The backen
 that selection into LiveKit token metadata and room naming so the worker can load the
 correct system prompt, ElevenLabs voice, and LiteLLM model.
 
+## Media Controls
+
+The microphone, camera, and screen-share controls are inherited from the AURA LiveKit
+interface. Microphone input drives the current audio-first Tango agent. Camera and
+screen share publish local LiveKit video tracks and show compact local preview tiles,
+but the current STT/LLM/TTS worker does not consume visual frames as model context.
+Adding true visual understanding would require a future LiveKit video-frame pipeline.
+
 ## Local Setup
 
 Backend:

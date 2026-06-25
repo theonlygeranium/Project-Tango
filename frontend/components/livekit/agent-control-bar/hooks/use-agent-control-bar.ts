@@ -110,7 +110,7 @@ export function useAgentControlBar(props: UseAgentControlBarProps = {}): UseAgen
     async (enabled?: boolean) => {
       const nextEnabled = enabled ?? !cameraEnabled;
       if (screenShareEnabled) {
-        toggleScreenShare(false);
+        await toggleScreenShare(false);
       }
       await toggleCamera(enabled);
       // persist video input enabled preference
@@ -132,7 +132,7 @@ export function useAgentControlBar(props: UseAgentControlBarProps = {}): UseAgen
   const handleToggleScreenShare = React.useCallback(
     async (enabled?: boolean) => {
       if (cameraEnabled) {
-        toggleCamera(false);
+        await toggleCamera(false);
       }
       await toggleScreenShare(enabled);
     },

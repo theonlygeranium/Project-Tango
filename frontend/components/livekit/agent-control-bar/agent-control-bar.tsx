@@ -67,6 +67,7 @@ export function AgentControlBar({
   } = useAgentControlBar({
     controls,
     saveUserChoices,
+    onDeviceError,
   });
 
   const handleSendMessage = async (message: string) => {
@@ -101,6 +102,11 @@ export function AgentControlBar({
     },
     [onDeviceError]
   );
+  const microphoneLabel = microphoneToggle.enabled ? 'Mute microphone' : 'Unmute microphone';
+  const cameraLabel = cameraToggle.enabled ? 'Stop camera preview' : 'Share camera preview';
+  const screenShareLabel = screenShareToggle.enabled ? 'Stop screen share' : 'Share screen';
+  const chatLabel = chatOpen ? 'Close chat' : 'Open chat';
+  const captionsLabel = captionsEnabled ? 'Hide captions' : 'Show captions';
 
   return (
     <div
@@ -136,6 +142,8 @@ export function AgentControlBar({
                 pressed={microphoneToggle.enabled}
                 disabled={microphoneToggle.pending}
                 onPressedChange={microphoneToggle.toggle}
+                aria-label={microphoneLabel}
+                title={microphoneLabel}
                 className="peer/track group/track relative min-h-11 min-w-11 pr-3 pl-3 md:rounded-r-none md:border-r-0 md:pr-2"
               >
                 <BarVisualizer
@@ -157,6 +165,8 @@ export function AgentControlBar({
               <DeviceSelect
                 size="sm"
                 kind="audioinput"
+                aria-label="Choose microphone"
+                title="Choose microphone"
                 onMediaDeviceError={onMicrophoneDeviceSelectError}
                 onActiveDeviceChange={handleAudioDeviceChange}
                 className={cn([
@@ -179,12 +189,16 @@ export function AgentControlBar({
                 pending={cameraToggle.pending}
                 disabled={cameraToggle.pending}
                 onPressedChange={cameraToggle.toggle}
+                aria-label={cameraLabel}
+                title={cameraLabel}
                 className="peer/track relative w-auto rounded-r-none pr-3 pl-3 disabled:opacity-100 md:border-r-0 md:pr-2"
               />
               <hr className="bg-separator1 peer-data-[state=off]/track:bg-separatorSerious relative z-10 -mr-px hidden h-4 w-px md:block" />
               <DeviceSelect
                 size="sm"
                 kind="videoinput"
+                aria-label="Choose camera"
+                title="Choose camera"
                 onMediaDeviceError={onCameraDeviceSelectError}
                 onActiveDeviceChange={handleVideoDeviceChange}
                 className={cn([
@@ -206,6 +220,8 @@ export function AgentControlBar({
                 pressed={screenShareToggle.enabled}
                 disabled={screenShareToggle.pending}
                 onPressedChange={screenShareToggle.toggle}
+                aria-label={screenShareLabel}
+                title={screenShareLabel}
                 className="relative w-auto"
               />
             </div>
@@ -214,7 +230,8 @@ export function AgentControlBar({
           {visibleControls.chat && (
             <Toggle
               variant="secondary"
-              aria-label="Toggle chat"
+              aria-label={chatLabel}
+              title={chatLabel}
               pressed={chatOpen}
               onPressedChange={setChatOpen}
               disabled={!isAgentAvailable}
@@ -226,7 +243,8 @@ export function AgentControlBar({
           {onCaptionsEnabledChange && (
             <Toggle
               variant="secondary"
-              aria-label="Toggle captions"
+              aria-label={captionsLabel}
+              title={captionsLabel}
               pressed={captionsEnabled}
               onPressedChange={onCaptionsEnabledChange}
               className="min-h-11 min-w-11"
@@ -240,6 +258,7 @@ export function AgentControlBar({
             variant="destructive"
             onClick={onLeave}
             disabled={isDisconnecting}
+            title="End call"
             className="min-h-11 font-mono"
           >
             <PhoneDisconnectIcon weight="bold" />

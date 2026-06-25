@@ -36,11 +36,43 @@ function getSourceIcon(source: Track.Source, enabled: boolean, pending = false) 
   }
 }
 
-export function TrackToggle({ source, pressed, pending, className, ...props }: TrackToggleProps) {
-  const IconComponent = getSourceIcon(source, pressed ?? false, pending);
+function getSourceLabel(source: Track.Source, enabled: boolean, pending = false) {
+  if (pending) {
+    return 'Preparing media';
+  }
+
+  switch (source) {
+    case Track.Source.Microphone:
+      return enabled ? 'Mute microphone' : 'Unmute microphone';
+    case Track.Source.Camera:
+      return enabled ? 'Stop camera preview' : 'Share camera preview';
+    case Track.Source.ScreenShare:
+      return enabled ? 'Stop screen share' : 'Share screen';
+    default:
+      return 'Toggle media';
+  }
+}
+
+export function TrackToggle({
+  source,
+  pressed,
+  pending,
+  className,
+  title,
+  ...props
+}: TrackToggleProps) {
+  const enabled = pressed ?? false;
+  const IconComponent = getSourceIcon(source, enabled, pending);
+  const label = props['aria-label'] ?? getSourceLabel(source, enabled, pending);
 
   return (
-    <Toggle pressed={pressed} aria-label={`Toggle ${source}`} className={cn(className)} {...props}>
+    <Toggle
+      pressed={pressed}
+      title={title ?? label}
+      className={cn(className)}
+      {...props}
+      aria-label={label}
+    >
       <IconComponent weight="bold" className={cn(pending && 'animate-spin')} />
       {props.children}
     </Toggle>

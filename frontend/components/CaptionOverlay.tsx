@@ -83,17 +83,21 @@ export function CaptionOverlay({ enabled, messages, room, sessionStarted }: Capt
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-3 bottom-36 z-50 flex justify-center md:bottom-44">
-      <div className="flex w-full max-w-2xl flex-col items-center gap-2">
+    <div className="pointer-events-none fixed inset-x-3 bottom-[12.5rem] z-[60] flex justify-center md:bottom-[15rem]">
+      <div
+        role="status"
+        aria-live="polite"
+        className="bg-background/90 pointer-events-auto flex max-h-[min(30svh,13rem)] w-full max-w-2xl flex-col gap-2 overflow-y-auto overscroll-contain rounded-lg border border-white/10 p-3 text-center shadow-2xl backdrop-blur-md md:max-h-[min(34svh,15rem)] md:p-4 dark:bg-black/70"
+      >
         {agentTrack.text && (
-          <p className="bg-background/85 text-foreground line-clamp-2 max-w-full rounded-full border px-4 py-2 text-center text-sm font-medium shadow-sm backdrop-blur-md transition-opacity duration-200 md:text-base">
+          <p className="text-foreground text-sm leading-6 font-medium break-words whitespace-pre-wrap md:text-base md:leading-7">
             {agentTrack.text}
           </p>
         )}
         {userTrack.text && (
           <p
             className={cn(
-              'bg-muted/85 text-muted-foreground line-clamp-2 max-w-[92%] rounded-full border px-3 py-1.5 text-center text-xs shadow-sm backdrop-blur-md transition-opacity duration-500 md:text-sm',
+              'text-muted-foreground border-border/70 border-t pt-2 text-xs leading-5 font-medium break-words whitespace-pre-wrap transition-opacity duration-500 md:text-sm md:leading-6',
               userVisible ? 'opacity-100' : 'opacity-0'
             )}
           >

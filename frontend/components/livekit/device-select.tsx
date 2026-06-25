@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useEffect } from 'react';
 import { cva } from 'class-variance-authority';
 import { LocalAudioTrack, LocalVideoTrack } from 'livekit-client';
 import { useMaybeRoomContext, useMediaDeviceSelect } from '@livekit/components-react';
@@ -46,13 +47,13 @@ export function DeviceSelect({
   track,
   requestPermissions,
   onMediaDeviceError,
-  // initialSelection,
-  // onActiveDeviceChange,
-  // onDeviceListChange,
-  ...props
+  onActiveDeviceChange,
+  onDeviceListChange,
+  className,
+  size = 'default',
+  title,
+  ...triggerProps
 }: DeviceSelectProps) {
-  const size = props.size || 'default';
-
   const room = useMaybeRoomContext();
   const { devices, activeDeviceId, setActiveMediaDevice } = useMediaDeviceSelect({
     kind,
@@ -61,17 +62,36 @@ export function DeviceSelect({
     requestPermissions,
     onError: onMediaDeviceError,
   });
+  const label =
+    triggerProps['aria-label'] ?? (kind === 'audioinput' ? 'Choose microphone' : 'Choose camera');
+  const handleValueChange = useCallback(
+    async (deviceId: string) => {
+      await setActiveMediaDevice(deviceId);
+      onActiveDeviceChange?.(deviceId);
+    },
+    [onActiveDeviceChange, setActiveMediaDevice]
+  );
+
+  useEffect(() => {
+    onDeviceListChange?.(devices);
+  }, [devices, onDeviceListChange]);
+
   return (
-    <Select value={activeDeviceId} onValueChange={setActiveMediaDevice}>
-      <SelectTrigger className={cn(selectVariants({ size }), props.className)}>
+    <Select value={activeDeviceId} onValueChange={handleValueChange}>
+      <SelectTrigger
+        className={cn(selectVariants({ size }), className)}
+        title={title ?? label}
+        {...triggerProps}
+        aria-label={label}
+      >
         {size !== 'sm' && (
           <SelectValue className="font-mono text-sm" placeholder={`Select a ${kind}`} />
         )}
       </SelectTrigger>
       <SelectContent>
-        {devices.map((device) => (
+        {devices.map((device, index) => (
           <SelectItem key={device.deviceId} value={device.deviceId} className="font-mono text-xs">
-            {device.label}
+            {device.label || `Device ${index + 1}`}
           </SelectItem>
         ))}
       </SelectContent>

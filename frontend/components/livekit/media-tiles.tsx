@@ -197,6 +197,7 @@ export function MediaTiles({
                     ...animationProps.transition,
                     delay: chatOpen ? 0 : 0.15,
                   }}
+                  label="Camera"
                   className="h-[90px]"
                 />
               )}
@@ -212,6 +213,8 @@ export function MediaTiles({
                     ...animationProps.transition,
                     delay: chatOpen ? 0 : 0.15,
                   }}
+                  fit="contain"
+                  label="Screen"
                   className="h-[90px]"
                 />
               )}
