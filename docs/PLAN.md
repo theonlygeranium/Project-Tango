@@ -2,6 +2,7 @@
 
 ## BS-001 + BS-002
 
+- Canonical deployment repo: `theonlygeranium/Project-Tango`.
 - Fork baseline: `theonlygeranium/AURA`.
 - Rename app/package identity to `project-tango`.
 - Keep the AURA LiveKit orb frontend and add a session-start persona selector.
@@ -23,8 +24,8 @@
 
 ## Current Status - 2026-06-22
 
-- Local clone is connected to `theonlygeranium/AURA` as `origin`.
-- Original AURA is kept as `upstream`; push to `upstream` is disabled locally.
+- The private `Project-Tango` repo is the deployment source for Schubert.
+- Public `AURA` is kept as the fork baseline / historical adaptation source.
 - Work is on local branch `project-tango/bootstrap`.
 - Backend and frontend persona maps are updated to the v1.2 LiteLLM aliases.
 - `backend/.env.example` uses `LITELLM_MASTER_KEY` and does not include `WRITER_API_KEY`.
@@ -58,7 +59,7 @@
   `/Users/jeffgeronimo/Downloads/Project Tango_VERIFICATION_AND_AUDIO_OPTIMIZATION.md`
   is applied for the supported LiveKit plugin settings: Deepgram Nova-3 now uses
   `endpointing_ms=300` and `smart_format=True`; ElevenLabs Flash v2.5 now uses
-  per-persona `VoiceSettings`, `streaming_latency=2`, `auto_mode=True`, and
+  per-persona `VoiceSettings`, `streaming_latency=3`, `auto_mode=True`, and
   `use_speaker_boost=False` for all personas. Deepgram Flux and unsupported
   `utterance_end_ms` remain deferred.
 
@@ -142,7 +143,7 @@ is the v1.2 target and should stay free for `tango-backend.service`.
   plugin accepts the supported settings: `deepgram.STT` reports
   `endpointing_ms=300` and `smart_format=True`; `elevenlabs.TTS` constructs for
   Damian, Chris, Nathaniel, and Tita with `eleven_flash_v2_5`,
-  `streaming_latency=2`, `auto_mode=True`, and `use_speaker_boost=False`.
+  `streaming_latency=3`, `auto_mode=True`, and `use_speaker_boost=False`.
 - Goal 5 DB error QA temporarily renamed the `tango` schema; `/api/history`
   returned only `{"error":"Database error"}` with HTTP 500, then recovered after
   restoring the schema.

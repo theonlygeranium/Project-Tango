@@ -11,6 +11,11 @@ ehthumbs.db
 # Python / Backend
 # =================================
 
+# Runtime secrets live on Schubert and must not be committed.
+/.env
+/.env.*
+!/.env.example
+
 # Virtual Environment
 backend/venv/
 

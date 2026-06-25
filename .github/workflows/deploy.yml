@@ -39,4 +39,14 @@ jobs:
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout=30 \
             z121532@100.86.47.6 \
-            "cd /opt/Project-Tango && git pull origin main && sudo bash scripts/deploy.sh"
+            'set -e
+            cd /opt/Project-Tango
+            if [ -f .env ]; then
+              cp .env /tmp/project-tango.env.backup
+            fi
+            git pull origin main
+            if [ -f /tmp/project-tango.env.backup ]; then
+              mv /tmp/project-tango.env.backup .env
+              chmod 600 .env
+            fi
+            sudo bash scripts/deploy.sh'

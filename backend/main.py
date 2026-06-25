@@ -519,7 +519,7 @@ async def entrypoint(ctx: Any) -> None:
             voice_id=persona.voice_id,
             api_key=os.getenv("ELEVENLABS_API_KEY"),
             voice_settings=elevenlabs.VoiceSettings(**persona.voice_settings),
-            optimize_streaming_latency=3,
+            streaming_latency=3,
             auto_mode=True,
         ),
         use_tts_aligned_transcript=True,

@@ -4,6 +4,9 @@ Project Tango adapts the forked AURA LiveKit voice interface into a Schubert-hos
 persona-driven AI companion. The frontend keeps the orb-style WebRTC session UI, while
 the backend routes all LLM traffic through the existing LiteLLM proxy on Schubert.
 
+The canonical deployment repo is `theonlygeranium/Project-Tango`. The public
+`theonlygeranium/AURA` repo is the fork baseline and historical adaptation source only.
+
 ## Architecture
 
 - `frontend/` - Next.js 15 LiveKit client on port `3006`.
@@ -33,6 +36,8 @@ Do not deploy new LiteLLM or Ollama services for this repo. LLM calls go through
   the backend. Run `deploy/schubert-preflight.sh` before installing.
 - Do not add `WRITER_API_KEY` or `PALMYRA_API_KEY` to Tango env files. LiteLLM already
   owns downstream provider credentials.
+- Runtime credentials stay in `/opt/Project-Tango/.env` on Schubert and are not tracked
+  in Git.
 
 ## Personas
 
