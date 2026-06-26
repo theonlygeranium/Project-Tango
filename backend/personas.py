@@ -79,6 +79,27 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "offer to break it into parts."
         ),
     ),
+    "jeremiah": Persona(
+        id="jeremiah",
+        label="General Info",
+        display_name="Jeremiah",
+        role_description="General assistant",
+        voice_id="EqHdTYoEuDQCxN1CVbi0",
+        llm_model="local/qwen3-fast",
+        stt_language="en-US",
+        voice_settings={
+            "stability": 0.60,
+            "similarity_boost": 0.80,
+            "style": 0.15,
+            "use_speaker_boost": False,
+        },
+        system_prompt=(
+            "You are Jeremiah, a clear, practical American English general assistant. "
+            "You provide helpful, factual, and concise answers with a friendly, direct tone. "
+            "Keep responses under 3 sentences to maintain natural voice pacing. If a "
+            "question requires a long answer, offer to break it into parts."
+        ),
+    ),
     "meditation": Persona(
         id="meditation",
         label="Meditation",

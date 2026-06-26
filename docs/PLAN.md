@@ -18,8 +18,8 @@
 - Backend local/deploy port: `8030`.
 - Existing frontend Caddy route: `project-tango.schubert.life -> 3006`; do not recreate it.
 - New API Caddy route: `tango-api.schubert.life -> 8030`.
-- Therapy, Meditation, Pinoy Pride model alias: `local/qwen3-fast`.
-- General Info model alias: `writer/palmyra-x5-voice`.
+- Therapy, Jeremiah, Meditation, Pinoy Pride model alias: `local/qwen3-fast`.
+- Chris default model alias: `writer/palmyra-x5-voice`.
 - Do not use unregistered aliases `ollama/qwen3.6`, `ollama/qwen3.6:latest`, or `writer/palmyra`.
 
 ## Current Status - 2026-06-22
@@ -87,6 +87,10 @@
   and applies endpointing `min_delay=0.6` for non-Tagalog local-Qwen sessions.
   Do not fix local route contention by changing shared LiteLLM/Ollama config
   from this repo; coordinate shared infra changes separately.
+- Jeremiah is added as a second General assistant with American English STT
+  (`en-US`), ElevenLabs voice ID `EqHdTYoEuDQCxN1CVbi0`, and default route
+  `local/qwen3-fast`; the allowlisted model switcher can still route him to
+  Palmyra for comparison.
 
 Live inspection on 2026-06-22 confirmed the v1.2 LiteLLM aliases exist in
 `/opt/polyglot/services/litellm/litellm_config.yaml`.
@@ -99,7 +103,7 @@ is the v1.2 target and should stay free for `tango-backend.service`.
 
 - `backend`: Python compile passes for `main.py`, `jarvis_agent.py`, and
   `personas.py`.
-- `backend`: LiveKit Agents service construction passes for all four personas with the
+- `backend`: LiveKit Agents service construction passes for all five personas with the
   expected LiteLLM aliases and ElevenLabs voice IDs.
 - `frontend`: `corepack pnpm exec tsc --noEmit` passes.
 - `frontend`: `corepack pnpm run build` passes without lint or metadata warnings.
@@ -132,7 +136,7 @@ is the v1.2 target and should stay free for `tango-backend.service`.
   `tango-web.service` are active, `http://127.0.0.1:8030/health` returns OK,
   `http://127.0.0.1:3006` returns HTTP 200, `https://project-tango.schubert.life`
   returns HTTP 200, the LiveKit worker registers successfully, and browser QA
-  shows the public frontend with all four personas.
+  shows the public frontend with all five personas.
 - Public API QA for Goal 4 is accepted: authoritative Cloudflare DNS resolves
   `tango-api.schubert.life`, and `curl --resolve` through both Cloudflare edge
   A records returns `ok` from `https://tango-api.schubert.life/healthz`.
@@ -160,14 +164,14 @@ is the v1.2 target and should stay free for `tango-backend.service`.
   `tango-api.schubert.life`.
 - Goal 5 regression QA after the close-path hardening recorded and closed Chris
   session `f9be8d70-0dd1-49fd-b15f-c50a3f8d4edd`: browser QA showed the
-  public app loaded, all four personas were present, Chris/general-info started,
+  public app loaded, all five personas were present, Chris/general-info started,
   the greeting transcript appeared, History was hidden while active and visible
   after End Call, and `/api/history/{session_id}` returned the ordered agent
   turn "Chris (British) is online. How can I help?"
 - Audio optimization constructor QA on Schubert confirmed the deployed LiveKit
   plugin accepts the supported settings: `deepgram.STT` reports
   `endpointing_ms=300` and `smart_format=True`; `elevenlabs.TTS` constructs for
-  Damian, Chris, Nathaniel, and Tita with `eleven_flash_v2_5`,
+  Damian, Chris, Jeremiah, Nathaniel, and Tita with `eleven_flash_v2_5`,
   `streaming_latency=3`, `auto_mode=True`, and `use_speaker_boost=False`.
 - Goal 5 DB error QA temporarily renamed the `tango` schema; `/api/history`
   returned only `{"error":"Database error"}` with HTTP 500, then recovered after

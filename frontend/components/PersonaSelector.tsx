@@ -18,7 +18,7 @@ export function PersonaSelector({
     <div
       role="radiogroup"
       aria-label="Choose persona"
-      className="grid w-full max-w-2xl grid-cols-2 gap-2"
+      className="grid w-full max-w-3xl grid-cols-2 gap-2 md:grid-cols-3"
     >
       {TANGO_PERSONAS.map((persona) => {
         const selected = persona.id === selectedPersonaId;

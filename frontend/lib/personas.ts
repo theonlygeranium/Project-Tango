@@ -1,6 +1,6 @@
 import type { LlmModelId } from '@/lib/llm-models';
 
-export type PersonaId = 'therapy' | 'general-info' | 'meditation' | 'pinoy-pride';
+export type PersonaId = 'therapy' | 'general-info' | 'jeremiah' | 'meditation' | 'pinoy-pride';
 
 export type TangoPersona = {
   id: PersonaId;
@@ -35,6 +35,16 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     initials: 'CH',
     accentClassName:
       'border-emerald-500/70 bg-emerald-500/10 text-emerald-700 dark:border-emerald-300/70 dark:bg-emerald-300/10 dark:text-emerald-100',
+  },
+  {
+    id: 'jeremiah',
+    label: 'General Info',
+    displayName: 'Jeremiah',
+    roleDescription: 'General assistant',
+    defaultLlmModel: 'local/qwen3-fast',
+    initials: 'JE',
+    accentClassName:
+      'border-amber-500/70 bg-amber-500/10 text-amber-700 dark:border-amber-300/70 dark:bg-amber-300/10 dark:text-amber-100',
   },
   {
     id: 'meditation',

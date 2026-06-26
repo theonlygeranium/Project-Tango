@@ -45,6 +45,7 @@ Do not deploy new LiteLLM or Ollama services for this repo. LLM calls go through
 | --- | --- | --- | --- | --- |
 | Therapy | Damian | `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | `en-US` |
 | General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | `en-US` |
+| General Info | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | `en-US` |
 | Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | `en-US` |
 | Pinoy Pride | Tita | `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` | `tl` |
 
@@ -96,7 +97,7 @@ Open `http://localhost:3006`.
 
 1. `cd backend && uvicorn main:app --host 127.0.0.1 --port 8030 --reload`
 2. `cd frontend && npm run dev -- --port 3006`
-3. Confirm the persona selector shows all four personas.
+3. Confirm the persona selector shows all five personas.
 4. Select Damian and connect.
 5. Confirm Deepgram Nova-3 interim captions are visible.
 6. Confirm ElevenLabs Flash v2.5 playback and speaking animation.
@@ -105,7 +106,9 @@ Open `http://localhost:3006`.
 9. Switch to Chris and confirm model routing changes to `writer/palmyra-x5-voice`.
 10. Select Chris with `Schubert Local Qwen3` and confirm backend logs show
     `model=local/qwen3-fast`.
-11. Confirm deploy artifacts exist in `deploy/`.
-12. Run `bash -n deploy/schubert-preflight.sh`.
+11. Select Jeremiah with `Persona default` and confirm backend logs show
+    `model=local/qwen3-fast`.
+12. Confirm deploy artifacts exist in `deploy/`.
+13. Run `bash -n deploy/schubert-preflight.sh`.
 
 Read `docs/AGENTS.md` before making further changes.
