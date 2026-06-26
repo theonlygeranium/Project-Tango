@@ -190,7 +190,7 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
           hoverFillColor="#222"
         />
 
-        <div className="pointer-events-none relative z-10 flex max-w-[min(94vw,48rem)] flex-col items-center gap-4 p-4">
+        <div className="pointer-events-none relative z-10 flex max-w-[min(94vw,64rem)] flex-col items-center gap-4 p-4">
           <h1 className="text-foreground font-mono text-5xl leading-none sm:text-7xl md:text-[8rem] lg:text-[10rem]">
             TANGO
           </h1>

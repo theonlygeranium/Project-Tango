@@ -18,7 +18,7 @@ export function PersonaSelector({
     <div
       role="radiogroup"
       aria-label="Choose persona"
-      className="grid w-full max-w-3xl grid-cols-2 gap-2 md:grid-cols-3"
+      className="flex w-full max-w-5xl flex-wrap justify-center gap-2"
     >
       {TANGO_PERSONAS.map((persona) => {
         const selected = persona.id === selectedPersonaId;
@@ -32,7 +32,7 @@ export function PersonaSelector({
             aria-checked={selected}
             onClick={() => onPersonaChange(persona.id)}
             className={cn(
-              'group bg-background/70 flex min-h-20 items-center gap-2 rounded-lg border p-2 text-left shadow-sm backdrop-blur-md transition sm:gap-3 sm:p-3',
+              'group bg-background/70 flex min-h-20 min-w-0 flex-[1_1_12rem] items-center gap-2 rounded-lg border p-2 text-left shadow-sm backdrop-blur-md transition sm:max-w-56 sm:gap-3 sm:p-3',
               'hover:border-ring/45 hover:bg-muted/80 focus-visible:ring-ring/60 focus-visible:ring-2 focus-visible:outline-none',
               'disabled:pointer-events-none disabled:opacity-60',
               selected ? 'border-primary/70 bg-primary/10 ring-primary/20 ring-1' : 'border-border'
