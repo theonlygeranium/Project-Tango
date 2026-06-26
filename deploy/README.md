@@ -35,6 +35,9 @@ v1.2 target map:
   `WRITER_API_KEY` or `PALMYRA_API_KEY` to Tango env files.
 - LiteLLM aliases are `local/qwen3-fast` for Therapy/Meditation/Pinoy Pride and
   `writer/palmyra-x5-voice` for General Info.
+- The GitHub Actions deploy workflow is manual-only while the tailnet SSH policy
+  denies GitHub-hosted Tailscale runners access to Schubert. Normal pushes should
+  not trigger deploy attempts until that tailnet policy is updated.
 
 Live inspection on 2026-06-22 showed `127.0.0.1:8010` is permanently held by
 Docker container `asr-gateway`; do not reuse it. Backend port `8030` is the
