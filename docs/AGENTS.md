@@ -87,7 +87,7 @@ Do not use `ollama/qwen3.6`, `ollama/qwen3.6:latest`, or `writer/palmyra` as Tan
 | General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | `en-US` |
 | General Info | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | `en-US` |
 | General Info | Jacob | `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | `en-US` |
-| General Info | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | `en-US` |
+| General Info | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | `tl` |
 | Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | `en-US` |
 | Pinoy Pride | Tita | `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` | `tl` |
 
@@ -135,7 +135,7 @@ Run these before marking the bootstrap complete:
 12. Select Jacob with Persona default and confirm logs show
     `local/qwen3-fast` plus voice ID `qYwy2TckibCF9cBuhI46`.
 13. Select Mama Lulu with Persona default and confirm logs show
-    `local/qwen3-fast` plus voice ID `LF1xMOq6fDVEBEkLP0HO`.
+    `local/qwen3-fast`, `stt_language=tl`, and voice ID `LF1xMOq6fDVEBEkLP0HO`.
 14. Confirm `deploy/tango-backend.service`, `deploy/tango-web.service`, and
     `deploy/Caddyfile.tango-api` exist and are deploy-safe.
 15. Run `bash -n deploy/schubert-preflight.sh`.

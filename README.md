@@ -47,16 +47,16 @@ Do not deploy new LiteLLM or Ollama services for this repo. LLM calls go through
 | General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | `en-US` |
 | General Info | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | `en-US` |
 | General Info | Jacob | `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | `en-US` |
-| General Info | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | `en-US` |
+| General Info | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | `tl` |
 | Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | `en-US` |
 | Pinoy Pride | Tita | `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` | `tl` |
 
 The frontend sends the selected persona to `/api/connection-details`. The backend encodes
 that selection into LiveKit token metadata and room naming so the worker can load the
 correct system prompt, ElevenLabs voice, and LiteLLM model.
-Tita uses Deepgram Nova-3 Tagalog transcription (`tl`) so spoken Tagalog and
-Filipino are recognized during the current test pass; the other personas stay
-on English (`en-US`).
+Tita and Mama Lulu use Deepgram Nova-3 Tagalog transcription (`tl`) so spoken
+Tagalog, Filipino, and Taglish are recognized during the current test pass; the
+other personas stay on English (`en-US`).
 
 The welcome screen also includes an allowlisted model switcher. `Persona default`
 uses the persona table above; `Schubert Local Qwen3` forces `local/qwen3-fast`,
@@ -126,7 +126,8 @@ Open `http://localhost:3006`.
 12. Select Jacob with `Persona default` and confirm backend logs show
     `model=local/qwen3-fast` plus voice ID `qYwy2TckibCF9cBuhI46`.
 13. Select Mama Lulu with `Persona default` and confirm backend logs show
-    `model=local/qwen3-fast` plus voice ID `LF1xMOq6fDVEBEkLP0HO`.
+    `model=local/qwen3-fast`, `stt_language=tl`, and voice ID
+    `LF1xMOq6fDVEBEkLP0HO`.
 14. Confirm deploy artifacts exist in `deploy/`.
 15. Run `bash -n deploy/schubert-preflight.sh`.
 

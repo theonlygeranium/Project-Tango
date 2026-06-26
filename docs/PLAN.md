@@ -62,9 +62,9 @@
   per-persona `VoiceSettings`, `streaming_latency=3`, `auto_mode=True`, and
   `use_speaker_boost=False` for all personas. Deepgram Flux and unsupported
   `utterance_end_ms` remain deferred.
-- Tita now uses persona-specific Deepgram Nova-3 Tagalog STT (`language="tl"`)
-  for the current Tagalog/Filipino test pass. Damian, Chris, Jeremiah, Jacob, Mama Lulu, and Nathaniel
-  remain on `en-US`.
+- Tita and Mama Lulu now use persona-specific Deepgram Nova-3 Tagalog STT
+  (`language="tl"`) for Tagalog/Filipino/Taglish turns. Damian, Chris,
+  Jeremiah, Jacob, and Nathaniel remain on `en-US`.
 - The welcome screen now has an allowlisted LLM switcher for `Persona default`,
   `local/qwen3-fast`, and `writer/palmyra-x5-voice`. The selected alias is
   included in token metadata/attributes, validated again by the worker, logged,
@@ -78,7 +78,7 @@
   the persona changes, so Tita returns to `local/qwen3-fast` unless explicitly
   overridden for that call.
 - The same Tita review found occasional late Tagalog STT finals and split user
-  phrases, so Pinoy Pride sessions now apply LiveKit endpointing
+  phrases, so Tagalog STT sessions now apply LiveKit endpointing
   `min_delay=0.7` while the other personas keep the SDK default.
 - Chris/local-Qwen review on 2026-06-25 confirmed `general-info` can be routed
   through `local/qwen3-fast`, but the local route is slower than Palmyra for
@@ -95,10 +95,11 @@
   (`en-US`), ElevenLabs voice ID `qYwy2TckibCF9cBuhI46`, and default route
   `local/qwen3-fast`; the allowlisted model switcher can still route him to
   Palmyra for comparison.
-- Mama Lulu is added as another General assistant with American English STT
-  (`en-US`), ElevenLabs voice ID `LF1xMOq6fDVEBEkLP0HO`, and default route
-  `local/qwen3-fast`; the allowlisted model switcher can still route her to
-  Palmyra for comparison.
+- Mama Lulu is added as another General assistant fluent in Tagalog, Filipino,
+  English, and Taglish. She uses the same Tagalog STT and voice tuning profile
+  as Tita (`language="tl"`), ElevenLabs voice ID `LF1xMOq6fDVEBEkLP0HO`, and
+  default route `local/qwen3-fast`; the allowlisted model switcher can still
+  route her to Palmyra for comparison.
 - Camera and screen-share controls now feed a LiveKit video-frame context path.
   The worker subscribes to video tracks, keeps the newest camera/screen frame,
   asks a vision-capable LiteLLM alias (`TANGO_VISION_MODEL`, default
