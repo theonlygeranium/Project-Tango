@@ -101,8 +101,12 @@ speaking LLM route.
 
 For text-heavy visual turns such as terminal output, logs, command results, or code, the worker
 uses the OCR path: larger frames, high image detail, and `TANGO_VISION_OCR_MODEL`
-(`openai/gpt-4o` by default). `AgentSession` disables preemptive generation while vision is
-enabled so the visual/OCR context is injected before the persona model starts answering.
+(`openai/gpt-4o` by default). Software/app/editor/interface identification also uses this OCR
+path because the relevant clues often live in small title, tab, menu, or workspace text.
+`AgentSession` disables preemptive generation inside `turn_handling` while vision is enabled so
+the visual/OCR context is injected before the persona model starts answering. Set
+`TANGO_VISION_DEBUG_SUMMARIES=true` only for diagnostics when the injected visual summary text
+must be visible in logs.
 
 The frontend may request a specific LiteLLM alias through `llm_model`, but the backend must validate
 that value against the allowlist in `backend/personas.py`. Unknown model strings must fall back to

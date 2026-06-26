@@ -72,12 +72,15 @@ Visual understanding uses a lightweight frame-summary step: the worker captures 
 latest camera or screen-share frame, summarizes it through the LiteLLM alias in
 `TANGO_VISION_MODEL` (`openai/gpt-4o-mini` by default), and injects the resulting
 short text as context for the persona's normal voice model. Text-heavy requests such
-as terminal output, command results, logs, or code automatically switch to an OCR
-path using larger high-detail frames and `TANGO_VISION_OCR_MODEL` (`openai/gpt-4o`
-by default). This keeps Jeremiah, Tita, Damian, Nathaniel, and Chris on their
-selected speaking model while allowing screen/camera questions to work. Set
-`TANGO_VISION_MODEL=xai/grok-4` or `TANGO_VISION_OCR_MODEL=xai/grok-4` to compare
-providers without changing persona defaults.
+as terminal output, command results, logs, code, or software/interface
+identification automatically switch to an OCR path using larger high-detail frames
+and `TANGO_VISION_OCR_MODEL` (`openai/gpt-4o` by default). This keeps Jeremiah,
+Tita, Damian, Nathaniel, and Chris on their selected speaking model while allowing
+screen/camera questions to work. Set `TANGO_VISION_MODEL=xai/grok-4` or
+`TANGO_VISION_OCR_MODEL=xai/grok-4` to compare providers without changing persona
+defaults. Set `TANGO_VISION_DEBUG_SUMMARIES=true` only during diagnostics to log
+the short text summary injected into each visual turn; screenshots are not logged
+by this toggle.
 
 ## Local Setup
 

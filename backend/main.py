@@ -113,12 +113,20 @@ def _room_name(persona: Persona, requested_room: str | None = None) -> str:
     return f"tango_{persona.id}_{uuid.uuid4().hex[:10]}"
 
 
-def _turn_handling_for_session(persona: Persona, llm_model: str) -> dict[str, Any]:
+def _turn_handling_for_session(
+    persona: Persona,
+    llm_model: str,
+    *,
+    preemptive_generation_enabled: bool = True,
+) -> dict[str, Any]:
+    turn_handling: dict[str, Any] = {}
     if persona.stt_language == "tl":
-        return {"endpointing": {"min_delay": TAGALOG_ENDPOINTING_MIN_DELAY}}
-    if llm_model == LOCAL_QWEN_MODEL:
-        return {"endpointing": {"min_delay": LOCAL_QWEN_ENDPOINTING_MIN_DELAY}}
-    return {}
+        turn_handling["endpointing"] = {"min_delay": TAGALOG_ENDPOINTING_MIN_DELAY}
+    elif llm_model == LOCAL_QWEN_MODEL:
+        turn_handling["endpointing"] = {"min_delay": LOCAL_QWEN_ENDPOINTING_MIN_DELAY}
+
+    turn_handling["preemptive_generation"] = {"enabled": preemptive_generation_enabled}
+    return turn_handling
 
 
 def _json_object(value: str | None) -> dict[str, Any]:
@@ -513,11 +521,20 @@ async def entrypoint(ctx: Any) -> None:
     persona = get_persona(participant_context.get("persona_id") or _persona_id_from_job_context(ctx))
     llm_model = resolve_llm_model(persona, participant_context.get("llm_model"))
     room_name = getattr(getattr(ctx, "room", None), "name", "unknown")
-    turn_handling = _turn_handling_for_session(persona, llm_model)
+    vision_config = VisionContextConfig.from_env(LITELLM_BASE_URL, LITELLM_MASTER_KEY)
+    turn_handling = _turn_handling_for_session(
+        persona,
+        llm_model,
+        preemptive_generation_enabled=not vision_config.enabled,
+    )
     endpointing_min_delay = turn_handling.get("endpointing", {}).get("min_delay", "default")
+    preemptive_generation_enabled = turn_handling.get("preemptive_generation", {}).get(
+        "enabled",
+        "default",
+    )
 
     logger.info(
-        "Starting Tango agent room=%s persona_id=%s model=%s default_model=%s voice_id=%s stt_language=%s endpointing_min_delay=%s llm_base_url=%s",
+        "Starting Tango agent room=%s persona_id=%s model=%s default_model=%s voice_id=%s stt_language=%s endpointing_min_delay=%s preemptive_generation=%s llm_base_url=%s",
         room_name,
         persona.id,
         llm_model,
@@ -525,6 +542,7 @@ async def entrypoint(ctx: Any) -> None:
         persona.voice_id,
         persona.stt_language,
         endpointing_min_delay,
+        preemptive_generation_enabled,
         LITELLM_BASE_URL,
     )
 
@@ -547,7 +565,6 @@ async def entrypoint(ctx: Any) -> None:
     except Exception:
         logger.exception("Could not create Tango history session; voice session will continue.")
 
-    vision_config = VisionContextConfig.from_env(LITELLM_BASE_URL, LITELLM_MASTER_KEY)
     vision_context = LiveVideoContext(ctx.room, vision_config)
 
     session = AgentSession(
@@ -574,7 +591,6 @@ async def entrypoint(ctx: Any) -> None:
         ),
         turn_handling=turn_handling,
         use_tts_aligned_transcript=True,
-        preemptive_generation=vision_context.preemptive_generation_enabled,
     )
 
     session_turns: list[dict[str, Any]] = []

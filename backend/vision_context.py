@@ -5,6 +5,7 @@ import base64
 import json
 import logging
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -17,9 +18,14 @@ logger = logging.getLogger("project-tango.vision")
 DEFAULT_VISION_MODEL = "openai/gpt-4o-mini"
 DEFAULT_VISION_OCR_MODEL = "openai/gpt-4o"
 VISUAL_REFERENCE_TERMS = (
+    "app",
     "camera",
+    "current",
+    "here",
     "image",
     "look",
+    "now",
+    "over here",
     "photo",
     "picture",
     "read",
@@ -40,30 +46,62 @@ VISUAL_REFERENCE_TERMS = (
     "yan",
 )
 OCR_REFERENCE_TERMS = (
+    "about window",
+    "app",
+    "application",
+    "branding",
     "command",
     "copy",
+    "directory",
+    "editor",
     "error",
     "exact",
+    "file",
+    "filename",
+    "folder",
+    "ide",
+    "identify",
+    "interface",
     "line",
     "log",
+    "menu",
+    "menu bar",
     "number",
     "output",
     "paste",
     "prompt",
+    "recognize",
+    "repo",
+    "repository",
     "read",
     "say",
     "says",
+    "screen says",
+    "software",
     "stderr",
     "stdout",
     "terminal",
     "text",
+    "title bar",
+    "toolbar",
     "uptime",
     "version",
+    "what app",
     "what does it say",
     "what does that say",
+    "what interface",
+    "what software",
+    "what window",
+    "where am i",
+    "which app",
+    "which editor",
+    "which software",
     "do you see it now",
     "there is the output",
 )
+
+CAMERA_SOURCE_VALUES = {1}
+SCREEN_SHARE_SOURCE_VALUES = {3, 4}
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -102,6 +140,20 @@ def _litellm_chat_completions_url(base_url: str) -> str:
     return f"{base}/v1/chat/completions"
 
 
+def _contains_reference_term(text: str, terms: tuple[str, ...]) -> bool:
+    normalized = text.lower()
+    for term in terms:
+        normalized_term = term.lower()
+        if " " in normalized_term:
+            if normalized_term in normalized:
+                return True
+            continue
+
+        if re.search(rf"\b{re.escape(normalized_term)}\b", normalized):
+            return True
+    return False
+
+
 @dataclass(frozen=True)
 class VisionContextConfig:
     enabled: bool
@@ -121,6 +173,7 @@ class VisionContextConfig:
     injection_mode: str
     image_detail: str
     ocr_image_detail: str
+    debug_summaries: bool
 
     @classmethod
     def from_env(cls, base_url: str, api_key: str) -> VisionContextConfig:
@@ -142,6 +195,7 @@ class VisionContextConfig:
             injection_mode=os.getenv("TANGO_VISION_INJECTION_MODE", "auto").strip().lower(),
             image_detail=os.getenv("TANGO_VISION_IMAGE_DETAIL", "auto").strip().lower(),
             ocr_image_detail=os.getenv("TANGO_VISION_OCR_IMAGE_DETAIL", "high").strip().lower(),
+            debug_summaries=_env_bool("TANGO_VISION_DEBUG_SUMMARIES", False),
         )
 
 
@@ -166,10 +220,6 @@ class LiveVideoContext:
     @property
     def enabled(self) -> bool:
         return self.config.enabled and bool(self.config.model)
-
-    @property
-    def preemptive_generation_enabled(self) -> bool:
-        return not self.enabled
 
     def start(self) -> None:
         if self._started:
@@ -265,6 +315,14 @@ class LiveVideoContext:
             self._model_for_mode(mode),
             len(summary),
         )
+        if self.config.debug_summaries:
+            logger.info(
+                "Visual context summary mode=%s source=%s model=%s summary=%r",
+                mode,
+                self._latest_frame_source,
+                self._model_for_mode(mode),
+                self._debug_summary(summary),
+            )
         context_kind = "Visual OCR context" if mode == "ocr" else "Visual context"
         return f"{context_kind} from the user's current {self._latest_frame_source}: {summary}"
 
@@ -276,7 +334,9 @@ class LiveVideoContext:
                 track = getattr(publication, "track", None)
                 if track is None or getattr(track, "kind", None) != rtc.TrackKind.KIND_VIDEO:
                     continue
-                candidates.append((self._source_priority(publication), track, publication, participant))
+                candidates.append(
+                    (self._source_priority(publication, track, participant), track, publication, participant)
+                )
 
         if not candidates:
             return
@@ -285,8 +345,7 @@ class LiveVideoContext:
         self._use_video_track(track, publication, participant)
 
     def _use_video_track(self, track: Any, publication: Any, participant: Any) -> None:
-        del participant
-        priority = self._source_priority(publication)
+        priority = self._source_priority(publication, track, participant)
         if self._active_track is track:
             return
         if self._active_track is not None and priority < self._active_priority:
@@ -295,7 +354,7 @@ class LiveVideoContext:
         self._clear_active_stream()
         self._active_track = track
         self._active_priority = priority
-        self._active_source_label = self._source_label(publication)
+        self._active_source_label = self._source_label(publication, track, participant)
 
         try:
             from livekit import rtc
@@ -309,7 +368,11 @@ class LiveVideoContext:
         task = asyncio.create_task(self._read_video_stream(self._video_stream, self._active_source_label))
         self._tasks.append(task)
         task.add_done_callback(self._remove_task)
-        logger.info("Tango vision subscribed to %s track.", self._active_source_label)
+        logger.info(
+            "Tango vision subscribed to %s track source_hint=%s.",
+            self._active_source_label,
+            self._source_debug_hint(publication, track, participant),
+        )
 
     async def _read_video_stream(self, stream: Any, source_label: str) -> None:
         try:
@@ -336,22 +399,123 @@ class LiveVideoContext:
         except ValueError:
             return
 
-    def _source_priority(self, publication: Any) -> int:
-        label = self._source_label(publication)
+    def _source_priority(
+        self,
+        publication: Any,
+        track: Any | None = None,
+        participant: Any | None = None,
+    ) -> int:
+        label = self._source_label(publication, track, participant)
         if label == "screen share":
             return 3
         if label == "camera":
             return 2
         return 1
 
-    def _source_label(self, publication: Any) -> str:
-        source = getattr(publication, "source", None)
-        source_text = f"{getattr(source, 'name', '')} {getattr(source, 'value', '')} {source}".lower()
-        if "screen" in source_text:
+    def _source_label(
+        self,
+        publication: Any,
+        track: Any | None = None,
+        participant: Any | None = None,
+    ) -> str:
+        for value in self._source_values(publication, track, participant):
+            numeric_value = self._numeric_source_value(value)
+            if numeric_value in SCREEN_SHARE_SOURCE_VALUES:
+                return "screen share"
+            if numeric_value in CAMERA_SOURCE_VALUES:
+                return "camera"
+
+        source_text = " ".join(self._source_text_values(publication, track, participant)).lower()
+        if any(term in source_text for term in ("screen", "screenshare", "screen_share", "display")):
             return "screen share"
-        if "camera" in source_text:
+        if any(term in source_text for term in ("camera", "webcam")):
             return "camera"
         return "video"
+
+    def _source_values(
+        self,
+        publication: Any,
+        track: Any | None = None,
+        participant: Any | None = None,
+    ) -> list[Any]:
+        candidates: list[Any] = []
+        for owner, attributes in (
+            (publication, ("source", "_source")),
+            (track, ("source", "_source")),
+            (getattr(publication, "_info", None), ("source", "track_source")),
+            (getattr(track, "_info", None), ("source", "track_source")),
+        ):
+            if owner is None:
+                continue
+            for attribute in attributes:
+                if hasattr(owner, attribute):
+                    candidates.append(getattr(owner, attribute))
+
+        del participant
+        return candidates
+
+    def _source_text_values(
+        self,
+        publication: Any,
+        track: Any | None = None,
+        participant: Any | None = None,
+    ) -> list[str]:
+        values: list[str] = []
+        for value in self._source_values(publication, track, participant):
+            values.extend(self._stringify_source_value(value))
+
+        for owner, attributes in (
+            (publication, ("name", "sid", "track_sid", "track_name")),
+            (track, ("name", "sid")),
+            (getattr(publication, "_info", None), ("name", "sid", "track_sid", "track_name")),
+            (getattr(track, "_info", None), ("name", "sid")),
+            (participant, ("identity", "name")),
+        ):
+            if owner is None:
+                continue
+            for attribute in attributes:
+                value = getattr(owner, attribute, None)
+                if value is not None:
+                    values.append(str(value))
+
+        return values
+
+    def _stringify_source_value(self, value: Any) -> list[str]:
+        if value is None:
+            return []
+
+        parts = [str(value)]
+        for attribute in ("name", "value"):
+            attribute_value = getattr(value, attribute, None)
+            if attribute_value is not None:
+                parts.append(str(attribute_value))
+        return parts
+
+    def _numeric_source_value(self, value: Any) -> int | None:
+        if isinstance(value, int):
+            return int(value)
+
+        raw_value = getattr(value, "value", None)
+        if isinstance(raw_value, int):
+            return int(raw_value)
+
+        if isinstance(value, str) and value.isdigit():
+            return int(value)
+        if isinstance(raw_value, str) and raw_value.isdigit():
+            return int(raw_value)
+
+        return None
+
+    def _source_debug_hint(
+        self,
+        publication: Any,
+        track: Any | None = None,
+        participant: Any | None = None,
+    ) -> str:
+        values = [value for value in self._source_text_values(publication, track, participant) if value]
+        if not values:
+            return "unavailable"
+        return " | ".join(values)[:300]
 
     def _should_describe(self, user_text: str) -> bool:
         mode = self.config.injection_mode
@@ -360,12 +524,10 @@ class LiveVideoContext:
         if mode in {"off", "never", "false"}:
             return False
 
-        normalized = user_text.lower()
-        return any(term in normalized for term in VISUAL_REFERENCE_TERMS)
+        return _contains_reference_term(user_text, VISUAL_REFERENCE_TERMS)
 
     def _should_use_ocr(self, user_text: str) -> bool:
-        normalized = user_text.lower()
-        return any(term in normalized for term in OCR_REFERENCE_TERMS)
+        return _contains_reference_term(user_text, OCR_REFERENCE_TERMS)
 
     def _model_for_mode(self, mode: str) -> str:
         if mode == "ocr" and self.config.ocr_model:
@@ -416,13 +578,20 @@ class LiveVideoContext:
                 "You provide OCR-style visual context for a voice assistant. Read visible "
                 "terminal, code, UI, or document text that is relevant to the user's latest "
                 "turn. Preserve exact commands, numbers, filenames, and error text when "
-                "visible. Do not guess text that is too small or blurry; say what is "
-                "unreadable. Keep the answer under 90 words."
+                "visible. For software or editor identification questions, inspect visible "
+                "app names, browser tabs, title bars, menus, sidebars, logos, URLs, and "
+                "workspace labels. Distinguish Codex, ChatGPT/Codex desktop, VS Code, and "
+                "GitHub Codespaces only from visible evidence; state uncertainty when the "
+                "branding is not readable. Do not guess text that is too small or blurry; "
+                "say what is unreadable. Keep the answer under 90 words."
             )
 
         return (
             "You produce compact visual context for a voice assistant. "
             "Describe only visible details that help answer the user's latest turn. "
+            "If the user asks what app, software, code editor, or interface is visible, "
+            "identify the visible clues first and avoid overconfident product guesses; "
+            "Codex, ChatGPT/Codex desktop, VS Code, and GitHub Codespaces can look similar. "
             "If the frame is unreadable or irrelevant, say so briefly. "
             "Keep the answer under 45 words."
         )
@@ -433,6 +602,8 @@ class LiveVideoContext:
                 f"The user is sharing their {source_label}. "
                 f"The user just said: {user_text[:500]!r}. "
                 "Extract the exact visible text or command output needed to answer them. "
+                "For interface identification, prioritize readable app chrome, tab titles, "
+                "menus, URL bars, window titles, and workspace labels. "
                 "Then add a very short explanation only if it helps."
             )
 
@@ -441,6 +612,12 @@ class LiveVideoContext:
             f"The user just said: {user_text[:500]!r}. "
             "Summarize the useful visual context."
         )
+
+    def _debug_summary(self, summary: str) -> str:
+        compact = " ".join(summary.split())
+        if len(compact) <= 700:
+            return compact
+        return f"{compact[:697]}..."
 
     def _request_summary(
         self,
