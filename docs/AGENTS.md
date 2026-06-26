@@ -73,7 +73,7 @@ Live inspection on 2026-06-22 showed Docker container `asr-gateway` listening on
 
 | Alias | Actual model | Use |
 | --- | --- | --- |
-| `local/qwen3-fast` | `ollama/qwen3.6:latest` | Therapy, Jeremiah, Jacob, Meditation, Pinoy Pride |
+| `local/qwen3-fast` | `ollama/qwen3.6:latest` | Therapy, Jeremiah, Jacob, Mama Lulu, Meditation, Pinoy Pride |
 | `writer/palmyra-x5-voice` | Writer Palmyra X5 voice-tuned route | Chris default; selectable override for all personas |
 
 Do not use `ollama/qwen3.6`, `ollama/qwen3.6:latest`, or `writer/palmyra` as Tango
@@ -87,6 +87,7 @@ Do not use `ollama/qwen3.6`, `ollama/qwen3.6:latest`, or `writer/palmyra` as Tan
 | General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | `en-US` |
 | General Info | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | `en-US` |
 | General Info | Jacob | `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | `en-US` |
+| General Info | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | `en-US` |
 | Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | `en-US` |
 | Pinoy Pride | Tita | `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` | `tl` |
 
@@ -120,7 +121,7 @@ Run these before marking the bootstrap complete:
 
 1. `cd backend && uvicorn main:app --host 127.0.0.1 --port 8030 --reload`
 2. `cd frontend && npm run dev -- --port 3006`
-3. Open `http://localhost:3006` and confirm all six personas are selectable.
+3. Open `http://localhost:3006` and confirm all seven personas are selectable.
 4. Select Damian, connect, and confirm LiveKit reaches the listening state.
 5. Speak and confirm interim Deepgram captions render.
 6. Confirm ElevenLabs audio playback and speaking animation.
@@ -133,6 +134,8 @@ Run these before marking the bootstrap complete:
     `local/qwen3-fast` plus voice ID `EqHdTYoEuDQCxN1CVbi0`.
 12. Select Jacob with Persona default and confirm logs show
     `local/qwen3-fast` plus voice ID `qYwy2TckibCF9cBuhI46`.
-13. Confirm `deploy/tango-backend.service`, `deploy/tango-web.service`, and
+13. Select Mama Lulu with Persona default and confirm logs show
+    `local/qwen3-fast` plus voice ID `LF1xMOq6fDVEBEkLP0HO`.
+14. Confirm `deploy/tango-backend.service`, `deploy/tango-web.service`, and
     `deploy/Caddyfile.tango-api` exist and are deploy-safe.
-14. Run `bash -n deploy/schubert-preflight.sh`.
+15. Run `bash -n deploy/schubert-preflight.sh`.

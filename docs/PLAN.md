@@ -18,7 +18,7 @@
 - Backend local/deploy port: `8030`.
 - Existing frontend Caddy route: `project-tango.schubert.life -> 3006`; do not recreate it.
 - New API Caddy route: `tango-api.schubert.life -> 8030`.
-- Therapy, Jeremiah, Jacob, Meditation, Pinoy Pride model alias: `local/qwen3-fast`.
+- Therapy, Jeremiah, Jacob, Mama Lulu, Meditation, Pinoy Pride model alias: `local/qwen3-fast`.
 - Chris default model alias: `writer/palmyra-x5-voice`.
 - Do not use unregistered aliases `ollama/qwen3.6`, `ollama/qwen3.6:latest`, or `writer/palmyra`.
 
@@ -63,7 +63,7 @@
   `use_speaker_boost=False` for all personas. Deepgram Flux and unsupported
   `utterance_end_ms` remain deferred.
 - Tita now uses persona-specific Deepgram Nova-3 Tagalog STT (`language="tl"`)
-  for the current Tagalog/Filipino test pass. Damian, Chris, Jeremiah, Jacob, and Nathaniel
+  for the current Tagalog/Filipino test pass. Damian, Chris, Jeremiah, Jacob, Mama Lulu, and Nathaniel
   remain on `en-US`.
 - The welcome screen now has an allowlisted LLM switcher for `Persona default`,
   `local/qwen3-fast`, and `writer/palmyra-x5-voice`. The selected alias is
@@ -95,6 +95,10 @@
   (`en-US`), ElevenLabs voice ID `qYwy2TckibCF9cBuhI46`, and default route
   `local/qwen3-fast`; the allowlisted model switcher can still route him to
   Palmyra for comparison.
+- Mama Lulu is added as another General assistant with American English STT
+  (`en-US`), ElevenLabs voice ID `LF1xMOq6fDVEBEkLP0HO`, and default route
+  `local/qwen3-fast`; the allowlisted model switcher can still route her to
+  Palmyra for comparison.
 - Camera and screen-share controls now feed a LiveKit video-frame context path.
   The worker subscribes to video tracks, keeps the newest camera/screen frame,
   asks a vision-capable LiteLLM alias (`TANGO_VISION_MODEL`, default
@@ -124,7 +128,7 @@ is the v1.2 target and should stay free for `tango-backend.service`.
 
 - `backend`: Python compile passes for `main.py`, `jarvis_agent.py`, and
   `personas.py`.
-- `backend`: LiveKit Agents service construction passes for all six personas with the
+- `backend`: LiveKit Agents service construction passes for all seven personas with the
   expected LiteLLM aliases and ElevenLabs voice IDs.
 - `frontend`: `corepack pnpm exec tsc --noEmit` passes.
 - `frontend`: `corepack pnpm run build` passes without lint or metadata warnings.
@@ -157,7 +161,7 @@ is the v1.2 target and should stay free for `tango-backend.service`.
   `tango-web.service` are active, `http://127.0.0.1:8030/health` returns OK,
   `http://127.0.0.1:3006` returns HTTP 200, `https://project-tango.schubert.life`
   returns HTTP 200, the LiveKit worker registers successfully, and browser QA
-  shows the public frontend with all six personas.
+  shows the public frontend with all seven personas.
 - Public API QA for Goal 4 is accepted: authoritative Cloudflare DNS resolves
   `tango-api.schubert.life`, and `curl --resolve` through both Cloudflare edge
   A records returns `ok` from `https://tango-api.schubert.life/healthz`.
@@ -185,14 +189,14 @@ is the v1.2 target and should stay free for `tango-backend.service`.
   `tango-api.schubert.life`.
 - Goal 5 regression QA after the close-path hardening recorded and closed Chris
   session `f9be8d70-0dd1-49fd-b15f-c50a3f8d4edd`: browser QA showed the
-  public app loaded, all six personas were present, Chris/general-info started,
+  public app loaded, all seven personas were present, Chris/general-info started,
   the greeting transcript appeared, History was hidden while active and visible
   after End Call, and `/api/history/{session_id}` returned the ordered agent
   turn "Chris (British) is online. How can I help?"
 - Audio optimization constructor QA on Schubert confirmed the deployed LiveKit
   plugin accepts the supported settings: `deepgram.STT` reports
   `endpointing_ms=300` and `smart_format=True`; `elevenlabs.TTS` constructs for
-  Damian, Chris, Jeremiah, Jacob, Nathaniel, and Tita with `eleven_flash_v2_5`,
+  Damian, Chris, Jeremiah, Jacob, Mama Lulu, Nathaniel, and Tita with `eleven_flash_v2_5`,
   `streaming_latency=3`, `auto_mode=True`, and `use_speaker_boost=False`.
 - Goal 5 DB error QA temporarily renamed the `tango` schema; `/api/history`
   returned only `{"error":"Database error"}` with HTTP 500, then recovered after

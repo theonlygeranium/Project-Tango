@@ -47,6 +47,7 @@ Do not deploy new LiteLLM or Ollama services for this repo. LLM calls go through
 | General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | `en-US` |
 | General Info | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | `en-US` |
 | General Info | Jacob | `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | `en-US` |
+| General Info | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | `en-US` |
 | Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | `en-US` |
 | Pinoy Pride | Tita | `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` | `tl` |
 
@@ -76,7 +77,7 @@ short text as context for the persona's normal voice model. Text-heavy requests 
 as terminal output, command results, logs, code, or software/interface
 identification automatically switch to an OCR path using larger high-detail frames
 and `TANGO_VISION_OCR_MODEL` (`openai/gpt-4o` by default). This keeps Jeremiah,
-Jacob, Tita, Damian, Nathaniel, and Chris on their selected speaking model while allowing
+Jacob, Mama Lulu, Tita, Damian, Nathaniel, and Chris on their selected speaking model while allowing
 screen/camera questions to work. Set `TANGO_VISION_MODEL=xai/grok-4` or
 `TANGO_VISION_OCR_MODEL=xai/grok-4` to compare providers without changing persona
 defaults. Set `TANGO_VISION_DEBUG_SUMMARIES=true` only during diagnostics to log
@@ -111,7 +112,7 @@ Open `http://localhost:3006`.
 
 1. `cd backend && uvicorn main:app --host 127.0.0.1 --port 8030 --reload`
 2. `cd frontend && npm run dev -- --port 3006`
-3. Confirm the persona selector shows all six personas.
+3. Confirm the persona selector shows all seven personas.
 4. Select Damian and connect.
 5. Confirm Deepgram Nova-3 interim captions are visible.
 6. Confirm ElevenLabs Flash v2.5 playback and speaking animation.
@@ -124,7 +125,9 @@ Open `http://localhost:3006`.
     `model=local/qwen3-fast`.
 12. Select Jacob with `Persona default` and confirm backend logs show
     `model=local/qwen3-fast` plus voice ID `qYwy2TckibCF9cBuhI46`.
-13. Confirm deploy artifacts exist in `deploy/`.
-14. Run `bash -n deploy/schubert-preflight.sh`.
+13. Select Mama Lulu with `Persona default` and confirm backend logs show
+    `model=local/qwen3-fast` plus voice ID `LF1xMOq6fDVEBEkLP0HO`.
+14. Confirm deploy artifacts exist in `deploy/`.
+15. Run `bash -n deploy/schubert-preflight.sh`.
 
 Read `docs/AGENTS.md` before making further changes.

@@ -5,6 +5,7 @@ export type PersonaId =
   | 'general-info'
   | 'jeremiah'
   | 'jacob'
+  | 'mama-lulu'
   | 'meditation'
   | 'pinoy-pride';
 
@@ -61,6 +62,16 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     initials: 'JA',
     accentClassName:
       'border-teal-500/70 bg-teal-500/10 text-teal-700 dark:border-teal-300/70 dark:bg-teal-300/10 dark:text-teal-100',
+  },
+  {
+    id: 'mama-lulu',
+    label: 'General Info',
+    displayName: 'Mama Lulu',
+    roleDescription: 'General assistant',
+    defaultLlmModel: 'local/qwen3-fast',
+    initials: 'ML',
+    accentClassName:
+      'border-fuchsia-500/70 bg-fuchsia-500/10 text-fuchsia-700 dark:border-fuchsia-300/70 dark:bg-fuchsia-300/10 dark:text-fuchsia-100',
   },
   {
     id: 'meditation',
