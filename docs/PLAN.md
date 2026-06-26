@@ -18,6 +18,8 @@
 - Backend local/deploy port: `8030`.
 - Existing frontend Caddy route: `project-tango.schubert.life -> 3006`; do not recreate it.
 - New API Caddy route: `tango-api.schubert.life -> 8030`.
+- LiveKit worker idle process default: `LIVEKIT_NUM_IDLE_PROCESSES=1` to reduce
+  Schubert memory pressure while keeping one warm voice job process available.
 - Therapy, Jeremiah, Jacob, Mama Lulu, Meditation, Pinoy Pride model alias: `local/qwen3-fast`.
 - Chris default model alias: `writer/palmyra-x5-voice`.
 - Do not use unregistered aliases `ollama/qwen3.6`, `ollama/qwen3.6:latest`, or `writer/palmyra`.
@@ -117,6 +119,9 @@
   chrome, browser tabs, menu labels, and workspace titles are read before the
   speaking model answers. Optional `TANGO_VISION_DEBUG_SUMMARIES=true` logging
   records only the injected text summary for diagnostics, not screenshots.
+- LiveKit production idle job processes are capped to one by default after the
+  2026-06-26 memory review. Raise `LIVEKIT_NUM_IDLE_PROCESSES` only when faster
+  concurrent room-start latency is worth the extra resident memory.
 
 Live inspection on 2026-06-22 confirmed the v1.2 LiteLLM aliases exist in
 `/opt/polyglot/services/litellm/litellm_config.yaml`.
@@ -131,6 +136,8 @@ is the v1.2 target and should stay free for `tango-backend.service`.
   `personas.py`.
 - `backend`: LiveKit Agents service construction passes for all seven personas with the
   expected LiteLLM aliases and ElevenLabs voice IDs.
+- `backend`: LiveKit worker startup uses `num_idle_processes=1` unless
+  `LIVEKIT_NUM_IDLE_PROCESSES` overrides it.
 - `frontend`: `corepack pnpm exec tsc --noEmit` passes.
 - `frontend`: `corepack pnpm run build` passes without lint or metadata warnings.
 - `deploy`: `bash -n deploy/schubert-preflight.sh` passes.

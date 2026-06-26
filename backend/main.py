@@ -52,6 +52,7 @@ TANGO_AGENT_NAME = os.getenv("TANGO_AGENT_NAME", "tango-agent")
 LOCAL_QWEN_MODEL = "local/qwen3-fast"
 LOCAL_QWEN_ENDPOINTING_MIN_DELAY = 0.6
 TAGALOG_ENDPOINTING_MIN_DELAY = 0.7
+DEFAULT_LIVEKIT_NUM_IDLE_PROCESSES = 1
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -127,6 +128,21 @@ def _turn_handling_for_session(
 
     turn_handling["preemptive_generation"] = {"enabled": preemptive_generation_enabled}
     return turn_handling
+
+
+def _livekit_num_idle_processes() -> int:
+    raw_value = os.getenv("LIVEKIT_NUM_IDLE_PROCESSES")
+    if raw_value is None or raw_value.strip() == "":
+        return DEFAULT_LIVEKIT_NUM_IDLE_PROCESSES
+
+    try:
+        value = int(raw_value)
+    except ValueError:
+        raise ValueError("LIVEKIT_NUM_IDLE_PROCESSES must be an integer") from None
+
+    if value < 0:
+        raise ValueError("LIVEKIT_NUM_IDLE_PROCESSES must be zero or greater")
+    return value
 
 
 def _json_object(value: str | None) -> dict[str, Any]:
@@ -683,10 +699,14 @@ async def entrypoint(ctx: Any) -> None:
 if __name__ == "__main__":
     from livekit.agents import WorkerOptions, cli
 
+    num_idle_processes = _livekit_num_idle_processes()
+    logger.info("Starting LiveKit worker num_idle_processes=%d", num_idle_processes)
+
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
             agent_name=TANGO_AGENT_NAME,
+            num_idle_processes=num_idle_processes,
             shutdown_process_timeout=15.0,
         )
     )

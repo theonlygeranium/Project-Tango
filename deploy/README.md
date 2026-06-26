@@ -35,6 +35,9 @@ v1.2 target map:
   `WRITER_API_KEY` or `PALMYRA_API_KEY` to Tango env files.
 - LiteLLM aliases are `local/qwen3-fast` for Damian, Jeremiah, Jacob,
   Mama Lulu, Nathaniel, and Tita; Chris defaults to `writer/palmyra-x5-voice`.
+- The LiveKit worker defaults to one warm idle job process
+  (`LIVEKIT_NUM_IDLE_PROCESSES=1`) to limit Project Tango memory usage on the
+  shared Schubert host.
 - The GitHub Actions deploy workflow is manual-only while the tailnet SSH policy
   denies GitHub-hosted Tailscale runners access to Schubert. Normal pushes should
   not trigger deploy attempts until that tailnet policy is updated.

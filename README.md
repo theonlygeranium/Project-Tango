@@ -38,6 +38,9 @@ Do not deploy new LiteLLM or Ollama services for this repo. LLM calls go through
   owns downstream provider credentials.
 - Runtime credentials stay in `/opt/Project-Tango/.env` on Schubert and are not tracked
   in Git.
+- The LiveKit worker keeps one idle job process warm by default to reduce Schubert memory
+  pressure. Set `LIVEKIT_NUM_IDLE_PROCESSES` higher only when concurrent voice-session
+  starts need lower latency.
 
 ## Personas
 
@@ -117,18 +120,19 @@ Open `http://localhost:3006`.
 5. Confirm Deepgram Nova-3 interim captions are visible.
 6. Confirm ElevenLabs Flash v2.5 playback and speaking animation.
 7. Confirm backend logs show `http://localhost:4000`, not `api.openai.com`.
-8. Confirm Therapy uses `local/qwen3-fast`.
-9. Switch to Chris and confirm model routing changes to `writer/palmyra-x5-voice`.
-10. Select Chris with `Schubert Local Qwen3` and confirm backend logs show
+8. Confirm worker startup logs show `num_idle_processes=1`.
+9. Confirm Therapy uses `local/qwen3-fast`.
+10. Switch to Chris and confirm model routing changes to `writer/palmyra-x5-voice`.
+11. Select Chris with `Schubert Local Qwen3` and confirm backend logs show
     `model=local/qwen3-fast`.
-11. Select Jeremiah with `Persona default` and confirm backend logs show
+12. Select Jeremiah with `Persona default` and confirm backend logs show
     `model=local/qwen3-fast`.
-12. Select Jacob with `Persona default` and confirm backend logs show
+13. Select Jacob with `Persona default` and confirm backend logs show
     `model=local/qwen3-fast` plus voice ID `qYwy2TckibCF9cBuhI46`.
-13. Select Mama Lulu with `Persona default` and confirm backend logs show
+14. Select Mama Lulu with `Persona default` and confirm backend logs show
     `model=local/qwen3-fast`, `stt_language=tl`, and voice ID
     `LF1xMOq6fDVEBEkLP0HO`.
-14. Confirm deploy artifacts exist in `deploy/`.
-15. Run `bash -n deploy/schubert-preflight.sh`.
+15. Confirm deploy artifacts exist in `deploy/`.
+16. Run `bash -n deploy/schubert-preflight.sh`.
 
 Read `docs/AGENTS.md` before making further changes.

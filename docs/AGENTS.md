@@ -64,6 +64,8 @@ Live inspection on 2026-06-22 showed Docker container `asr-gateway` listening on
 - Do not add `WRITER_API_KEY` or `PALMYRA_API_KEY` to Tango env files.
 - Deepgram STT must use Nova-3 with interim results enabled for live captions.
 - ElevenLabs TTS must use `eleven_flash_v2_5`.
+- Production LiveKit workers default to `LIVEKIT_NUM_IDLE_PROCESSES=1` to reduce
+  Schubert memory pressure. Raise it only for expected concurrent voice-session starts.
 - Camera/screen visual understanding must use LiveKit video track sampling and a
   vision-capable LiteLLM alias through `TANGO_VISION_MODEL`; do not call a vision
   provider directly outside LiteLLM.
@@ -126,16 +128,17 @@ Run these before marking the bootstrap complete:
 5. Speak and confirm interim Deepgram captions render.
 6. Confirm ElevenLabs audio playback and speaking animation.
 7. Confirm backend logs show `http://localhost:4000`, not `api.openai.com`.
-8. Confirm Therapy logs show `local/qwen3-fast`.
-9. Switch to Chris and confirm logs show `writer/palmyra-x5-voice`.
-10. Select Chris with the local model switcher option and confirm logs show
+8. Confirm worker startup logs show `num_idle_processes=1`.
+9. Confirm Therapy logs show `local/qwen3-fast`.
+10. Switch to Chris and confirm logs show `writer/palmyra-x5-voice`.
+11. Select Chris with the local model switcher option and confirm logs show
     `local/qwen3-fast`.
-11. Select Jeremiah with Persona default and confirm logs show
+12. Select Jeremiah with Persona default and confirm logs show
     `local/qwen3-fast` plus voice ID `EqHdTYoEuDQCxN1CVbi0`.
-12. Select Jacob with Persona default and confirm logs show
+13. Select Jacob with Persona default and confirm logs show
     `local/qwen3-fast` plus voice ID `qYwy2TckibCF9cBuhI46`.
-13. Select Mama Lulu with Persona default and confirm logs show
+14. Select Mama Lulu with Persona default and confirm logs show
     `local/qwen3-fast`, `stt_language=tl`, and voice ID `LF1xMOq6fDVEBEkLP0HO`.
-14. Confirm `deploy/tango-backend.service`, `deploy/tango-web.service`, and
+15. Confirm `deploy/tango-backend.service`, `deploy/tango-web.service`, and
     `deploy/Caddyfile.tango-api` exist and are deploy-safe.
-15. Run `bash -n deploy/schubert-preflight.sh`.
+16. Run `bash -n deploy/schubert-preflight.sh`.
