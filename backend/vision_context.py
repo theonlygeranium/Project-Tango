@@ -15,6 +15,7 @@ logger = logging.getLogger("project-tango.vision")
 
 
 DEFAULT_VISION_MODEL = "openai/gpt-4o-mini"
+DEFAULT_VISION_OCR_MODEL = "openai/gpt-4o"
 VISUAL_REFERENCE_TERMS = (
     "camera",
     "image",
@@ -37,6 +38,31 @@ VISUAL_REFERENCE_TERMS = (
     "larawan",
     "tingnan",
     "yan",
+)
+OCR_REFERENCE_TERMS = (
+    "command",
+    "copy",
+    "error",
+    "exact",
+    "line",
+    "log",
+    "number",
+    "output",
+    "paste",
+    "prompt",
+    "read",
+    "say",
+    "says",
+    "stderr",
+    "stdout",
+    "terminal",
+    "text",
+    "uptime",
+    "version",
+    "what does it say",
+    "what does that say",
+    "do you see it now",
+    "there is the output",
 )
 
 
@@ -80,30 +106,42 @@ def _litellm_chat_completions_url(base_url: str) -> str:
 class VisionContextConfig:
     enabled: bool
     model: str
+    ocr_model: str
     base_url: str
     api_key: str
     max_tokens: int
+    ocr_max_tokens: int
     timeout_seconds: float
+    ocr_timeout_seconds: float
     frame_width: int
     frame_height: int
+    ocr_frame_width: int
+    ocr_frame_height: int
     max_frame_age_seconds: float
     injection_mode: str
     image_detail: str
+    ocr_image_detail: str
 
     @classmethod
     def from_env(cls, base_url: str, api_key: str) -> VisionContextConfig:
         return cls(
             enabled=_env_bool("TANGO_VISION_ENABLED", True),
             model=os.getenv("TANGO_VISION_MODEL", DEFAULT_VISION_MODEL).strip(),
+            ocr_model=os.getenv("TANGO_VISION_OCR_MODEL", DEFAULT_VISION_OCR_MODEL).strip(),
             base_url=base_url,
             api_key=api_key,
             max_tokens=max(_env_int("TANGO_VISION_MAX_TOKENS", 120), 20),
+            ocr_max_tokens=max(_env_int("TANGO_VISION_OCR_MAX_TOKENS", 220), 40),
             timeout_seconds=max(_env_float("TANGO_VISION_TIMEOUT_SECONDS", 8.0), 1.0),
+            ocr_timeout_seconds=max(_env_float("TANGO_VISION_OCR_TIMEOUT_SECONDS", 14.0), 1.0),
             frame_width=max(_env_int("TANGO_VISION_FRAME_WIDTH", 768), 128),
             frame_height=max(_env_int("TANGO_VISION_FRAME_HEIGHT", 768), 128),
+            ocr_frame_width=max(_env_int("TANGO_VISION_OCR_FRAME_WIDTH", 1536), 512),
+            ocr_frame_height=max(_env_int("TANGO_VISION_OCR_FRAME_HEIGHT", 1536), 512),
             max_frame_age_seconds=max(_env_float("TANGO_VISION_MAX_FRAME_AGE_SECONDS", 10.0), 1.0),
             injection_mode=os.getenv("TANGO_VISION_INJECTION_MODE", "auto").strip().lower(),
             image_detail=os.getenv("TANGO_VISION_IMAGE_DETAIL", "auto").strip().lower(),
+            ocr_image_detail=os.getenv("TANGO_VISION_OCR_IMAGE_DETAIL", "high").strip().lower(),
         )
 
 
@@ -128,6 +166,10 @@ class LiveVideoContext:
     @property
     def enabled(self) -> bool:
         return self.config.enabled and bool(self.config.model)
+
+    @property
+    def preemptive_generation_enabled(self) -> bool:
+        return not self.enabled
 
     def start(self) -> None:
         if self._started:
@@ -194,8 +236,9 @@ class LiveVideoContext:
             logger.info("Skipping stale vision frame age=%.1fs", frame_age)
             return None
 
+        mode = "ocr" if self._should_use_ocr(user_text) else "scene"
         try:
-            data_url = self._encode_frame(frame)
+            data_url = self._encode_frame(frame, mode)
         except Exception:
             logger.exception("Could not encode LiveKit video frame for vision context.")
             return None
@@ -206,6 +249,7 @@ class LiveVideoContext:
                 data_url,
                 self._latest_frame_source,
                 user_text,
+                mode,
             )
         except Exception:
             logger.exception("Vision model request failed.")
@@ -215,12 +259,14 @@ class LiveVideoContext:
             return None
 
         logger.info(
-            "Injected visual context source=%s model=%s chars=%d",
+            "Injected visual context mode=%s source=%s model=%s chars=%d",
+            mode,
             self._latest_frame_source,
-            self.config.model,
+            self._model_for_mode(mode),
             len(summary),
         )
-        return f"Visual context from the user's current {self._latest_frame_source}: {summary}"
+        context_kind = "Visual OCR context" if mode == "ocr" else "Visual context"
+        return f"{context_kind} from the user's current {self._latest_frame_source}: {summary}"
 
     def _select_best_existing_track(self, rtc: Any) -> None:
         candidates: list[tuple[int, Any, Any, Any]] = []
@@ -317,16 +363,46 @@ class LiveVideoContext:
         normalized = user_text.lower()
         return any(term in normalized for term in VISUAL_REFERENCE_TERMS)
 
-    def _encode_frame(self, frame: Any) -> str:
+    def _should_use_ocr(self, user_text: str) -> bool:
+        normalized = user_text.lower()
+        return any(term in normalized for term in OCR_REFERENCE_TERMS)
+
+    def _model_for_mode(self, mode: str) -> str:
+        if mode == "ocr" and self.config.ocr_model:
+            return self.config.ocr_model
+        return self.config.model
+
+    def _image_detail_for_mode(self, mode: str) -> str:
+        if mode == "ocr":
+            return self.config.ocr_image_detail
+        return self.config.image_detail
+
+    def _max_tokens_for_mode(self, mode: str) -> int:
+        if mode == "ocr":
+            return self.config.ocr_max_tokens
+        return self.config.max_tokens
+
+    def _timeout_for_mode(self, mode: str) -> float:
+        if mode == "ocr":
+            return self.config.ocr_timeout_seconds
+        return self.config.timeout_seconds
+
+    def _frame_size_for_mode(self, mode: str) -> tuple[int, int]:
+        if mode == "ocr":
+            return self.config.ocr_frame_width, self.config.ocr_frame_height
+        return self.config.frame_width, self.config.frame_height
+
+    def _encode_frame(self, frame: Any, mode: str) -> str:
         from livekit.agents.utils.images import EncodeOptions, ResizeOptions, encode
 
+        width, height = self._frame_size_for_mode(mode)
         image_bytes = encode(
             frame,
             EncodeOptions(
                 format="JPEG",
                 resize_options=ResizeOptions(
-                    width=self.config.frame_width,
-                    height=self.config.frame_height,
+                    width=width,
+                    height=height,
                     strategy="scale_aspect_fit",
                 ),
             ),
@@ -334,42 +410,72 @@ class LiveVideoContext:
         encoded = base64.b64encode(image_bytes).decode("utf-8")
         return f"data:image/jpeg;base64,{encoded}"
 
-    def _request_summary(self, image_data_url: str, source_label: str, user_text: str) -> str | None:
+    def _system_prompt_for_mode(self, mode: str) -> str:
+        if mode == "ocr":
+            return (
+                "You provide OCR-style visual context for a voice assistant. Read visible "
+                "terminal, code, UI, or document text that is relevant to the user's latest "
+                "turn. Preserve exact commands, numbers, filenames, and error text when "
+                "visible. Do not guess text that is too small or blurry; say what is "
+                "unreadable. Keep the answer under 90 words."
+            )
+
+        return (
+            "You produce compact visual context for a voice assistant. "
+            "Describe only visible details that help answer the user's latest turn. "
+            "If the frame is unreadable or irrelevant, say so briefly. "
+            "Keep the answer under 45 words."
+        )
+
+    def _user_prompt_for_mode(self, source_label: str, user_text: str, mode: str) -> str:
+        if mode == "ocr":
+            return (
+                f"The user is sharing their {source_label}. "
+                f"The user just said: {user_text[:500]!r}. "
+                "Extract the exact visible text or command output needed to answer them. "
+                "Then add a very short explanation only if it helps."
+            )
+
+        return (
+            f"The user is sharing their {source_label}. "
+            f"The user just said: {user_text[:500]!r}. "
+            "Summarize the useful visual context."
+        )
+
+    def _request_summary(
+        self,
+        image_data_url: str,
+        source_label: str,
+        user_text: str,
+        mode: str,
+    ) -> str | None:
+        model = self._model_for_mode(mode)
         payload = {
-            "model": self.config.model,
+            "model": model,
             "messages": [
                 {
                     "role": "system",
-                    "content": (
-                        "You produce compact visual context for a voice assistant. "
-                        "Describe only visible details that help answer the user's latest turn. "
-                        "If the frame is unreadable or irrelevant, say so briefly. "
-                        "Keep the answer under 45 words."
-                    ),
+                    "content": self._system_prompt_for_mode(mode),
                 },
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": (
-                                f"The user is sharing their {source_label}. "
-                                f"The user just said: {user_text[:500]!r}. "
-                                "Summarize the useful visual context."
-                            ),
+                            "text": self._user_prompt_for_mode(source_label, user_text, mode),
                         },
                         {
                             "type": "image_url",
                             "image_url": {
                                 "url": image_data_url,
-                                "detail": self.config.image_detail,
+                                "detail": self._image_detail_for_mode(mode),
                             },
                         },
                     ],
                 },
             ],
             "temperature": 0.1,
-            "max_tokens": self.config.max_tokens,
+            "max_tokens": self._max_tokens_for_mode(mode),
         }
         request = urllib.request.Request(
             _litellm_chat_completions_url(self.config.base_url),
@@ -382,11 +488,11 @@ class LiveVideoContext:
         )
 
         try:
-            with urllib.request.urlopen(request, timeout=self.config.timeout_seconds) as response:
+            with urllib.request.urlopen(request, timeout=self._timeout_for_mode(mode)) as response:
                 body = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:500]
-            logger.warning("Vision model HTTP %s: %s", exc.code, detail)
+            logger.warning("Vision model HTTP %s mode=%s model=%s: %s", exc.code, mode, model, detail)
             return None
 
         choices = body.get("choices") or []

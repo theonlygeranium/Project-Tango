@@ -98,6 +98,11 @@
   user turns, and injects that text into the persona's current voice-model turn.
   Grok can be tested by setting `TANGO_VISION_MODEL=xai/grok-4`, but the persona
   speaking model remains independently selected.
+- The vision path disables LiveKit preemptive generation while visual context is
+  enabled, preventing the persona model from racing ahead before the injected
+  visual note is ready. Text-heavy visual turns use an OCR mode with larger
+  1536px high-detail frames, `TANGO_VISION_OCR_MODEL` (default `openai/gpt-4o`),
+  and a prompt that preserves exact terminal/output/log/code text when readable.
 
 Live inspection on 2026-06-22 confirmed the v1.2 LiteLLM aliases exist in
 `/opt/polyglot/services/litellm/litellm_config.yaml`.

@@ -71,10 +71,13 @@ are sampled by the backend worker when the user asks a visually referential ques
 Visual understanding uses a lightweight frame-summary step: the worker captures the
 latest camera or screen-share frame, summarizes it through the LiteLLM alias in
 `TANGO_VISION_MODEL` (`openai/gpt-4o-mini` by default), and injects the resulting
-short text as context for the persona's normal voice model. This keeps Jeremiah,
-Tita, Damian, Nathaniel, and Chris on their selected speaking model while allowing
-screen/camera questions to work. Set `TANGO_VISION_MODEL=xai/grok-4` or another
-vision-capable LiteLLM alias to compare providers without changing persona defaults.
+short text as context for the persona's normal voice model. Text-heavy requests such
+as terminal output, command results, logs, or code automatically switch to an OCR
+path using larger high-detail frames and `TANGO_VISION_OCR_MODEL` (`openai/gpt-4o`
+by default). This keeps Jeremiah, Tita, Damian, Nathaniel, and Chris on their
+selected speaking model while allowing screen/camera questions to work. Set
+`TANGO_VISION_MODEL=xai/grok-4` or `TANGO_VISION_OCR_MODEL=xai/grok-4` to compare
+providers without changing persona defaults.
 
 ## Local Setup
 

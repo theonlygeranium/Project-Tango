@@ -99,6 +99,11 @@ short visual summary into the current turn. The default summary model is `openai
 through LiteLLM, configurable with `TANGO_VISION_MODEL`. This is separate from the persona's
 speaking LLM route.
 
+For text-heavy visual turns such as terminal output, logs, command results, or code, the worker
+uses the OCR path: larger frames, high image detail, and `TANGO_VISION_OCR_MODEL`
+(`openai/gpt-4o` by default). `AgentSession` disables preemptive generation while vision is
+enabled so the visual/OCR context is injected before the persona model starts answering.
+
 The frontend may request a specific LiteLLM alias through `llm_model`, but the backend must validate
 that value against the allowlist in `backend/personas.py`. Unknown model strings must fall back to
 the persona default. Do not expose arbitrary model names to LiveKit token metadata or the OpenAI

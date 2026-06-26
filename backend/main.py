@@ -547,6 +547,9 @@ async def entrypoint(ctx: Any) -> None:
     except Exception:
         logger.exception("Could not create Tango history session; voice session will continue.")
 
+    vision_config = VisionContextConfig.from_env(LITELLM_BASE_URL, LITELLM_MASTER_KEY)
+    vision_context = LiveVideoContext(ctx.room, vision_config)
+
     session = AgentSession(
         vad=silero.VAD.load(),
         stt=deepgram.STT(
@@ -571,10 +574,7 @@ async def entrypoint(ctx: Any) -> None:
         ),
         turn_handling=turn_handling,
         use_tts_aligned_transcript=True,
-    )
-    vision_context = LiveVideoContext(
-        ctx.room,
-        VisionContextConfig.from_env(LITELLM_BASE_URL, LITELLM_MASTER_KEY),
+        preemptive_generation=vision_context.preemptive_generation_enabled,
     )
 
     session_turns: list[dict[str, Any]] = []
