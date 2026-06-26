@@ -103,8 +103,10 @@ export function AgentControlBar({
     [onDeviceError]
   );
   const microphoneLabel = microphoneToggle.enabled ? 'Mute microphone' : 'Unmute microphone';
-  const cameraLabel = cameraToggle.enabled ? 'Stop camera preview' : 'Share camera preview';
-  const screenShareLabel = screenShareToggle.enabled ? 'Stop screen share' : 'Share screen';
+  const cameraLabel = cameraToggle.enabled ? 'Stop sharing camera' : 'Share camera with agent';
+  const screenShareLabel = screenShareToggle.enabled
+    ? 'Stop screen share'
+    : 'Share screen with agent';
   const chatLabel = chatOpen ? 'Close chat' : 'Open chat';
   const captionsLabel = captionsEnabled ? 'Hide captions' : 'Show captions';
 

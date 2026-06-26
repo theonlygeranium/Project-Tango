@@ -505,8 +505,9 @@ async def entrypoint(ctx: Any) -> None:
     )
     from livekit.agents.llm import ChatMessage
     from livekit.plugins import deepgram, elevenlabs, openai, silero
+    from vision_context import LiveVideoContext, VisionContextConfig
 
-    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
+    await ctx.connect(auto_subscribe=AutoSubscribe.SUBSCRIBE_ALL)
     participant = await ctx.wait_for_participant()
     participant_context = _history_context_from_participant(participant)
     persona = get_persona(participant_context.get("persona_id") or _persona_id_from_job_context(ctx))
@@ -570,6 +571,10 @@ async def entrypoint(ctx: Any) -> None:
         ),
         turn_handling=turn_handling,
         use_tts_aligned_transcript=True,
+    )
+    vision_context = LiveVideoContext(
+        ctx.room,
+        VisionContextConfig.from_env(LITELLM_BASE_URL, LITELLM_MASTER_KEY),
     )
 
     session_turns: list[dict[str, Any]] = []
@@ -636,12 +641,17 @@ async def entrypoint(ctx: Any) -> None:
         if ev.error is not None:
             close_error_code = str(ev.reason)
         logger.info("Tango agent session closed reason=%s turns=%d", ev.reason, len(session_turns))
+        asyncio.create_task(vision_context.aclose())
         asyncio.create_task(flush_history())
 
     ctx.add_shutdown_callback(flush_history)
+    ctx.add_shutdown_callback(vision_context.aclose)
 
     try:
-        await session.start(agent=Jarvis(persona, llm_model=llm_model), room=ctx.room)
+        await session.start(
+            agent=Jarvis(persona, llm_model=llm_model, vision_context=vision_context),
+            room=ctx.room,
+        )
     except Exception as exc:
         error_text = str(exc).lower()
         if "timeout" in error_text or "504" in error_text:

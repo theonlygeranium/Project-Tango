@@ -64,6 +64,9 @@ Live inspection on 2026-06-22 showed Docker container `asr-gateway` listening on
 - Do not add `WRITER_API_KEY` or `PALMYRA_API_KEY` to Tango env files.
 - Deepgram STT must use Nova-3 with interim results enabled for live captions.
 - ElevenLabs TTS must use `eleven_flash_v2_5`.
+- Camera/screen visual understanding must use LiveKit video track sampling and a
+  vision-capable LiteLLM alias through `TANGO_VISION_MODEL`; do not call a vision
+  provider directly outside LiteLLM.
 - Do not commit real API keys. Keep `.env.example` placeholders blank.
 
 ## LiteLLM Aliases
@@ -90,6 +93,11 @@ Persona selection starts in the frontend, is sent to `/api/connection-details`, 
 the LiveKit token metadata, participant attributes, and generated room name. The backend worker must
 use that persona to choose the ElevenLabs voice, LiteLLM model string, Deepgram STT language, and
 system prompt.
+
+If the user shares camera or screen video, the worker subscribes to video tracks and may inject a
+short visual summary into the current turn. The default summary model is `openai/gpt-4o-mini`
+through LiteLLM, configurable with `TANGO_VISION_MODEL`. This is separate from the persona's
+speaking LLM route.
 
 The frontend may request a specific LiteLLM alias through `llm_model`, but the backend must validate
 that value against the allowlist in `backend/personas.py`. Unknown model strings must fall back to

@@ -52,10 +52,24 @@ def _load_tools() -> tuple[Any, ...]:
     return tuple(tools)
 
 
+def _chat_message_text(item: Any) -> str:
+    text_content = getattr(item, "text_content", None)
+    if isinstance(text_content, str):
+        return text_content
+
+    content = getattr(item, "content", None)
+    if not isinstance(content, list):
+        return ""
+
+    parts = [part for part in content if isinstance(part, str)]
+    return "\n".join(parts)
+
+
 class Jarvis(Agent):
-    def __init__(self, persona: Persona, llm_model: str):
+    def __init__(self, persona: Persona, llm_model: str, vision_context: Any | None = None):
         self.persona = persona
         self.llm_model = llm_model
+        self.vision_context = vision_context
         local_model_guidance = ""
         if llm_model == LOCAL_QWEN_MODEL:
             local_model_guidance = (
@@ -72,11 +86,32 @@ class Jarvis(Agent):
                 "tool is unavailable on this Linux deployment, explain that limitation plainly.\n\n"
                 f"Runtime model route: {llm_model}. If the user asks what model powers you, "
                 "answer with this exact Project Tango LiteLLM route. Do not claim to be "
-                "Palmyra unless the route is writer/palmyra-x5-voice."
+                "Palmyra unless the route is writer/palmyra-x5-voice. When visual context "
+                "from the user's camera or screen share is provided as a system note, use it "
+                "naturally if it helps answer the user's latest turn; do not claim you are "
+                "watching continuously."
                 f"{local_model_guidance}"
             ),
             tools=list(_load_tools()),
         )
 
     async def on_enter(self):
+        if self.vision_context is not None:
+            self.vision_context.start()
         await self.session.say(f"{self.persona.display_name} is online. How can I help?")
+
+    async def on_user_turn_completed(self, turn_ctx: Any, new_message: Any) -> None:
+        if self.vision_context is None:
+            return
+
+        visual_context = await self.vision_context.describe_latest_frame(_chat_message_text(new_message))
+        if not visual_context:
+            return
+
+        turn_ctx.add_message(
+            role="system",
+            content=(
+                f"{visual_context}\n"
+                "Use this as current visual context only if it is relevant to the user's request."
+            ),
+        )

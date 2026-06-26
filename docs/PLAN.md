@@ -91,6 +91,13 @@
   (`en-US`), ElevenLabs voice ID `EqHdTYoEuDQCxN1CVbi0`, and default route
   `local/qwen3-fast`; the allowlisted model switcher can still route him to
   Palmyra for comparison.
+- Camera and screen-share controls now feed a LiveKit video-frame context path.
+  The worker subscribes to video tracks, keeps the newest camera/screen frame,
+  asks a vision-capable LiteLLM alias (`TANGO_VISION_MODEL`, default
+  `openai/gpt-4o-mini`) for a compact visual summary on visually referential
+  user turns, and injects that text into the persona's current voice-model turn.
+  Grok can be tested by setting `TANGO_VISION_MODEL=xai/grok-4`, but the persona
+  speaking model remains independently selected.
 
 Live inspection on 2026-06-22 confirmed the v1.2 LiteLLM aliases exist in
 `/opt/polyglot/services/litellm/litellm_config.yaml`.
@@ -182,6 +189,9 @@ is the v1.2 target and should stay free for `tango-backend.service`.
 - iOS native app.
 - User authentication/session ownership for history.
 - Transcript search, filtering, export, and admin operations.
+- Current-info retrieval tools for time-sensitive questions. Recommended shape:
+  keep persona LLM routing stable, add small tools for live web/news/project
+  facts, and optionally route those tools through Grok or another LiteLLM alias.
 - New LiteLLM/Ollama service changes.
 - Frontend Caddy block creation.
 - Edits to `polyglot-*`, `meetscribe-*`, `project-foxtrot-*`, Ollama overrides, or

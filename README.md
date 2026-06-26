@@ -65,9 +65,16 @@ unknown model strings and never calls Ollama directly.
 
 The microphone, camera, and screen-share controls are inherited from the AURA LiveKit
 interface. Microphone input drives the current audio-first Tango agent. Camera and
-screen share publish local LiveKit video tracks and show compact local preview tiles,
-but the current STT/LLM/TTS worker does not consume visual frames as model context.
-Adding true visual understanding would require a future LiveKit video-frame pipeline.
+screen share publish local LiveKit video tracks, show compact local preview tiles, and
+are sampled by the backend worker when the user asks a visually referential question.
+
+Visual understanding uses a lightweight frame-summary step: the worker captures the
+latest camera or screen-share frame, summarizes it through the LiteLLM alias in
+`TANGO_VISION_MODEL` (`openai/gpt-4o-mini` by default), and injects the resulting
+short text as context for the persona's normal voice model. This keeps Jeremiah,
+Tita, Damian, Nathaniel, and Chris on their selected speaking model while allowing
+screen/camera questions to work. Set `TANGO_VISION_MODEL=xai/grok-4` or another
+vision-capable LiteLLM alias to compare providers without changing persona defaults.
 
 ## Local Setup
 

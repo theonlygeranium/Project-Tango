@@ -45,9 +45,9 @@ function getSourceLabel(source: Track.Source, enabled: boolean, pending = false)
     case Track.Source.Microphone:
       return enabled ? 'Mute microphone' : 'Unmute microphone';
     case Track.Source.Camera:
-      return enabled ? 'Stop camera preview' : 'Share camera preview';
+      return enabled ? 'Stop sharing camera' : 'Share camera with agent';
     case Track.Source.ScreenShare:
-      return enabled ? 'Stop screen share' : 'Share screen';
+      return enabled ? 'Stop screen share' : 'Share screen with agent';
     default:
       return 'Toggle media';
   }
