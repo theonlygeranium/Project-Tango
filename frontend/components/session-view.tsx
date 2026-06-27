@@ -221,9 +221,8 @@ export const SessionView = ({
               )}
             >
               <span className="font-mono text-[0.6rem] font-medium tracking-wide text-sky-500 dark:text-sky-400">
-                Tap{' '}
-                <span className="font-bold">End Call</span>{' '}
-                to stop or switch to a different persona
+                Tap <span className="font-bold">End Call</span> to stop or switch to a different
+                persona
               </span>
             </div>
 
