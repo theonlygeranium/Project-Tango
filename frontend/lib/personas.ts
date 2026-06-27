@@ -85,11 +85,11 @@ export const TANGO_PERSONAS: TangoPersona[] = [
   },
   {
     id: 'pinoy-pride',
-    label: 'Pinoy Pride',
-    displayName: 'Tita',
-    roleDescription: 'Pinoy pride',
+    label: 'Tita Baby',
+    displayName: 'Tita Baby',
+    roleDescription: 'The Ultimate Filipina Tita',
     defaultLlmModel: 'local/qwen3-fast',
-    initials: 'TI',
+    initials: 'TB',
     accentClassName:
       'border-rose-500/70 bg-rose-500/10 text-rose-700 dark:border-rose-300/70 dark:bg-rose-300/10 dark:text-rose-100',
   },
