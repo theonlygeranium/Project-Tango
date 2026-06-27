@@ -45,9 +45,19 @@ export default function useConnectionDetails(
       });
   }, [personaId, llmModelSelectionId]);
 
+  // Clears the cached connection details without triggering a new fetch.
+  // Use this on session end so a persona switch starts with a clean slate.
+  const clearConnectionDetails = useCallback(() => {
+    setConnectionDetails(null);
+  }, []);
+
   useEffect(() => {
     if (enabled) { fetchConnectionDetails(); }
   }, [fetchConnectionDetails, enabled]);
 
-  return { connectionDetails, refreshConnectionDetails: fetchConnectionDetails };
+  return {
+    connectionDetails,
+    refreshConnectionDetails: fetchConnectionDetails,
+    clearConnectionDetails,
+  };
 }
