@@ -48,7 +48,7 @@ export function App({ appConfig }: AppProps) {
     DEFAULT_LLM_MODEL_SELECTION_ID
   );
   const [preferencesReady, setPreferencesReady] = useState(false);
-  const { connectionDetails, refreshConnectionDetails } = useConnectionDetails(
+  const { connectionDetails, refreshConnectionDetails, clearConnectionDetails } = useConnectionDetails(
     selectedPersonaId,
     selectedLlmModelId,
     preferencesReady && sessionStarted
@@ -73,7 +73,9 @@ export function App({ appConfig }: AppProps) {
     const onDisconnected = () => {
       setSessionStarted(false);
       setCanPlayAudio(room.canPlaybackAudio);
-      refreshConnectionDetails();
+      // Clear stale connection details so a persona switch always starts a
+      // fresh fetch when the user taps Start — never reuse the old token.
+      clearConnectionDetails();
     };
     const onAudioPlaybackStatusChanged = () => {
       setCanPlayAudio(room.canPlaybackAudio);
@@ -96,7 +98,7 @@ export function App({ appConfig }: AppProps) {
       room.off(RoomEvent.MediaDevicesError, onMediaDevicesError);
       room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlaybackStatusChanged);
     };
-  }, [room, refreshConnectionDetails]);
+  }, [room, clearConnectionDetails]);
 
   useEffect(() => {
     let aborted = false;
