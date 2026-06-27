@@ -70,8 +70,7 @@ const TippingButtonStyles: FC = () => (
 
     @media (max-width: 640px) {
       .tipping-button-container {
-        right: 1rem;
-        bottom: calc(4.5rem + env(safe-area-inset-bottom));
+        display: none;
       }
 
       .tipping-button-container main {

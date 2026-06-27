@@ -127,11 +127,25 @@ const AnimatedSquares: React.FC<AnimatedSquaresProps> = ({
       animationState.current.hoveredSquare = null;
     };
 
+    const handleTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = touch.clientX - rect.left;
+      const mouseY = touch.clientY - rect.top;
+      const state = animationState.current;
+      state.hoveredSquare = {
+        x: Math.floor((mouseX + state.gridOffset.x) / squareSize),
+        y: Math.floor((mouseY + state.gridOffset.y) / squareSize),
+      };
+    };
+
     resizeCanvas();
     updateAnimation();
     window.addEventListener('resize', resizeCanvas);
     // Attach mouse move to the window, not the canvas
     window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
     window.addEventListener('mouseleave', handleMouseLeave);
 
     const state = animationState.current;
@@ -141,6 +155,7 @@ const AnimatedSquares: React.FC<AnimatedSquaresProps> = ({
       }
       window.removeEventListener('resize', resizeCanvas);
       window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('mouseleave', handleMouseLeave);
     };
   }, [direction, speed, borderColor, squareSize, hoverFillColor]);
@@ -180,7 +195,7 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
       <div
         ref={ref}
         inert={disabled}
-        className="fixed inset-0 z-10 mx-auto flex h-svh flex-col items-center justify-center text-center"
+        className="fixed inset-0 z-10 mx-auto flex h-svh flex-col items-center justify-start overflow-y-auto px-3 pt-[calc(env(safe-area-inset-top)+3.25rem)] pb-[calc(env(safe-area-inset-bottom)+4.5rem)] text-center sm:justify-center sm:overflow-hidden sm:p-0"
       >
         <AnimatedSquares
           direction="diagonal"
@@ -190,12 +205,12 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
           hoverFillColor="#222"
         />
 
-        <div className="pointer-events-none relative z-10 flex max-w-[min(94vw,64rem)] flex-col items-center gap-4 p-4">
-          <h1 className="text-foreground font-mono text-5xl leading-none sm:text-7xl md:text-[8rem] lg:text-[10rem]">
+        <div className="pointer-events-none relative z-10 flex w-full max-w-[min(94vw,64rem)] flex-col items-center gap-3 p-3 sm:gap-4 sm:p-4">
+          <h1 className="text-foreground font-mono text-[6rem] leading-[0.9] sm:text-[7rem] md:text-[8rem] lg:text-[10rem]">
             TANGO
           </h1>
 
-          <p className="text-foreground/80 max-w-lg text-base leading-7 sm:text-lg">
+          <p className="text-foreground/80 max-w-lg text-sm leading-6 sm:text-lg sm:leading-7">
             Choose a voice, then begin a thoughtful Project Tango session.
           </p>
 
@@ -223,7 +238,7 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
             variant="primary"
             size="lg"
             onClick={onStartCall}
-            className="text-primary-foreground/80 hover:text-primary-foreground pointer-events-auto min-h-11 w-64 font-sans text-[0.85rem] transition-colors"
+            className="text-primary-foreground/80 hover:text-primary-foreground pointer-events-auto min-h-12 w-72 max-w-full font-sans text-[0.85rem] transition-colors"
             disabled={disabled}
           >
             {startButtonText}
