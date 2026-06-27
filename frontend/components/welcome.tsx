@@ -110,7 +110,6 @@ const AnimatedSquares: React.FC<AnimatedSquaresProps> = ({
       state.requestRef = requestAnimationFrame(updateAnimation);
     };
 
-    // This event listener is now on the window, so it works everywhere
     const handleMouseMove = (event: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
       const mouseX = event.clientX - rect.left;
@@ -143,7 +142,6 @@ const AnimatedSquares: React.FC<AnimatedSquaresProps> = ({
     resizeCanvas();
     updateAnimation();
     window.addEventListener('resize', resizeCanvas);
-    // Attach mouse move to the window, not the canvas
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('touchmove', handleTouchMove, { passive: true });
     window.addEventListener('mouseleave', handleMouseLeave);
@@ -187,7 +185,6 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
     ref
   ) => {
     function handleTipComplete(): void {
-      // Show a thank you message or perform any desired action after tipping
       console.log('Tip animation finished! Thanks for the tip!');
     }
 
@@ -210,8 +207,10 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
             TANGO
           </h1>
 
-          <p className="text-foreground/80 max-w-lg text-sm leading-6 sm:text-lg sm:leading-7">
-            Choose a voice, then begin a thoughtful Project Tango session.
+          <p className="max-w-lg text-sm leading-6 text-sky-500 sm:text-lg sm:leading-7 dark:text-sky-400">
+            Choose a voice, then click{' '}
+            <span className="font-semibold">Start Conversation</span>{' '}
+            to begin your chat.
           </p>
 
           <div className="pointer-events-auto flex w-full flex-col items-center gap-2">
@@ -245,18 +244,24 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
           </Button>
         </div>
 
-        <p className="text-foreground/60 pointer-events-none fixed bottom-6 left-1/2 w-full max-w-prose -translate-x-1/2 text-xs">
-          Project Tango uses{' '}
-          <a
-            target="_blank"
-            rel="noopener noreferrer"
-            href="https://livekit.io"
-            className="hover:text-foreground/80 pointer-events-auto underline"
-          >
-            LiveKit
-          </a>
-          .
-        </p>
+        <div className="pointer-events-none fixed bottom-6 left-1/2 flex w-full max-w-prose -translate-x-1/2 flex-col items-center gap-1 text-center text-xs">
+          <p className="font-medium text-sky-500 dark:text-sky-400">
+            Developed by Geronimo AI &mdash; Proprietary & Confidential
+          </p>
+          <p className="text-foreground/60">
+            Project Tango uses{' '}
+            <a
+              target="_blank"
+              rel="noopener noreferrer"
+              href="https://livekit.io"
+              className="hover:text-foreground/80 pointer-events-auto underline"
+            >
+              LiveKit
+            </a>
+            .
+          </p>
+        </div>
+
         <TippingButton
           onTip={handleTipComplete}
           coinIcon={<FaReact size="100%" color="currentColor" />}
