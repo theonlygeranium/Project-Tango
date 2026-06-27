@@ -98,7 +98,13 @@ class Jarvis(Agent):
     async def on_enter(self):
         if self.vision_context is not None:
             self.vision_context.start()
-        await self.session.say(f"{self.persona.display_name} is online. How can I help?")
+        # Use persona-specific greeting if defined, otherwise fall back to generic.
+        opening_line = (
+            self.persona.greeting
+            if self.persona.greeting
+            else f"{self.persona.display_name} is online. How can I help?"
+        )
+        await self.session.say(opening_line)
 
     async def on_user_turn_completed(self, turn_ctx: Any, new_message: Any) -> None:
         if self.vision_context is None:
