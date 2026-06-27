@@ -48,11 +48,8 @@ export function App({ appConfig }: AppProps) {
     DEFAULT_LLM_MODEL_SELECTION_ID
   );
   const [preferencesReady, setPreferencesReady] = useState(false);
-  const { connectionDetails, refreshConnectionDetails, clearConnectionDetails } = useConnectionDetails(
-    selectedPersonaId,
-    selectedLlmModelId,
-    preferencesReady && sessionStarted
-  );
+  const { connectionDetails, refreshConnectionDetails, clearConnectionDetails } =
+    useConnectionDetails(selectedPersonaId, selectedLlmModelId, preferencesReady && sessionStarted);
 
   useEffect(() => {
     setSelectedPersonaId(readStoredPersonaId());
