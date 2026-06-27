@@ -208,9 +208,8 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
           </h1>
 
           <p className="max-w-lg text-sm leading-6 text-sky-500 sm:text-lg sm:leading-7 dark:text-sky-400">
-            Choose a voice, then click{' '}
-            <span className="font-semibold">Start Conversation</span>{' '}
-            to begin your chat.
+            Choose a voice, then click <span className="font-semibold">Start Conversation</span> to
+            begin your chat.
           </p>
 
           <div className="pointer-events-auto flex w-full flex-col items-center gap-2">
