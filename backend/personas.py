@@ -21,8 +21,15 @@ class Persona:
     voice_settings: dict[str, float | bool]
     system_prompt: str
     # Optional custom opening line spoken on session start.
-    # If None, jarvis_agent falls back to the generic greeting.
     greeting: str | None = None
+    # Flux end-of-turn detection tuning.
+    # eot_threshold: 0.5 (fast/loose) – 0.9 (slow/strict). Default 0.7.
+    eot_threshold: float = 0.7
+    # eot_timeout_ms: max silence before EndOfTurn is forced. Default 3000ms.
+    eot_timeout_ms: int = 3000
+    # keyterms: domain-specific words for Deepgram Plugin keyterm boosting.
+    # Especially useful for Taglish personas.
+    keyterms: tuple[str, ...] = field(default_factory=tuple)
 
     def public_dict(self) -> dict[str, str]:
         return {
@@ -44,6 +51,10 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="QF9HJC7XWnue5c9W3LkY",
         llm_model="local/qwen3-fast",
         stt_language="en-US",
+        # Higher eot_threshold + longer timeout so Damian never cuts off a user
+        # who pauses mid-thought during an emotional moment.
+        eot_threshold=0.8,
+        eot_timeout_ms=4500,
         voice_settings={
             "stability": 0.75,
             "similarity_boost": 0.85,
@@ -75,6 +86,8 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="HfRP3cIhYLmeNHeTvkWK",
         llm_model="writer/palmyra-x5-voice",
         stt_language="en-US",
+        eot_threshold=0.7,
+        eot_timeout_ms=2500,
         voice_settings={
             "stability": 0.60,
             "similarity_boost": 0.80,
@@ -104,13 +117,15 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="EqHdTYoEuDQCxN1CVbi0",
         llm_model="local/qwen3-fast",
         stt_language="en-US",
+        eot_threshold=0.7,
+        eot_timeout_ms=2500,
+        greeting="Hi, I'm Jeremiah. I'm an agent whose voice is based on my creator, Jeff Geronimo. How can I help?",
         voice_settings={
             "stability": 0.60,
             "similarity_boost": 0.80,
             "style": 0.15,
             "use_speaker_boost": False,
         },
-        greeting="Hi, I'm Jeremiah. I'm an agent whose voice is based on my creator, Jeff Geronimo. How can I help?",
         system_prompt=(
             "You are Jeremiah, a straight-talking, practical American general assistant. "
             "Your personality is confident, no-nonsense, and genuinely helpful. "
@@ -144,6 +159,8 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="qYwy2TckibCF9cBuhI46",
         llm_model="local/qwen3-fast",
         stt_language="en-US",
+        eot_threshold=0.7,
+        eot_timeout_ms=2500,
         voice_settings={
             "stability": 0.60,
             "similarity_boost": 0.80,
@@ -172,6 +189,14 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="LF1xMOq6fDVEBEkLP0HO",
         llm_model="local/qwen3-fast",
         stt_language="tl",
+        eot_threshold=0.7,
+        eot_timeout_ms=3000,
+        # Keyterms boost recognition of common Tagalog and Taglish words.
+        keyterms=(
+            "anak", "po", "naman", "oo", "hindi", "salamat", "maganda",
+            "sobrang", "talaga", "kaya", "dito", "paano", "bakit",
+            "sige", "wag", "ganun", "ganito", "pwede", "ayaw", "gusto",
+        ),
         voice_settings={
             "stability": 0.55,
             "similarity_boost": 0.80,
@@ -202,6 +227,10 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="pFQStpMdprGFILRDrWR2",
         llm_model="local/qwen3-fast",
         stt_language="en-US",
+        # Highest patience: users following guided meditation speak slowly
+        # and pause for breath. Never interrupt an intentional silence.
+        eot_threshold=0.8,
+        eot_timeout_ms=5500,
         voice_settings={
             "stability": 0.85,
             "similarity_boost": 0.90,
@@ -233,6 +262,17 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="smYFzUb4yrSqprnml7n5",
         llm_model="local/qwen3-fast",
         stt_language="tl",
+        eot_threshold=0.7,
+        eot_timeout_ms=2500,
+        # Keyterms boost recognition of Taglish slang, fillers, and endearments
+        # that are phonetically similar to English and often mis-transcribed.
+        keyterms=(
+            "hay naku", "susmariosep", "kaloka", "charot", "shookt",
+            "sana all", "gora", "pak", "ganern", "accla",
+            "anak", "hija", "hijo", "beshie", "mare",
+            "grabe", "talaga", "naman", "ano ba yan",
+            "jun-jun", "marites", "budol", "shopee",
+        ),
         voice_settings={
             "stability": 0.55,
             "similarity_boost": 0.80,
