@@ -24,13 +24,13 @@ SUMMARIZE_PROMPT = """\
 You are a memory extractor for a voice AI assistant. Given a conversation transcript, \
 extract the following in valid JSON with exactly these keys:
 
-{
+{{
   "summary": "<2-3 sentence plain-language summary of what was discussed>",
   "user_profile_updates": ["<fact 1 about the user>", "<fact 2>"],
   "open_loops": ["<unresolved topic or follow-up item 1>", "<item 2>"],
   "emotional_tone": "<one word: positive|neutral|distressed|frustrated|reflective>",
   "key_topics": ["<topic 1>", "<topic 2>", "<topic 3>"]
-}
+}}
 
 Rules:
 - user_profile_updates: stable facts about the user (name, job, location, relationships). Max 5 items.
