@@ -531,7 +531,11 @@ async def entrypoint(ctx: Any) -> None:
     from vision_context import LiveVideoContext, VisionContextConfig
 
     await ctx.connect(auto_subscribe=AutoSubscribe.SUBSCRIBE_ALL)
-    participant = await ctx.wait_for_participant()
+    try:
+        participant = await ctx.wait_for_participant()
+    except RuntimeError as e:
+        logger.warning("entrypoint: room disconnected before participant: %s", e)
+        return
     participant_context = _history_context_from_participant(participant)
     persona = get_persona(participant_context.get("persona_id") or _persona_id_from_job_context(ctx))
     llm_model = resolve_llm_model(persona, participant_context.get("llm_model"))
