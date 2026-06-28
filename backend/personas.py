@@ -29,7 +29,7 @@ class Persona:
     # Optional custom opening line spoken on session start.
     greeting: str | None = None
     # Flux end-of-turn detection tuning.
-    # eot_threshold: 0.5 (fast/loose) – 0.9 (slow/strict). Default 0.7.
+    # eot_threshold: 0.5 (fast/loose) - 0.9 (slow/strict). Default 0.7.
     eot_threshold: float = 0.7
     # eot_timeout_ms: max silence before EndOfTurn is forced. Default 3000ms.
     eot_timeout_ms: int = 3000
@@ -57,8 +57,6 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="QF9HJC7XWnue5c9W3LkY",
         llm_model="local/qwen3-fast",
         stt_language="en-US",
-        # Higher eot_threshold + longer timeout so Damian never cuts off a user
-        # who pauses mid-thought during an emotional moment.
         eot_threshold=0.8,
         eot_timeout_ms=4500,
         voice_settings={
@@ -123,7 +121,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         display_name="Jeremiah",
         role_description="General assistant",
         voice_id="EqHdTYoEuDQCxN1CVbi0",
-        llm_model="local/qwen3-fast",
+        llm_model="writer/palmyra-x5-voice",
         stt_language="en-US",
         eot_threshold=0.7,
         eot_timeout_ms=2500,
@@ -201,7 +199,6 @@ TANGO_PERSONAS: dict[str, Persona] = {
         stt_language="tl",
         eot_threshold=0.7,
         eot_timeout_ms=3000,
-        # Keyterms boost recognition of common Tagalog and Taglish words.
         keyterms=(
             "anak", "po", "naman", "oo", "hindi", "salamat", "maganda",
             "sobrang", "talaga", "kaya", "dito", "paano", "bakit",
@@ -237,8 +234,6 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="pFQStpMdprGFILRDrWR2",
         llm_model="local/qwen3-fast",
         stt_language="en-US",
-        # Highest patience: users following guided meditation speak slowly
-        # and pause for breath. Never interrupt an intentional silence.
         eot_threshold=0.8,
         eot_timeout_ms=5500,
         voice_settings={
@@ -275,8 +270,6 @@ TANGO_PERSONAS: dict[str, Persona] = {
         stt_language="tl",
         eot_threshold=0.7,
         eot_timeout_ms=2500,
-        # Keyterms boost recognition of Taglish slang, fillers, and endearments
-        # that are phonetically similar to English and often mis-transcribed.
         keyterms=(
             "hay naku", "susmariosep", "kaloka", "charot", "shookt",
             "sana all", "gora", "pak", "ganern", "accla",
