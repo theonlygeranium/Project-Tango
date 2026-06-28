@@ -38,6 +38,7 @@ from personas import (
     list_personas,
     resolve_llm_model,
 )
+from sip import SIP_GREETING_ADDENDUM, persona_key_from_room_name
 
 dotenv_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
@@ -485,6 +486,11 @@ def _persona_id_from_job_context(ctx: Any) -> str | None:
     return None
 
 
+def _sip_greeting(persona: Persona) -> str:
+    role = persona.role_description[:1].lower() + persona.role_description[1:]
+    return f"Hi, this is {persona.display_name}, your {role}. I'm glad you called."
+
+
 def _history_context_from_participant(participant: Any | None) -> dict[str, str]:
     if participant is None:
         return {}
@@ -622,17 +628,29 @@ async def entrypoint(ctx: Any) -> None:
         logger.warning("entrypoint: room disconnected before participant: %s", e)
         return
     participant_context = _history_context_from_participant(participant)
-    persona = get_persona(participant_context.get("persona_id") or _persona_id_from_job_context(ctx))
-    llm_model = resolve_llm_model(persona, participant_context.get("llm_model"))
     room_name = getattr(getattr(ctx, "room", None), "name", "unknown")
+    metadata_persona_id = participant_context.get("persona_id") or _persona_id_from_job_context(ctx)
+    sip_persona_id = persona_key_from_room_name(room_name) if not metadata_persona_id else None
+    is_sip = sip_persona_id is not None
+    persona = get_persona(metadata_persona_id or sip_persona_id)
+    llm_model = resolve_llm_model(persona, participant_context.get("llm_model"))
+    augmented_system_prompt = persona.system_prompt
     prior_context = ""
     try:
         prior_context = await load_context_for_session(await get_pool(), persona.id)
     except Exception:
         logger.exception("entrypoint: memory context unavailable room=%s persona_id=%s", room_name, persona.id)
+    if prior_context:
+        augmented_system_prompt = f"{augmented_system_prompt}{prior_context}"
+    if is_sip:
+        augmented_system_prompt = f"{augmented_system_prompt}{SIP_GREETING_ADDENDUM}"
     persona_for_agent = (
-        replace(persona, system_prompt=f"{persona.system_prompt}{prior_context}")
-        if prior_context
+        replace(
+            persona,
+            system_prompt=augmented_system_prompt,
+            greeting=_sip_greeting(persona) if is_sip else persona.greeting,
+        )
+        if prior_context or is_sip
         else persona
     )
     vision_config = VisionContextConfig.from_env(LITELLM_BASE_URL, LITELLM_MASTER_KEY)
@@ -649,10 +667,11 @@ async def entrypoint(ctx: Any) -> None:
     _flux_model = "flux-general-en" if not _use_nova3 else "nova-3-multi"
 
     logger.info(
-        "Starting Tango agent room=%s persona_id=%s model=%s flux_stt=%s eot_threshold=%s eot_timeout_ms=%s preemptive_generation=%s llm_base_url=%s",
+        "Starting Tango agent room=%s persona_id=%s model=%s is_sip=%s flux_stt=%s eot_threshold=%s eot_timeout_ms=%s preemptive_generation=%s llm_base_url=%s",
         room_name,
         persona.id,
         llm_model,
+        is_sip,
         _flux_model,
         persona.eot_threshold,
         persona.eot_timeout_ms,
