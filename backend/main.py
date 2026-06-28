@@ -125,6 +125,7 @@ def _turn_handling_for_session(
     # The per-persona eot_threshold and eot_timeout_ms are passed directly to STTv2.
     # Only preemptive_generation remains here.
     turn_handling: dict[str, Any] = {}
+    turn_handling["turn_detection"] = "stt"
     turn_handling["preemptive_generation"] = {"enabled": preemptive_generation_enabled}
     return turn_handling
 
@@ -610,9 +611,8 @@ async def entrypoint(ctx: Any) -> None:
             voice_settings=elevenlabs.VoiceSettings(**persona.voice_settings),
             auto_mode=True,
         ),
-        turn_detection="stt",
         turn_handling=turn_handling,
-        use_tts_aligned_transcript=True,
+        use_tts_aligned_transcript=False,
     )
 
     session_turns: list[dict[str, Any]] = []
