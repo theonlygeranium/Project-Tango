@@ -587,7 +587,7 @@ async def entrypoint(ctx: Any) -> None:
 
     vision_context = LiveVideoContext(ctx.room, vision_config)
     if _use_nova3:
-        _stt = deepgram.STT(model="nova-3", language="multi")
+        _stt = deepgram.STT(model="nova-3", language="tl", smart_format=True)
         turn_handling.pop("turn_detection", None)
     else:
         stt_kwargs: dict[str, Any] = {
