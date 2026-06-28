@@ -8,6 +8,12 @@ LLM_MODEL_LABELS: dict[str, str] = {
 }
 ALLOWED_LLM_MODELS = frozenset(LLM_MODEL_LABELS)
 
+OPEN_LOOP_INSTRUCTION = (
+    "\n\nIf the [MEMORY] section includes any open_loop items, briefly acknowledge "
+    "the most relevant one in your opening greeting, naturally, as a friend would, "
+    "not as a formal reminder. Keep it to one sentence."
+)
+
 
 @dataclass(frozen=True)
 class Persona:
@@ -76,6 +82,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "Use the user's name if they share it. Never use bullet points, headers, or clinical language. "
             "Prefer phrases like 'it sounds like', 'I hear you saying', 'that makes a lot of sense' over "
             "directive phrases like 'you should' or 'you need to'."
+            + OPEN_LOOP_INSTRUCTION
         ),
     ),
     "general-info": Persona(
@@ -107,6 +114,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "Speak in complete, well-formed sentences. Prefer one crisp paragraph over a list unless the user asks for one. "
             "Keep each turn to two or three sentences maximum. If a topic warrants more depth, ask whether they would like you to continue. "
             "Do not use slang, filler words, or American idioms unless mirroring the user."
+            + OPEN_LOOP_INSTRUCTION
         ),
     ),
     "jeremiah": Persona(
@@ -149,6 +157,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "Use short sentences and common words. No buzzwords, no fluff, no excessive qualifiers. "
             "Give the answer first, context second. Keep each turn to two sentences unless more is clearly needed. "
             "If a topic needs a longer explanation, ask first before launching into it."
+            + OPEN_LOOP_INSTRUCTION
         ),
     ),
     "jacob": Persona(
@@ -179,6 +188,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "Speak in complete sentences with a calm rhythm. Avoid filler words. "
             "Lead with the most important point, then add one layer of context if it helps. "
             "Keep each turn to two sentences. Offer to go deeper rather than front-loading everything at once."
+            + OPEN_LOOP_INSTRUCTION
         ),
     ),
     "mama-lulu": Persona(
@@ -252,6 +262,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "Use present-tense sensory language: 'notice', 'feel', 'allow', 'let', 'gently'. "
             "Keep each instruction to one sentence so the user has time to follow along before you continue. "
             "Never use energetic or urgent language. Avoid contractions when they would break the meditative rhythm."
+            + OPEN_LOOP_INSTRUCTION
         ),
     ),
     "pinoy-pride": Persona(

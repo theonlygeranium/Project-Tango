@@ -80,7 +80,7 @@ app.add_middleware(
         "http://localhost:3006,http://127.0.0.1:3006",
     ).split(","),
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -346,6 +346,15 @@ def _serialize_turn(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _serialize_open_loop(row: Any) -> dict[str, Any]:
+    return {
+        "id": str(row["id"]),
+        "persona": row["persona"],
+        "content": row["content"],
+        "created_at": _serialize_time(row.get("created_at")),
+    }
+
+
 @app.get("/api/history")
 @limiter.limit("30/minute")
 async def history_endpoint(request: Request, limit: int = 20, offset: int = 0) -> Any:
@@ -382,6 +391,79 @@ async def history_detail_endpoint(request: Request, session_id: str) -> Any:
     except Exception:
         logger.exception("History detail query failed session_id=%s", parsed_session_id)
         return _api_database_error()
+
+
+@app.get("/api/memory/open-loops")
+@limiter.limit("30/minute")
+async def get_open_loops(request: Request, persona: str | None = None) -> Any:
+    del request
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            if persona:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, persona, content, created_at
+                    FROM tango.memories
+                    WHERE memory_type = 'open_loop'
+                      AND resolved_at IS NULL
+                      AND (expires_at IS NULL OR expires_at > now())
+                      AND persona = $1
+                    ORDER BY created_at DESC
+                    LIMIT 5
+                    """,
+                    persona,
+                )
+            else:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, persona, content, created_at
+                    FROM tango.memories
+                    WHERE memory_type = 'open_loop'
+                      AND resolved_at IS NULL
+                      AND (expires_at IS NULL OR expires_at > now())
+                    ORDER BY created_at DESC
+                    LIMIT 10
+                    """
+                )
+        return {"open_loops": [_serialize_open_loop(row) for row in rows]}
+    except Exception:
+        logger.exception("Open loop query failed persona=%s", persona)
+        return _api_database_error()
+
+
+@app.patch("/api/memory/open-loops/{loop_id}/resolve")
+@limiter.limit("30/minute")
+async def resolve_open_loop(request: Request, loop_id: str, note: str | None = None) -> Any:
+    del request
+    try:
+        parsed_loop_id = uuid.UUID(loop_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid open loop id") from None
+
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE tango.memories
+                SET resolved_at = now(),
+                    resolution_note = $2
+                WHERE id = $1
+                  AND memory_type = 'open_loop'
+                  AND resolved_at IS NULL
+                """,
+                parsed_loop_id,
+                note,
+            )
+    except Exception:
+        logger.exception("Open loop resolve failed loop_id=%s", loop_id)
+        return _api_database_error()
+
+    if result == "UPDATE 0":
+        raise HTTPException(status_code=404, detail="Open loop not found or already resolved")
+
+    return {"status": "resolved", "id": str(parsed_loop_id)}
 
 
 def _persona_id_from_job_context(ctx: Any) -> str | None:

@@ -7,6 +7,13 @@ export interface CombinedTranscription extends TranscriptionSegment {
 }
 export type ThemeMode = 'dark' | 'light' | 'system';
 
+export interface OpenLoop {
+  id: string;
+  persona: string;
+  content: string;
+  created_at: string;
+}
+
 export interface AppConfig {
   pageTitle: string;
   pageDescription: string;

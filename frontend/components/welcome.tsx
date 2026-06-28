@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from 'react';
 import { FaReact } from 'react-icons/fa';
 import { LlmModelSelector } from '@/components/LlmModelSelector';
+import { LoopBanner } from '@/components/LoopBanner';
 import { PersonaSelector } from '@/components/PersonaSelector';
 import { TippingButton } from '@/components/TippingButton';
 import { Button } from '@/components/ui/button';
@@ -211,6 +212,8 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
             Choose a voice, then click <span className="font-semibold">Start Conversation</span> to
             begin your chat.
           </p>
+
+          <LoopBanner />
 
           <div className="pointer-events-auto flex w-full flex-col items-center gap-2">
             <span className="text-foreground/60 font-mono text-xs font-bold uppercase">
