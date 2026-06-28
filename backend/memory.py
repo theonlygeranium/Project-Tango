@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -11,7 +12,7 @@ import httpx
 
 logger = logging.getLogger("project-tango.memory")
 
-LITELLM_BASE_URL = "http://localhost:4000"
+LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL", "http://localhost:4000").rstrip("/")
 MEMORY_MODEL = "local/qwen3-fast"
 MAX_MEMORIES_PER_PERSONA = 10
 MEMORY_MAX_AGE_DAYS = 90
