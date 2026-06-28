@@ -648,7 +648,7 @@ async def entrypoint(ctx: Any) -> None:
         replace(
             persona,
             system_prompt=augmented_system_prompt,
-            greeting=_sip_greeting(persona) if is_sip else persona.greeting,
+            greeting=(persona.greeting or _sip_greeting(persona)) if is_sip else persona.greeting,
         )
         if prior_context or is_sip
         else persona

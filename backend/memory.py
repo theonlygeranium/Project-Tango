@@ -11,6 +11,7 @@ import asyncpg
 import httpx
 
 logger = logging.getLogger("project-tango.memory")
+_resolution_columns_cache: bool | None = None
 
 LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL", "http://localhost:4000").rstrip("/")
 MEMORY_MODEL = "local/qwen3-fast"
@@ -192,8 +193,10 @@ async def _write_memory_records(
 
 
 async def _has_resolution_columns(pool: asyncpg.Pool) -> bool:
+    global _resolution_columns_cache
+    if _resolution_columns_cache is not None:return _resolution_columns_cache
     async with pool.acquire() as conn:
-        return bool(
+        result=bool(
             await conn.fetchval(
                 """
                 SELECT EXISTS (
@@ -206,6 +209,8 @@ async def _has_resolution_columns(pool: asyncpg.Pool) -> bool:
                 """
             )
         )
+    _resolution_columns_cache=result
+    return result
 
 
 def _display_content(memory_type: str, content: str) -> str:
