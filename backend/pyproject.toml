@@ -12,6 +12,7 @@ dependencies = [
   "pydantic",
   "asyncpg",
   "slowapi",
+  "httpx",
 ]
 
 [tool.uvicorn]

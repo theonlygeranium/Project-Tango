@@ -6,6 +6,7 @@ import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,7 @@ from history import (
     mask_client_ip,
     record_turn,
 )
+from memory import generate_session_memory, load_context_for_session
 from personas import (
     DEFAULT_PERSONA_ID,
     Persona,
@@ -541,6 +543,16 @@ async def entrypoint(ctx: Any) -> None:
     persona = get_persona(participant_context.get("persona_id") or _persona_id_from_job_context(ctx))
     llm_model = resolve_llm_model(persona, participant_context.get("llm_model"))
     room_name = getattr(getattr(ctx, "room", None), "name", "unknown")
+    prior_context = ""
+    try:
+        prior_context = await load_context_for_session(await get_pool(), persona.id)
+    except Exception:
+        logger.exception("entrypoint: memory context unavailable room=%s persona_id=%s", room_name, persona.id)
+    persona_for_agent = (
+        replace(persona, system_prompt=f"{persona.system_prompt}{prior_context}")
+        if prior_context
+        else persona
+    )
     vision_config = VisionContextConfig.from_env(LITELLM_BASE_URL, LITELLM_MASTER_KEY)
     turn_handling = _turn_handling_for_session(
         persona,
@@ -676,6 +688,21 @@ async def entrypoint(ctx: Any) -> None:
                 len(session_turns),
                 total_tokens,
             )
+            try:
+                asyncio.create_task(
+                    generate_session_memory(
+                        await get_pool(),
+                        history_session_id,
+                        persona.id,
+                        LITELLM_MASTER_KEY,
+                    )
+                )
+            except Exception:
+                logger.exception(
+                    "Could not schedule memory generation session_id=%s persona_id=%s",
+                    history_session_id,
+                    persona.id,
+                )
 
     @session.on("close")
     def on_close(ev: CloseEvent) -> None:
@@ -691,7 +718,7 @@ async def entrypoint(ctx: Any) -> None:
 
     try:
         await session.start(
-            agent=Jarvis(persona, llm_model=llm_model, vision_context=vision_context),
+            agent=Jarvis(persona_for_agent, llm_model=llm_model, vision_context=vision_context),
             room=ctx.room,
         )
     except Exception as exc:
