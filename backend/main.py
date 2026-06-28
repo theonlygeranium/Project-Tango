@@ -551,7 +551,8 @@ async def entrypoint(ctx: Any) -> None:
         "enabled",
         "default",
     )
-    _flux_model = "flux-general-multi" if persona.stt_language == "tl" else "flux-general-en"
+    _use_nova3 = persona.stt_language in ("tl",)
+    _flux_model = "flux-general-en" if not _use_nova3 else "nova-3-multi"
 
     logger.info(
         "Starting Tango agent room=%s persona_id=%s model=%s flux_stt=%s eot_threshold=%s eot_timeout_ms=%s preemptive_generation=%s llm_base_url=%s",
@@ -585,19 +586,22 @@ async def entrypoint(ctx: Any) -> None:
         logger.exception("Could not create Tango history session; voice session will continue.")
 
     vision_context = LiveVideoContext(ctx.room, vision_config)
-    stt_kwargs: dict[str, Any] = {
-        "model": _flux_model,
-        "eot_threshold": persona.eot_threshold,
-        "eot_timeout_ms": persona.eot_timeout_ms,
-    }
-    if persona.keyterms:
-        stt_kwargs["keyterm"] = list(persona.keyterms)
-    if _flux_model == "flux-general-multi":
-        stt_kwargs["language_hint"] = [persona.stt_language]
+    if _use_nova3:
+        _stt = deepgram.STT(model="nova-3", language="multi")
+        turn_handling.pop("turn_detection", None)
+    else:
+        stt_kwargs: dict[str, Any] = {
+            "model": _flux_model,
+            "eot_threshold": persona.eot_threshold,
+            "eot_timeout_ms": persona.eot_timeout_ms,
+        }
+        if persona.keyterms:
+            stt_kwargs["keyterm"] = list(persona.keyterms)
+        _stt = deepgram.STTv2(**stt_kwargs)
 
     session = AgentSession(
         vad=silero.VAD.load(),
-        stt=deepgram.STTv2(**stt_kwargs),
+        stt=_stt,
         llm=openai.LLM(
             base_url=LITELLM_BASE_URL,
             api_key=LITELLM_MASTER_KEY,
