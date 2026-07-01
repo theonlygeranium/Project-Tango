@@ -279,13 +279,31 @@ def _build_f5_tts_adapter(persona: Persona) -> Any:
             if not content_type.lower().startswith("audio/"):
                 raise APIError(message="F5-TTS returned non-audio data", body=response.text[:1000])
 
+            # Strip the WAV/RIFF container header before pushing to LiveKit AudioEmitter.
+            # push() expects raw PCM frames. Passing the full WAV bytes (RIFF header included)
+            # causes the 44-byte header to be played as audio noise, producing garbled output.
+            # We also read the actual sample rate from the WAV header to avoid pitch shift
+            # when the vocoder's native rate differs from the declared DEFAULT_F5_TTS_SAMPLE_RATE.
+            import io as _io
+            import wave as _wave
+            try:
+                with _wave.open(_io.BytesIO(response.content), "rb") as wf:
+                    actual_sample_rate = wf.getframerate()
+                    actual_channels = wf.getnchannels()
+                    pcm_frames = wf.readframes(wf.getnframes())
+            except Exception:
+                # Fallback: WAV parse failed, pass raw bytes with declared values
+                actual_sample_rate = self._tts.sample_rate
+                actual_channels = self._tts.num_channels
+                pcm_frames = response.content
+
             output_emitter.initialize(
                 request_id=response.headers.get("x-request-id") or utils.shortuuid(),
-                sample_rate=self._tts.sample_rate,
-                num_channels=self._tts.num_channels,
-                mime_type=content_type,
+                sample_rate=actual_sample_rate,
+                num_channels=actual_channels,
+                mime_type="audio/pcm",
             )
-            output_emitter.push(response.content)
+            output_emitter.push(pcm_frames)
             output_emitter.flush()
 
     return F5TTSAdapter(persona_id=persona.id)
