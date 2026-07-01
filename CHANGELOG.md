@@ -26,6 +26,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 - Deployment, preflight, setup, architecture, and recovery docs now include the
   `tango-tts.service` sidecar and localhost port `8020`.
 - Generated `tts-voices/` F5-TTS reference artifacts are now ignored by git.
+- The deploy script now builds and copies Next.js frontend artifacts as
+  `z121532` so `.next` remains writable by the `tango-web.service` user.
 
 ### Fixed
 - The F5-TTS sidecar now calls the installed `f5_tts.api.F5TTS.infer()`

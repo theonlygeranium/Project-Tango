@@ -2,8 +2,15 @@
 set -e
 
 DEPLOY_LOG=/opt/Project-Tango/logs/deploy.log
+APP_USER=z121532
+APP_GROUP=z121532
+APP_HOME=/home/z121532
 mkdir -p /opt/Project-Tango/logs
 echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Starting deployment..." >> "$DEPLOY_LOG"
+
+run_as_app_user() {
+  sudo -u "$APP_USER" env HOME="$APP_HOME" "$@"
+}
 
 if [ -f /opt/Project-Tango/deploy/tango-tts.service ]; then
   cp /opt/Project-Tango/deploy/tango-tts.service /etc/systemd/system/tango-tts.service
@@ -26,20 +33,22 @@ fi
 
 # Build Next.js frontend
 cd /opt/Project-Tango/frontend
-npm ci --silent >> "$DEPLOY_LOG" 2>&1
-npm run build >> "$DEPLOY_LOG" 2>&1
+chown -R "$APP_USER:$APP_GROUP" /opt/Project-Tango/frontend/.next /opt/Project-Tango/frontend/node_modules 2>/dev/null || true
+run_as_app_user npm ci --silent >> "$DEPLOY_LOG" 2>&1
+run_as_app_user npm run build >> "$DEPLOY_LOG" 2>&1
 
 # Copy static assets into standalone output (required for Next.js standalone mode)
 # Without this, _next/static/* returns 404 and the app has no CSS or JS chunks.
-rm -rf /opt/Project-Tango/frontend/.next/standalone/.next/static
-mkdir -p /opt/Project-Tango/frontend/.next/standalone/.next
-cp -R /opt/Project-Tango/frontend/.next/static \
+run_as_app_user rm -rf /opt/Project-Tango/frontend/.next/standalone/.next/static
+run_as_app_user mkdir -p /opt/Project-Tango/frontend/.next/standalone/.next
+run_as_app_user cp -R /opt/Project-Tango/frontend/.next/static \
       /opt/Project-Tango/frontend/.next/standalone/.next/static >> "$DEPLOY_LOG" 2>&1
 if [ -d /opt/Project-Tango/frontend/public ]; then
-  rm -rf /opt/Project-Tango/frontend/.next/standalone/public
-  cp -R /opt/Project-Tango/frontend/public \
+  run_as_app_user rm -rf /opt/Project-Tango/frontend/.next/standalone/public
+  run_as_app_user cp -R /opt/Project-Tango/frontend/public \
         /opt/Project-Tango/frontend/.next/standalone/public >> "$DEPLOY_LOG" 2>&1
 fi
+chown -R "$APP_USER:$APP_GROUP" /opt/Project-Tango/frontend/.next
 echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Static assets copied to standalone dir." >> "$DEPLOY_LOG"
 
 # Restart systemd services

@@ -44,6 +44,10 @@ v1.2 target map:
   other personas remain on ElevenLabs Flash v2.5. Set
   `TANGO_F5_TTS_ENABLED=false` and restart `tango-backend` for a temporary
   Jeremiah fallback to ElevenLabs.
+- Run `scripts/deploy.sh` with sudo, but keep frontend build ownership with
+  `z121532`. The script builds and copies `.next` artifacts as that service user
+  so `tango-web.service` and later manual `npm run build` checks can read and
+  update the build output.
 - The GitHub Actions deploy workflow is manual-only while the tailnet SSH policy
   denies GitHub-hosted Tailscale runners access to Schubert. Normal pushes should
   not trigger deploy attempts until that tailnet policy is updated.
