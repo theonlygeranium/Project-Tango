@@ -25,6 +25,7 @@ voice sessions through the provider and persona constraints below.
 - Target host: Schubert, Ubuntu 26.04, NVIDIA RTX Pro 4500, 32 GB VRAM.
 - Backend target port: `8030`.
 - Frontend target port: `3006`.
+- F5-TTS sidecar target port: `8020` bound to `127.0.0.1` only.
 - `project-tango.schubert.life` already exists in the live Caddyfile and proxies to `3006`.
   Do not create a second frontend Caddy block.
 - Create only the API Caddy append block for `tango-api.schubert.life -> 127.0.0.1:8030`.
@@ -45,6 +46,7 @@ voice sessions through the provider and persona constraints below.
 | --- | --- | --- |
 | `3006` | `tango-web` frontend | Use for Project Tango frontend |
 | `8030` | `tango-backend` API | Use for Project Tango backend after confirming it is free |
+| `8020` | `tango-tts` F5-TTS sidecar | Localhost-only Jeremiah pilot; do not expose publicly |
 | `8010` | `asr-gateway` | Do not use |
 | `3010` | Schubert homepage | Do not use |
 | `3100` | MeetScribe frontend | Do not use |
@@ -64,6 +66,9 @@ Live inspection on 2026-06-22 showed Docker container `asr-gateway` listening on
 - Do not add `WRITER_API_KEY` or `PALMYRA_API_KEY` to Tango env files.
 - Deepgram STT must use Nova-3 with interim results enabled for live captions.
 - ElevenLabs TTS must use `eleven_flash_v2_5`.
+- Jeremiah may use the local F5-TTS sidecar when `tts_backend="f5-tts"` and
+  `TANGO_F5_TTS_ENABLED=true`; all other personas remain on ElevenLabs.
+- F5-TTS runs in `/opt/tts-lab/f5-venv` and serves only `127.0.0.1:8020`.
 - Production LiveKit workers default to `LIVEKIT_NUM_IDLE_PROCESSES=1` to reduce
   Schubert memory pressure. Raise it only for expected concurrent voice-session starts.
 - Camera/screen visual understanding must use LiveKit video track sampling and a
@@ -87,7 +92,7 @@ Do not use `ollama/qwen3.6`, `ollama/qwen3.6:latest`, or `writer/palmyra` as Tan
 | --- | --- | --- | --- | --- |
 | Therapy | Damian | `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | `en-US` |
 | General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | `en-US` |
-| General Info | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | `en-US` |
+| General Info | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` via F5-TTS pilot | `writer/palmyra-x5-voice` | `en-US` |
 | General Info | Jacob | `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | `en-US` |
 | General Info | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | `tl` |
 | Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | `en-US` |

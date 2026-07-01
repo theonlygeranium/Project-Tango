@@ -1,0 +1,20 @@
+[Unit]
+Description=Project Tango F5-TTS Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=z121532
+Group=z121532
+WorkingDirectory=/opt/Project-Tango
+EnvironmentFile=/opt/Project-Tango/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=/opt/tts-lab/f5-venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/opt/tts-lab/f5-venv/bin/uvicorn tts_server.main:app --host 127.0.0.1 --port 8020 --workers 1
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

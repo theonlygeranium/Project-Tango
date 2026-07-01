@@ -122,6 +122,11 @@
 - LiveKit production idle job processes are capped to one by default after the
   2026-06-26 memory review. Raise `LIVEKIT_NUM_IDLE_PROCESSES` only when faster
   concurrent room-start latency is worth the extra resident memory.
+- SPEC-004 F5-TTS pilot is implemented for Jeremiah only. The sidecar runs as
+  `tango-tts.service` on `127.0.0.1:8020`, uses `/opt/tts-lab/f5-venv`, and
+  requires `/opt/Project-Tango/tts-voices/jeremiah_reference.wav`. Set
+  `TANGO_F5_TTS_ENABLED=false` to temporarily fall back to ElevenLabs while
+  leaving the sidecar installed.
 
 Live inspection on 2026-06-22 confirmed the v1.2 LiteLLM aliases exist in
 `/opt/polyglot/services/litellm/litellm_config.yaml`.

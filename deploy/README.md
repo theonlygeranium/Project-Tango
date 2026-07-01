@@ -24,6 +24,8 @@ v1.2 target map:
   to frontend port `3006`. Do not create another frontend Caddy block.
 - `tango-api.schubert.life` proxies to backend port `8030` using
   `deploy/Caddyfile.tango-api`.
+- `tango-tts.service` binds F5-TTS to `127.0.0.1:8020` for the Jeremiah-only
+  SPEC-004 pilot. Do not expose port `8020` through Caddy or Cloudflare.
 - Schubert currently has `admin off` in the global Caddy options, so
   `systemctl reload caddy` cannot apply new Caddyfile content through the admin
   API. Apply Caddyfile changes with a full Caddy restart after validation.
@@ -38,6 +40,10 @@ v1.2 target map:
 - The LiveKit worker defaults to one warm idle job process
   (`LIVEKIT_NUM_IDLE_PROCESSES=1`) to limit Project Tango memory usage on the
   shared Schubert host.
+- Jeremiah has `tts_backend="f5-tts"` when `TANGO_F5_TTS_ENABLED=true`; all
+  other personas remain on ElevenLabs Flash v2.5. Set
+  `TANGO_F5_TTS_ENABLED=false` and restart `tango-backend` for a temporary
+  Jeremiah fallback to ElevenLabs.
 - The GitHub Actions deploy workflow is manual-only while the tailnet SSH policy
   denies GitHub-hosted Tailscale runners access to Schubert. Normal pushes should
   not trigger deploy attempts until that tailnet policy is updated.

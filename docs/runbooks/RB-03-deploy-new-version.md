@@ -9,9 +9,11 @@
 ## Pre-Deploy Checklist
 
 - [ ] `python3 -m py_compile backend/main.py backend/history.py`
+- [ ] `python3 -m py_compile tts_server/main.py scripts/extract_jeremiah_reference.py`
 - [ ] `cd frontend && npx tsc --noEmit`
 - [ ] `cd frontend && npm run build`
 - [ ] `bash deploy/schubert-preflight.sh`
+- [ ] If SPEC-004/F5-TTS changed: `bash -n scripts/setup-f5-tts.sh` and verify `tango-tts.service`
 - [ ] `CHANGELOG.md` updated
 - [ ] `git diff --check` — no secrets committed
 - [ ] If architecture changed: `docs/architecture.md` updated
@@ -40,6 +42,14 @@ sudo -u z121532 git pull origin main
 # Backend (if requirements.txt changed)
 cd backend && sudo -u z121532 venv/bin/pip install -r requirements.txt && cd ..
 
+# F5-TTS sidecar (if first install or TTS files changed)
+sudo bash scripts/setup-f5-tts.sh
+sudo -u z121532 python3 scripts/extract_jeremiah_reference.py
+sudo cp deploy/tango-tts.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable tango-tts
+sudo systemctl restart tango-tts
+
 # Frontend (if frontend/ changed)
 cd frontend
 sudo -u z121532 npm run build
@@ -48,7 +58,8 @@ sudo -u z121532 cp -r public .next/standalone/public
 cd ..
 
 sudo systemctl restart tango-backend tango-web
-systemctl is-active tango-backend tango-web
+systemctl is-active tango-tts tango-backend tango-web
+curl -s http://127.0.0.1:8020/healthz
 curl -s https://tango-api.schubert.life/healthz
 ```
 

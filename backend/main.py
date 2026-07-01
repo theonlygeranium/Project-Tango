@@ -10,6 +10,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -57,6 +58,9 @@ LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
 TANGO_AGENT_NAME = os.getenv("TANGO_AGENT_NAME", "tango-agent")
 LOCAL_QWEN_MODEL = "local/qwen3-fast"
 DEFAULT_LIVEKIT_NUM_IDLE_PROCESSES = 1
+DEFAULT_F5_TTS_BASE_URL = "http://127.0.0.1:8020"
+DEFAULT_F5_TTS_SAMPLE_RATE = 24000
+DEFAULT_F5_TTS_TIMEOUT_SECONDS = 60.0
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -146,6 +150,173 @@ def _livekit_num_idle_processes() -> int:
     if value < 0:
         raise ValueError("LIVEKIT_NUM_IDLE_PROCESSES must be zero or greater")
     return value
+
+
+def _env_bool(name: str, *, default: bool = True) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None or raw_value.strip() == "":
+        return default
+    return raw_value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _env_int(name: str, default: int) -> int:
+    raw_value = os.getenv(name)
+    if raw_value is None or raw_value.strip() == "":
+        return default
+    try:
+        value = int(raw_value)
+    except ValueError:
+        logger.warning("Invalid integer for %s=%r; using default %d", name, raw_value, default)
+        return default
+    if value <= 0:
+        logger.warning("Invalid non-positive integer for %s=%r; using default %d", name, raw_value, default)
+        return default
+    return value
+
+
+def _env_float(name: str, default: float) -> float:
+    raw_value = os.getenv(name)
+    if raw_value is None or raw_value.strip() == "":
+        return default
+    try:
+        value = float(raw_value)
+    except ValueError:
+        logger.warning("Invalid number for %s=%r; using default %.1f", name, raw_value, default)
+        return default
+    if value <= 0:
+        logger.warning("Invalid non-positive number for %s=%r; using default %.1f", name, raw_value, default)
+        return default
+    return value
+
+
+def _f5_tts_base_url() -> str:
+    return os.getenv("TANGO_F5_TTS_BASE_URL", DEFAULT_F5_TTS_BASE_URL).rstrip("/")
+
+
+def _f5_tts_sample_rate() -> int:
+    return _env_int("TANGO_F5_TTS_SAMPLE_RATE", DEFAULT_F5_TTS_SAMPLE_RATE)
+
+
+def _f5_tts_timeout_seconds() -> float:
+    return _env_float("TANGO_F5_TTS_TIMEOUT_SECONDS", DEFAULT_F5_TTS_TIMEOUT_SECONDS)
+
+
+def _build_f5_tts_adapter(persona: Persona) -> Any:
+    from livekit.agents import (
+        APIConnectionError,
+        APIError,
+        APIStatusError,
+        APITimeoutError,
+        tts as lk_tts,
+        utils,
+    )
+    from livekit.agents.types import APIConnectOptions, DEFAULT_API_CONNECT_OPTIONS
+
+    class F5TTSAdapter(lk_tts.TTS):
+        def __init__(self, *, persona_id: str) -> None:
+            super().__init__(
+                capabilities=lk_tts.TTSCapabilities(streaming=False),
+                sample_rate=_f5_tts_sample_rate(),
+                num_channels=1,
+            )
+            self._persona_id = persona_id
+            self._base_url = _f5_tts_base_url()
+
+        @property
+        def model(self) -> str:
+            return "f5-tts"
+
+        @property
+        def provider(self) -> str:
+            return "Project Tango F5-TTS"
+
+        def synthesize(
+            self,
+            text: str,
+            *,
+            conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS,
+        ) -> lk_tts.ChunkedStream:
+            return F5TTSChunkedStream(tts=self, input_text=text, conn_options=conn_options)
+
+        async def aclose(self) -> None:
+            return None
+
+    class F5TTSChunkedStream(lk_tts.ChunkedStream):
+        def __init__(
+            self,
+            *,
+            tts: F5TTSAdapter,
+            input_text: str,
+            conn_options: APIConnectOptions,
+        ) -> None:
+            super().__init__(tts=tts, input_text=input_text, conn_options=conn_options)
+            self._tts = tts
+
+        async def _run(self, output_emitter: lk_tts.AudioEmitter) -> None:
+            timeout_seconds = _f5_tts_timeout_seconds()
+            try:
+                async with httpx.AsyncClient(
+                    timeout=httpx.Timeout(timeout_seconds, connect=self._conn_options.timeout)
+                ) as client:
+                    response = await client.post(
+                        f"{self._tts._base_url}/synthesize",
+                        json={"persona_id": self._tts._persona_id, "text": self._input_text},
+                    )
+            except httpx.TimeoutException as exc:
+                raise APITimeoutError("F5-TTS request timed out") from exc
+            except httpx.HTTPError as exc:
+                raise APIConnectionError("F5-TTS request failed") from exc
+
+            if response.status_code >= 400:
+                raise APIStatusError(
+                    message=f"F5-TTS returned HTTP {response.status_code}",
+                    status_code=response.status_code,
+                    request_id=response.headers.get("x-request-id"),
+                    body=response.text[:1000],
+                )
+
+            content_type = response.headers.get("content-type", "audio/wav").split(";", 1)[0]
+            if not content_type.lower().startswith("audio/"):
+                raise APIError(message="F5-TTS returned non-audio data", body=response.text[:1000])
+
+            output_emitter.initialize(
+                request_id=response.headers.get("x-request-id") or utils.shortuuid(),
+                sample_rate=self._tts.sample_rate,
+                num_channels=self._tts.num_channels,
+                mime_type=content_type,
+            )
+            output_emitter.push(response.content)
+            output_emitter.flush()
+
+    return F5TTSAdapter(persona_id=persona.id)
+
+
+def _build_elevenlabs_tts(persona: Persona, elevenlabs: Any) -> Any:
+    return elevenlabs.TTS(
+        model="eleven_flash_v2_5",
+        voice_id=persona.voice_id,
+        api_key=os.getenv("ELEVENLABS_API_KEY"),
+        base_url=ELEVENLABS_BASE_URL,
+        voice_settings=elevenlabs.VoiceSettings(**persona.voice_settings),
+        auto_mode=True,
+    )
+
+
+def _build_tts(persona: Persona, elevenlabs: Any) -> Any:
+    tts_backend = getattr(persona, "tts_backend", "elevenlabs")
+    if tts_backend == "f5-tts":
+        if _env_bool("TANGO_F5_TTS_ENABLED", default=True):
+            logger.info(
+                "Using F5-TTS for persona=%s base_url=%s sample_rate=%d",
+                persona.id,
+                _f5_tts_base_url(),
+                _f5_tts_sample_rate(),
+            )
+            return _build_f5_tts_adapter(persona)
+
+        logger.warning("F5-TTS disabled by env; using ElevenLabs fallback for persona=%s", persona.id)
+
+    return _build_elevenlabs_tts(persona, elevenlabs)
 
 
 def _json_object(value: str | None) -> dict[str, Any]:
@@ -667,10 +838,11 @@ async def entrypoint(ctx: Any) -> None:
     _flux_model = "flux-general-en" if not _use_nova3 else "nova-3-multi"
 
     logger.info(
-        "Starting Tango agent room=%s persona_id=%s model=%s is_sip=%s flux_stt=%s eot_threshold=%s eot_timeout_ms=%s preemptive_generation=%s llm_base_url=%s",
+        "Starting Tango agent room=%s persona_id=%s model=%s tts_backend=%s is_sip=%s flux_stt=%s eot_threshold=%s eot_timeout_ms=%s preemptive_generation=%s llm_base_url=%s",
         room_name,
         persona.id,
         llm_model,
+        persona.tts_backend,
         is_sip,
         _flux_model,
         persona.eot_threshold,
@@ -720,14 +892,7 @@ async def entrypoint(ctx: Any) -> None:
             api_key=LITELLM_MASTER_KEY,
             model=llm_model,
         ),
-        tts=elevenlabs.TTS(
-            model="eleven_flash_v2_5",
-            voice_id=persona.voice_id,
-            api_key=os.getenv("ELEVENLABS_API_KEY"),
-            base_url=ELEVENLABS_BASE_URL,
-            voice_settings=elevenlabs.VoiceSettings(**persona.voice_settings),
-            auto_mode=True,
-        ),
+        tts=_build_tts(persona, elevenlabs),
         turn_handling=turn_handling,
         use_tts_aligned_transcript=False,
     )
@@ -770,6 +935,7 @@ async def entrypoint(ctx: Any) -> None:
             if history_flushed or history_session_id is None:
                 return
 
+            await asyncio.sleep(1.0)  # 0-token guard: allow final usage events to arrive.
             total_tokens = total_tokens or _usage_total_tokens(getattr(session, "usage", None))
             try:
                 await close_session(

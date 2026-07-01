@@ -1,6 +1,6 @@
 [Unit]
 Description=Project Tango LiveKit Agent Backend
-After=network-online.target polyglot-litellm.service
+After=network-online.target polyglot-litellm.service tango-tts.service
 Wants=network-online.target
 
 [Service]

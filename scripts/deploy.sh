@@ -5,6 +5,17 @@ DEPLOY_LOG=/opt/Project-Tango/logs/deploy.log
 mkdir -p /opt/Project-Tango/logs
 echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Starting deployment..." >> "$DEPLOY_LOG"
 
+if [ -f /opt/Project-Tango/deploy/tango-tts.service ]; then
+  cp /opt/Project-Tango/deploy/tango-tts.service /etc/systemd/system/tango-tts.service
+fi
+if [ -f /opt/Project-Tango/deploy/tango-backend.service ]; then
+  cp /opt/Project-Tango/deploy/tango-backend.service /etc/systemd/system/tango-backend.service
+fi
+if [ -f /opt/Project-Tango/deploy/tango-web.service ]; then
+  cp /opt/Project-Tango/deploy/tango-web.service /etc/systemd/system/tango-web.service
+fi
+systemctl daemon-reload
+
 # Install/update Python backend dependencies using the project venv
 VENV_PIP=/opt/Project-Tango/backend/venv/bin/pip
 if [ -x "$VENV_PIP" ]; then
@@ -32,11 +43,22 @@ fi
 echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Static assets copied to standalone dir." >> "$DEPLOY_LOG"
 
 # Restart systemd services
+TTS_READY=0
+if [ -x /opt/tts-lab/f5-venv/bin/uvicorn ] && [ -f /opt/Project-Tango/tts-voices/jeremiah_reference.wav ]; then
+  systemctl enable tango-tts >> "$DEPLOY_LOG" 2>&1 || true
+  systemctl restart tango-tts
+  TTS_READY=1
+else
+  echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] WARNING: F5-TTS venv or Jeremiah reference missing; tango-tts not restarted" >> "$DEPLOY_LOG"
+fi
 systemctl restart tango-backend
 systemctl restart tango-web
 
 # Verify services came back up
 sleep 3
+if [ "$TTS_READY" -eq 1 ]; then
+  systemctl is-active --quiet tango-tts || { echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] ERROR: tango-tts failed to start" >> "$DEPLOY_LOG"; exit 1; }
+fi
 systemctl is-active --quiet tango-backend || { echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] ERROR: tango-backend failed to start" >> "$DEPLOY_LOG"; exit 1; }
 systemctl is-active --quiet tango-web     || { echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] ERROR: tango-web failed to start"     >> "$DEPLOY_LOG"; exit 1; }
 

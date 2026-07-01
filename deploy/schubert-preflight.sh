@@ -6,7 +6,7 @@ echo
 status=0
 
 echo "Target ports and related occupied ports:"
-sudo ss -ltnp | grep -E ':(3006|8030|8010|3010|3100|8002|3000|3005|4000)\b' || true
+sudo ss -ltnp | grep -E ':(3006|8030|8020|8010|3010|3100|8002|3000|3005|4000)\b' || true
 if sudo ss -ltnp | grep -E '127\.0\.0\.1:8030\b'; then
   echo "blocked: 127.0.0.1:8030 must be available for tango-backend"
   status=2
@@ -15,6 +15,11 @@ else
 fi
 if sudo ss -ltnp | grep -E '127\.0\.0\.1:8010\b' >/dev/null; then
   echo "ok: 127.0.0.1:8010 is occupied by existing asr-gateway and must not be reused"
+fi
+if sudo ss -ltnp | grep -E '127\.0\.0\.1:8020\b' >/dev/null; then
+  echo "info: 127.0.0.1:8020 is occupied; verify it is tango-tts before deploy"
+else
+  echo "ok: 127.0.0.1:8020 is available for tango-tts"
 fi
 if sudo ss -ltnp | grep -E ':(3010|3100|8002|3000|3005|4000)\b' >/dev/null; then
   echo "ok: known non-Tango occupied ports are visible and must not be reused"

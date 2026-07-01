@@ -9,6 +9,23 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 ## [Unreleased]
 
+### Added
+- SPEC-004 F5-TTS Jeremiah pilot: added a localhost-only `tango-tts.service`
+  sidecar on `127.0.0.1:8020`, an F5-TTS FastAPI server, a Jeremiah reference
+  audio extraction script, and an idempotent setup helper for Schubert's cu128
+  PyTorch/F5-TTS venv.
+
+### Changed
+- Jeremiah now routes TTS through the local F5-TTS adapter when
+  `TANGO_F5_TTS_ENABLED=true`; all other personas remain on ElevenLabs Flash
+  v2.5, and Jeremiah can fall back to ElevenLabs by disabling the pilot env flag.
+- Deployment, preflight, setup, architecture, and recovery docs now include the
+  `tango-tts.service` sidecar and localhost port `8020`.
+
+### Fixed
+- Preserved the live Schubert 0-token history flush guard by waiting briefly for
+  final LiveKit usage events before closing a history session.
+
 ---
 
 ## [1.0.0] - 2026-06-28 — Stable Baseline `v1.0-stable`

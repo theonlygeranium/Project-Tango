@@ -7,7 +7,7 @@
 ![License](https://img.shields.io/badge/license-proprietary-red)
 ![LiveKit](https://img.shields.io/badge/powered%20by-LiveKit%20Agents-blueviolet)
 ![Deepgram](https://img.shields.io/badge/stt-Deepgram%20Flux-orange)
-![ElevenLabs](https://img.shields.io/badge/tts-ElevenLabs%20Flash%20v2.5-ff69b4)
+![TTS](https://img.shields.io/badge/tts-ElevenLabs%20%2B%20F5--TTS%20pilot-ff69b4)
 
 Project Tango is a real-time AI voice agent platform running on the **Schubert AI workstation**. It presents a selection of distinct persona-driven voice agents — each with a unique personality, voice, and language capability — powered by [LiveKit Agents](https://github.com/livekit/agents), [Deepgram](https://deepgram.com), and [ElevenLabs](https://elevenlabs.io), with all LLM traffic routed through the existing [LiteLLM](https://github.com/BerriAI/litellm) proxy on Schubert.
 
@@ -63,8 +63,9 @@ LiveKit Cloud  (wss://project-tango-0xs3szq3.livekit.cloud)
     ├── LiteLLM Proxy @ localhost:4000  (polyglot-litellm.service)
     │     ├── local/qwen3-fast   →  Ollama qwen3 on Schubert GPU
     │     └── writer/palmyra-x5-voice  →  WRITER Palmyra
-    └── ElevenLabs Flash v2.5 TTS  (api.us.elevenlabs.io)
-          └── Per-persona Voice IDs
+    └── TTS
+          ├── ElevenLabs Flash v2.5  (all non-pilot personas)
+          └── F5-TTS sidecar @ 127.0.0.1:8020  (Jeremiah pilot)
     │
     ▼
 PostgreSQL 18  (schema: tango — session & turn history)
@@ -81,7 +82,7 @@ PostgreSQL 18  (schema: tango — session & turn history)
 | Voice Framework | [LiveKit Agents SDK](https://github.com/livekit/agents) | `livekit-agents` PyPI — not Pipecat |
 | STT (English) | [Deepgram Flux](https://deepgram.com) (`flux-general-en`) | Native turn detection, lowest latency |
 | STT (Tagalog) | [Deepgram Nova-3](https://deepgram.com) (`nova-3`, `language=tl`) | Correct Taglish orthography |
-| TTS | [ElevenLabs Flash v2.5](https://elevenlabs.io) | US routing, per-persona VoiceSettings |
+| TTS | [ElevenLabs Flash v2.5](https://elevenlabs.io) + [F5-TTS](https://github.com/SWivid/F5-TTS) pilot | Jeremiah can use local F5-TTS on `127.0.0.1:8020`; all other personas use ElevenLabs |
 | LLM Proxy | [LiteLLM](https://github.com/BerriAI/litellm) v1.88+ | Already running on Schubert at port 4000 |
 | Local LLM | [Ollama](https://ollama.com) `qwen3.6:latest` | Already running on Schubert at port 11434 |
 | Cloud LLM | WRITER Palmyra X5 | Via LiteLLM `writer/palmyra-x5-voice` alias |
@@ -94,15 +95,15 @@ PostgreSQL 18  (schema: tango — session & turn history)
 
 ## Personas
 
-| Persona | Display Name | ElevenLabs Voice ID | LLM Alias | STT |
+| Persona | Display Name | Voice Source | LLM Alias | STT |
 |---|---|---|---|---|
-| Therapy | Damian | `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | Flux EN |
-| General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | Flux EN |
-| General Info | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | Flux EN |
-| General Info | Jacob | `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | Flux EN |
-| Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | Flux EN |
-| Pinoy Pride | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | Nova-3 TL |
-| Pinoy Pride | Tita Baby | `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` | Nova-3 TL |
+| Therapy | Damian | ElevenLabs `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | Flux EN |
+| General Info | Chris (British) | ElevenLabs `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | Flux EN |
+| General Info | Jeremiah | F5-TTS pilot from ElevenLabs reference `EqHdTYoEuDQCxN1CVbi0` | `writer/palmyra-x5-voice` | Flux EN |
+| General Info | Jacob | ElevenLabs `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | Flux EN |
+| Meditation | Nathaniel | ElevenLabs `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | Flux EN |
+| Pinoy Pride | Mama Lulu | ElevenLabs `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | Nova-3 TL |
+| Pinoy Pride | Tita Baby | ElevenLabs `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` | Nova-3 TL |
 
 ---
 
@@ -138,10 +139,12 @@ Project-Tango/
 │   └── public/                 ← Static assets, PWA manifest
 ├── deploy/
 │   ├── tango-backend.service   ← systemd unit for backend
+│   ├── tango-tts.service       ← systemd unit for F5-TTS sidecar
 │   ├── tango-web.service       ← systemd unit for frontend
 │   └── schubert-preflight.sh   ← Pre-deploy port/service validation
 ├── scripts/
 │   └── deploy.sh               ← Deployment helper
+├── tts_server/                 ← Local F5-TTS FastAPI sidecar
 ├── docs/
 │   ├── AGENTS.md               ← Runtime constraints for Codex sessions
 │   ├── PLAN.md                 ← Development plan and spec history

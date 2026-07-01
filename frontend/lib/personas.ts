@@ -15,6 +15,7 @@ export type TangoPersona = {
   displayName: string;
   roleDescription: string;
   defaultLlmModel: LlmModelId;
+  ttsBackend?: 'elevenlabs' | 'f5-tts';
   initials: string;
   accentClassName: string;
 };
@@ -49,6 +50,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     displayName: 'Jeremiah',
     roleDescription: 'General assistant',
     defaultLlmModel: 'writer/palmyra-x5-voice',
+    ttsBackend: 'f5-tts',
     initials: 'JE',
     accentClassName:
       'border-amber-500/70 bg-amber-500/10 text-amber-700 dark:border-amber-300/70 dark:bg-amber-300/10 dark:text-amber-100',

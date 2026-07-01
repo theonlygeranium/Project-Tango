@@ -56,6 +56,11 @@ export function PersonaSelector({
                     Selected
                   </span>
                 )}
+                {persona.ttsBackend === 'f5-tts' && (
+                  <span className="hidden rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[0.6rem] font-bold text-amber-700 uppercase sm:inline dark:text-amber-200">
+                    F5-TTS
+                  </span>
+                )}
               </span>
               <span className="text-muted-foreground mt-1 block text-[0.65rem] leading-3.5 sm:text-xs sm:leading-5">
                 {persona.roleDescription}

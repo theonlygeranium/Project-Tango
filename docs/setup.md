@@ -24,6 +24,7 @@ bash deploy/schubert-preflight.sh
 Required ports:
 - `3006` — Tango frontend (must be free)
 - `8030` — Tango backend (must be free)
+- `8020` — Tango F5-TTS sidecar (localhost-only; free before first install or owned by `tango-tts`)
 - `4000` — LiteLLM proxy (must be active)
 
 ---
@@ -62,6 +63,12 @@ ELEVENLABS_API_KEY=<your key>
 LITELLM_MASTER_KEY=<key from /opt/watson-ai/.credentials>
 LITELLM_BASE_URL=http://localhost:4000
 
+# F5-TTS Jeremiah pilot
+TANGO_F5_TTS_ENABLED=true
+TANGO_F5_TTS_BASE_URL=http://127.0.0.1:8020
+TANGO_F5_TTS_SAMPLE_RATE=24000
+TANGO_F5_TTS_TIMEOUT_SECONDS=60
+
 # Database
 DATABASE_URL=postgresql://tango_user:<password>@localhost:5432/tango
 
@@ -87,7 +94,27 @@ echo "Python compile: OK"
 
 ---
 
-## Step 4 — Database Initialization
+## Step 4 — F5-TTS Sidecar Setup
+
+This is required for the SPEC-004 Jeremiah pilot. It uses a separate venv so
+cu128 PyTorch and F5-TTS do not alter the main backend venv.
+
+```bash
+cd /opt/Project-Tango
+sudo bash scripts/setup-f5-tts.sh
+sudo -u z121532 python3 scripts/extract_jeremiah_reference.py
+```
+
+Verify the reference audio:
+
+```bash
+python3 -c "import wave; w=wave.open('/opt/Project-Tango/tts-voices/jeremiah_reference.wav'); print(f'{w.getnframes()/w.getframerate():.1f}s')"
+# Expected: >= 30.0s
+```
+
+---
+
+## Step 5 — Database Initialization
 
 ```bash
 sudo -u postgres psql
@@ -104,7 +131,7 @@ Tables are created automatically on first backend startup.
 
 ---
 
-## Step 5 — Frontend Build
+## Step 6 — Frontend Build
 
 ```bash
 cd /opt/Project-Tango/frontend
@@ -122,23 +149,28 @@ ls .next/standalone/server.js && echo "Build: OK"
 
 ---
 
-## Step 6 — Install systemd Services
+## Step 7 — Install systemd Services
 
 ```bash
 sudo cp deploy/tango-backend.service /etc/systemd/system/
+sudo cp deploy/tango-tts.service /etc/systemd/system/
 sudo cp deploy/tango-web.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable tango-backend tango-web
-sudo systemctl start tango-backend tango-web
+sudo systemctl enable tango-tts tango-backend tango-web
+sudo systemctl start tango-tts tango-backend tango-web
 ```
 
 ---
 
-## Step 7 — Verify Deployment
+## Step 8 — Verify Deployment
 
 ```bash
 # Services active
-systemctl is-active tango-backend tango-web
+systemctl is-active tango-tts tango-backend tango-web
+
+# F5-TTS health
+curl -s http://127.0.0.1:8020/healthz
+# Expected: {"status":"ok", ...}
 
 # Backend health
 curl -s https://tango-api.schubert.life/healthz
@@ -151,6 +183,10 @@ curl -sI https://project-tango.schubert.life | head -3
 # Confirm LiteLLM routing
 sudo journalctl -u tango-backend -n 30 --no-pager | grep "llm_base_url"
 # Expected: llm_base_url=http://localhost:4000
+
+# Confirm Jeremiah F5 routing after a Jeremiah session
+sudo journalctl -u tango-backend -n 80 --no-pager | grep -i "Using F5-TTS"
+sudo journalctl -u tango-tts -n 80 --no-pager | grep "Synthesized"
 ```
 
 ---
@@ -165,6 +201,10 @@ sudo journalctl -u tango-backend -n 30 --no-pager | grep "llm_base_url"
 cd /opt/Project-Tango
 sudo -u z121532 git pull origin main
 
+# F5-TTS sidecar (if SPEC-004 files changed or first setup is incomplete)
+sudo bash scripts/setup-f5-tts.sh
+sudo -u z121532 python3 scripts/extract_jeremiah_reference.py
+
 # Backend (if requirements changed)
 cd backend && sudo -u z121532 venv/bin/pip install -r requirements.txt && cd ..
 
@@ -175,7 +215,7 @@ sudo -u z121532 cp -r .next/static .next/standalone/.next/static
 sudo -u z121532 cp -r public .next/standalone/public
 cd ..
 
-sudo systemctl restart tango-backend tango-web
+sudo systemctl restart tango-tts tango-backend tango-web
 curl -s https://tango-api.schubert.life/healthz
 ```
 
@@ -212,7 +252,8 @@ Open `http://localhost:3006`.
 |---|---|---|
 | Services not starting | `journalctl -u tango-backend -n 50` | See [RB-02](runbooks/RB-02-service-recovery.md) |
 | Health check fails | `ss -tlnp \| grep 8030` | Port conflict — see [RB-02](runbooks/RB-02-service-recovery.md) |
-| Blank frontend page | Check static assets in `.next/standalone` | Rebuild frontend (Step 5) |
+| Blank frontend page | Check static assets in `.next/standalone` | Rebuild frontend (Step 6) |
 | Agent not joining room | POST /api/dispatch returns error | Check backend logs |
+| Jeremiah has no audio | `systemctl status tango-tts`; `curl http://127.0.0.1:8020/healthz` | Start `tango-tts` or set `TANGO_F5_TTS_ENABLED=false` and restart backend |
 | Tagalog phonetic transcription | Check `stt_model` in logs | Must be `nova-3` with `language=tl` |
 | Need to rollback | — | See [RB-01](runbooks/RB-01-rollback.md) or [REVERT.md](../REVERT.md) |

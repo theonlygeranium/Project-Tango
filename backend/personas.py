@@ -26,6 +26,7 @@ class Persona:
     stt_language: str
     voice_settings: dict[str, float | bool]
     system_prompt: str
+    tts_backend: str = "elevenlabs"
     # Optional custom opening line spoken on session start.
     greeting: str | None = None
     # Flux end-of-turn detection tuning.
@@ -45,6 +46,7 @@ class Persona:
             "role_description": self.role_description,
             "llm_model": self.llm_model,
             "stt_language": self.stt_language,
+            "tts_backend": self.tts_backend,
         }
 
 
@@ -123,6 +125,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="EqHdTYoEuDQCxN1CVbi0",
         llm_model="writer/palmyra-x5-voice",
         stt_language="en-US",
+        tts_backend="f5-tts",
         eot_threshold=0.7,
         eot_timeout_ms=2500,
         greeting="Hi, I'm Jeremiah. I'm an agent whose voice is based on my creator, Jeff Geronimo. How can I help?",

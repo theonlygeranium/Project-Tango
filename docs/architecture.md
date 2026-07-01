@@ -1,13 +1,13 @@
 # Project Tango — System Architecture
 
 > Keep this document in sync with the actual state of Schubert. Do not add aspirational content.
-> Last updated: 2026-06-28 — Stable baseline v1.0-stable
+> Last updated: 2026-07-01 — SPEC-004 F5-TTS Jeremiah pilot
 
 ---
 
 ## Overview
 
-Project Tango is a real-time AI voice agent platform. Users visit a web interface, select a persona, and have a live voice conversation. Audio flows through LiveKit's WebRTC infrastructure, speech is transcribed by Deepgram, the LLM generates a response through LiteLLM, and ElevenLabs synthesizes the reply as speech.
+Project Tango is a real-time AI voice agent platform. Users visit a web interface, select a persona, and have a live voice conversation. Audio flows through LiveKit's WebRTC infrastructure, speech is transcribed by Deepgram, the LLM generates a response through LiteLLM, and the configured persona TTS backend synthesizes the reply as speech.
 
 All compute runs on Schubert, a privately owned AI workstation. No managed cloud inference is used — all LLM requests proxy through the existing LiteLLM service on Schubert.
 
@@ -32,6 +32,8 @@ Schubert Nexus (192.168.86.77 / Tailscale)
         └── tango-backend.service (port 8030)
               FastAPI: /api/connection-details, /api/dispatch, /api/history/*
               LiveKit Agent Worker: voice pipeline per room
+        └── tango-tts.service (127.0.0.1:8020)
+              FastAPI F5-TTS sidecar for Jeremiah pilot only
 ```
 
 ---
@@ -60,9 +62,11 @@ LLM via LiteLLM proxy (localhost:4000)
         └── writer/palmyra-x5-voice  →  WRITER Palmyra X5 (cloud API)
         │  LLM response text
         ▼
-ElevenLabs Flash v2.5 TTS (api.us.elevenlabs.io)
+TTS routing
+        ├── Jeremiah pilot → F5-TTS sidecar (127.0.0.1:8020)
+        │     Reference voice: /opt/Project-Tango/tts-voices/jeremiah_reference.wav
+        └── All other personas → ElevenLabs Flash v2.5 (api.us.elevenlabs.io)
         │  use_tts_aligned_transcript=False  (prevents race condition pauses)
-        │  Per-persona VoiceSettings
         │  Audio stream
         ▼
 LiveKit Cloud  (audio track back to browser)
@@ -80,6 +84,7 @@ User speakers
 | Service | Unit | Port | Path |
 |---|---|---|---|
 | Backend | `tango-backend.service` | 8030 | `/opt/Project-Tango/backend/` |
+| F5-TTS sidecar | `tango-tts.service` | 8020 localhost only | `/opt/Project-Tango/tts_server/` |
 | Frontend | `tango-web.service` | 3006 | `/opt/Project-Tango/frontend/.next/standalone/` |
 
 ### Shared Schubert Services (do not modify)
@@ -126,15 +131,15 @@ Schema: `tango` (PostgreSQL 18)
 
 ## Personas
 
-| Persona Key | Display Name | ElevenLabs Voice ID | LLM Alias | STT Model | Language |
+| Persona Key | Display Name | TTS Backend | LLM Alias | STT Model | Language |
 |---|---|---|---|---|---|
-| `therapy` | Damian | `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | Flux | `en-US` |
-| `general-info` (Chris) | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | Flux | `en-US` |
-| `general-info` (Jeremiah) | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | Flux | `en-US` |
-| `general-info` (Jacob) | Jacob | `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | Flux | `en-US` |
-| `meditation` | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | Flux | `en-US` |
-| `pinoy-pride` (Mama Lulu) | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | Nova-3 | `tl` |
-| `pinoy-pride` (Tita Baby) | Tita Baby | `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` | Nova-3 | `tl` |
+| `therapy` | Damian | ElevenLabs `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | Flux | `en-US` |
+| `general-info` (Chris) | Chris (British) | ElevenLabs `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | Flux | `en-US` |
+| `general-info` (Jeremiah) | Jeremiah | F5-TTS pilot, reference from `EqHdTYoEuDQCxN1CVbi0` | `writer/palmyra-x5-voice` | Flux | `en-US` |
+| `general-info` (Jacob) | Jacob | ElevenLabs `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | Flux | `en-US` |
+| `meditation` | Nathaniel | ElevenLabs `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | Flux | `en-US` |
+| `pinoy-pride` (Mama Lulu) | Mama Lulu | ElevenLabs `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | Nova-3 | `tl` |
+| `pinoy-pride` (Tita Baby) | Tita Baby | ElevenLabs `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` | Nova-3 | `tl` |
 
 ---
 
@@ -195,3 +200,4 @@ See `docs/decisions/` for full ADRs.
 | Cloudflare tunnel direct to localhost | Bypasses Caddy, prevents Error 522 | ADR-005 |
 | POST /api/dispatch after room.connect() | Prevents agent timeout on empty rooms | ADR-006 |
 | LiteLLM proxy for all LLM calls | Centralized credentials, model switching | ADR-007 |
+| F5-TTS sidecar for Jeremiah pilot | Self-hosted TTS without disrupting other personas | ADR-008 |
