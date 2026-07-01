@@ -770,6 +770,7 @@ async def entrypoint(ctx: Any) -> None:
             if history_flushed or history_session_id is None:
                 return
 
+            await asyncio.sleep(1.0)  # 0-TOK guard
             total_tokens = total_tokens or _usage_total_tokens(getattr(session, "usage", None))
             try:
                 await close_session(
