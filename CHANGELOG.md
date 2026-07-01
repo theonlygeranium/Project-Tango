@@ -26,6 +26,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `tango-tts.service` sidecar and localhost port `8020`.
 
 ### Fixed
+- The F5-TTS sidecar now calls the installed `f5_tts.api.F5TTS.infer()`
+  method instead of the unavailable sketch `generate()` method from the design
+  spec.
 - Preserved the live Schubert 0-token history flush guard by waiting briefly for
   final LiveKit usage events before closing a history session.
 

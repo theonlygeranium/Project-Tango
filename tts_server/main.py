@@ -112,11 +112,12 @@ async def synthesize(req: SynthesizeRequest) -> Response:
         async with _tts_lock:
             tts = _load_f5_tts()
             await asyncio.to_thread(
-                tts.generate,
-                text=req.text,
-                ref_audio=str(ref_audio),
+                tts.infer,
+                ref_file=str(ref_audio),
                 ref_text=ref_text,
-                output_path=output_path,
+                gen_text=req.text,
+                file_wave=output_path,
+                show_info=logger.info,
             )
 
         audio_bytes = Path(output_path).read_bytes()
