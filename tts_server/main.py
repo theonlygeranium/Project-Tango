@@ -1,1 +1,205 @@
-ZnJvbSBfX2Z1dHVyZV9fIGltcG9ydCBhbm5vdGF0aW9ucwoKaW1wb3J0IGFzeW5jaW8KaW1wb3J0IGxvZ2dpbmcKaW1wb3J0IG9zCmltcG9ydCByYW5kb20KaW1wb3J0IHRlbXBmaWxlCmltcG9ydCB0aW1lCmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAoKZnJvbSBmYXN0YXBpIGltcG9ydCBGYXN0QVBJLCBIVFRQRXhjZXB0aW9uCmZyb20gZmFzdGFwaS5yZXNwb25zZXMgaW1wb3J0IFJlc3BvbnNlCmZyb20gcHlkYW50aWMgaW1wb3J0IEJhc2VNb2RlbCwgRmllbGQKCmxvZ2dlciA9IGxvZ2dpbmcuZ2V0TG9nZ2VyKCJwcm9qZWN0LXRhbmdvLXR0cyIpCmxvZ2dpbmcuYmFzaWNDb25maWcobGV2ZWw9bG9nZ2luZy5JTkZPLCBmb3JtYXQ9IiUoYXNjdGltZSlzICUobGV2ZWxuYW1lKXMgJShuYW1lKXM6ICUobWVzc2FnZSlzIikKCkFQUF9ST09UID0gUGF0aChvcy5nZXRlbnYoIlRBTkdPX0FQUF9ST09UIiwgIi9vcHQvUHJvamVjdC1UYW5nbyIpKQpERUZBVUxUX1ZPSUNFX0RJUiA9IEFQUF9ST09UIC8gInR0cy12b2ljZXMiCkRFRkFVTFRfSkVSRU1JQUhfUkVGRVJFTkNFID0gREVGQVVMVF9WT0lDRV9ESVIgLyAiamVyZW1pYWhfcmVmZXJlbmNlLndhdiIKREVGQVVMVF9KRVJFTUlBSF9SRUZFUkVOQ0VfVEVYVF9QQVRIID0gREVGQVVMVF9WT0lDRV9ESVIgLyAiamVyZW1pYWhfcmVmZXJlbmNlLnR4dCIKCkY1X1RUU19ERVZJQ0UgPSBvcy5nZXRlbnYoIkY1X1RUU19ERVZJQ0UiLCAiY3VkYSIpCkY1X1RUU19NT0RFTCA9IG9zLmdldGVudigiRjVfVFRTX01PREVMIiwgIiIpLnN0cmlwKCkKTUFYX1BZVEhPTl9IQVNIX1NFRUQgPSA0XzI5NF85NjdfMjk1CgoKZGVmIF9qZXJlbWlhaF9yZWZlcmVuY2VfdGV4dCgpIC0+IHN0cjoKICAgIGVudl90ZXh0ID0gb3MuZ2V0ZW52KCJKRVJFTUlBSF9GNV9SRUZfVEVYVCIpCiAgICBpZiBlbnZfdGV4dCBpcyBub3QgTm9uZToKICAgICAgICByZXR1cm4gZW52X3RleHQKICAgIGlmIERFRkFVTFRfSkVSRU1JQUhfUkVGRVJFTkNFX1RFWFRfUEFUSC5leGlzdHMoKToKICAgICAgICByZXR1cm4gREVGQVVMVF9KRVJFTUlBSF9SRUZFUkVOQ0VfVEVYVF9QQVRILnJlYWRfdGV4dCgpLnN0cmlwKCkKICAgIHJldHVybiAiIgoKCmRlZiBfZjVfdHRzX3NlZWQoKSAtPiBpbnQ6CiAgICByYXdfc2VlZCA9IG9zLmdldGVudigiRjVfVFRTX1NFRUQiKQogICAgaWYgcmF3X3NlZWQ6CiAgICAgICAgdHJ5OgogICAgICAgICAgICByZXR1cm4gaW50KHJhd19zZWVkKSAlIChNQVhfUFlUSE9OX0hBU0hfU0VFRCArIDEpCiAgICAgICAgZXhjZXB0IFZhbHVlRXJyb3I6CiAgICAgICAgICAgIGxvZ2dlci53YXJuaW5nKCJJbnZhbGlkIEY1X1RUU19TRUVEPSVyOyB1c2luZyBhIGJvdW5kZWQgcmFuZG9tIHNlZWQiLCByYXdfc2VlZCkKICAgIHJldHVybiByYW5kb20ucmFuZGludCgwLCBNQVhfUFlUSE9OX0hBU0hfU0VFRCkKCgpjbGFzcyBWb2ljZUNvbmZpZyhCYXNlTW9kZWwpOgogICAgcmVmX2F1ZGlvOiBQYXRoCiAgICByZWZfdGV4dDogc3RyCgoKVk9JQ0VfUkVHSVNUUlk6IGRpY3Rbc3RyLCBWb2ljZUNvbmZpZ10gPSB7CiAgICAiamVyZW1pYWgiOiBWb2ljZUNvbmZpZygKICAgICAgICByZWZfYXVkaW89UGF0aChvcy5nZXRlbnYoIkpFUkVNSUFIX0Y1X1JFRl9BVURJTyIsIHN0cihERUZBVUxUX0pFUkVNSUFIX1JFRkVSRU5DRSkpKSwKICAgICAgICByZWZfdGV4dD1famVyZW1pYWhfcmVmZXJlbmNlX3RleHQoKSwKICAgICksCn0KCgpjbGFzcyBTeW50aGVzaXplUmVxdWVzdChCYXNlTW9kZWwpOgogICAgcGVyc29uYV9pZDogc3RyID0gRmllbGQobWluX2xlbmd0aD0xLCBtYXhfbGVuZ3RoPTY0KQogICAgdGV4dDogc3RyID0gRmllbGQobWluX2xlbmd0aD0xLCBtYXhfbGVuZ3RoPTQwMDApCiAgICByZWZfYXVkaW9fb3ZlcnJpZGU6IHN0ciB8IE5vbmUgPSBOb25lCiAgICByZWZfdGV4dF9vdmVycmlkZTogc3RyIHwgTm9uZSA9IE5vbmUKCgphcHAgPSBGYXN0QVBJKHRpdGxlPSJQcm9qZWN0IFRhbmdvIEY1LVRUUyBTZXJ2ZXIiLCB2ZXJzaW9uPSIxLjAuMCIpCl90dHMgPSBOb25lCl90dHNfbG9jayA9IGFzeW5jaW8uTG9jaygpCgoKZGVmIF9sb2FkX2Y1X3R0cygpOgogICAgZ2xvYmFsIF90dHMKICAgIGlmIF90dHMgaXMgbm90IE5vbmU6CiAgICAgICAgcmV0dXJuIF90dHMKCiAgICB0cnk6CiAgICAgICAgZnJvbSBmNV90dHMgaW1wb3J0IEY1VFRTCiAgICBleGNlcHQgSW1wb3J0RXJyb3I6CiAgICAgICAgZnJvbSBmNV90dHMuYXBpIGltcG9ydCBGNVRUUwoKICAgIF9wYXRjaF90b3JjaGF1ZGlvX3dhdl9sb2FkZXIoKQoKICAgIGt3YXJncyA9IHsiZGV2aWNlIjogRjVfVFRTX0RFVklDRX0KICAgIGlmIEY1X1RUU19NT0RFTDoKICAgICAgICBrd2FyZ3NbIm1vZGVsIl0gPSBGNV9UVFNfTU9ERUwKCiAgICBsb2dnZXIuaW5mbygiTG9hZGluZyBGNS1UVFMgbW9kZWwgZGV2aWNlPSVzIG1vZGVsPSVzIiwgRjVfVFRTX0RFVklDRSwgRjVfVFRTX01PREVMIG9yICJkZWZhdWx0IikKICAgIF90dHMgPSBGNVRUUygqKmt3YXJncykKICAgIGxvZ2dlci5pbmZvKCJGNS1UVFMgbW9kZWwgcmVhZHkiKQogICAgcmV0dXJuIF90dHMKCgpkZWYgX3BhdGNoX3RvcmNoYXVkaW9fd2F2X2xvYWRlcigpIC0+IE5vbmU6CiAgICBpbXBvcnQgc291bmRmaWxlIGFzIHNmCiAgICBpbXBvcnQgdG9yY2gKICAgIGltcG9ydCB0b3JjaGF1ZGlvCgogICAgaWYgZ2V0YXR0cih0b3JjaGF1ZGlvLmxvYWQsICJfdGFuZ29fc291bmRmaWxlX3dhdl9sb2FkZXIiLCBGYWxzZSk6CiAgICAgICAgcmV0dXJuCgogICAgb3JpZ2luYWxfbG9hZCA9IHRvcmNoYXVkaW8ubG9hZAoKICAgIGRlZiBsb2FkX3dpdGhfc291bmRmaWxlX2Zvcl93YXYodXJpLCAqYXJncywgKiprd2FyZ3MpOgogICAgICAgIHBhdGggPSBQYXRoKHVyaSkgaWYgaXNpbnN0YW5jZSh1cmksIHN0ciB8IFBhdGgpIGVsc2UgTm9uZQogICAgICAgIGlmIHBhdGggaXMgTm9uZSBvciBwYXRoLnN1ZmZpeC5sb3dlcigpICE9ICIud2F2IiBvciBub3QgcGF0aC5leGlzdHMoKToKICAgICAgICAgICAgcmV0dXJuIG9yaWdpbmFsX2xvYWQodXJpLCAqYXJncywgKiprd2FyZ3MpCgogICAgICAgIGZyYW1lX29mZnNldCA9IGt3YXJncy5nZXQoImZyYW1lX29mZnNldCIsIDApCiAgICAgICAgbnVtX2ZyYW1lcyA9IGt3YXJncy5nZXQoIm51bV9mcmFtZXMiLCAtMSkKICAgICAgICBjaGFubmVsc19maXJzdCA9IGt3YXJncy5nZXQoImNoYW5uZWxzX2ZpcnN0IiwgVHJ1ZSkKICAgICAgICBmcmFtZXMgPSAtMSBpZiBudW1fZnJhbWVzIGlzIE5vbmUgb3IgbnVtX2ZyYW1lcyA8IDAgZWxzZSBudW1fZnJhbWVzCiAgICAgICAgZGF0YSwgc2FtcGxlX3JhdGUgPSBzZi5yZWFkKAogICAgICAgICAgICBzdHIocGF0aCksCiAgICAgICAgICAgIGR0eXBlPSJmbG9hdDMyIiwKICAgICAgICAgICAgYWx3YXlzXzJkPVRydWUsCiAgICAgICAgICAgIHN0YXJ0PWZyYW1lX29mZnNldCwKICAgICAgICAgICAgZnJhbWVzPWZyYW1lcywKICAgICAgICApCiAgICAgICAgaWYgY2hhbm5lbHNfZmlyc3Q6CiAgICAgICAgICAgIGRhdGEgPSBkYXRhLlQKICAgICAgICByZXR1cm4gdG9yY2guZnJvbV9udW1weShkYXRhLmNvcHkoKSksIHNhbXBsZV9yYXRlCgogICAgbG9hZF93aXRoX3NvdW5kZmlsZV9mb3Jfd2F2Ll90YW5nb19zb3VuZGZpbGVfd2F2X2xvYWRlciA9IFRydWUKICAgIHRvcmNoYXVkaW8ubG9hZCA9IGxvYWRfd2l0aF9zb3VuZGZpbGVfZm9yX3dhdgoKCkBhcHAub25fZXZlbnQoInN0YXJ0dXAiKQphc3luYyBkZWYgc3RhcnR1cCgpIC0+IE5vbmU6CiAgICBhd2FpdCBhc3luY2lvLnRvX3RocmVhZChfbG9hZF9mNV90dHMpCgoKQGFwcC5nZXQoIi9oZWFsdGh6IikKYXN5bmMgZGVmIGhlYWx0aHooKSAtPiBkaWN0W3N0ciwgb2JqZWN0XToKICAgIHJldHVybiB7CiAgICAgICAgInN0YXR1cyI6ICJvayIsCiAgICAgICAgIm1vZGVsIjogImY1LXR0cyIsCiAgICAgICAgImRldmljZSI6IEY1X1RUU19ERVZJQ0UsCiAgICAgICAgInZvaWNlcyI6IHNvcnRlZChWT0lDRV9SRUdJU1RSWSksCiAgICB9CgoKQGFwcC5wb3N0KCIvc3ludGhlc2l6ZSIpCmFzeW5jIGRlZiBzeW50aGVzaXplKHJlcTogU3ludGhlc2l6ZVJlcXVlc3QpIC0+IFJlc3BvbnNlOgogICAgdm9pY2UgPSBWT0lDRV9SRUdJU1RSWS5nZXQocmVxLnBlcnNvbmFfaWQpCiAgICBpZiB2b2ljZSBpcyBOb25lIGFuZCBub3QgcmVxLnJlZl9hdWRpb19vdmVycmlkZToKICAgICAgICByYWlzZSBIVFRQRXhjZXB0aW9uKHN0YXR1c19jb2RlPTQwNCwgZGV0YWlsPWYiTm8gRjUtVFRTIHZvaWNlIHJlZ2lzdGVyZWQgZm9yIHtyZXEucGVyc29uYV9pZCFyfSIpCgogICAgcmVmX2F1ZGlvID0gUGF0aChyZXEucmVmX2F1ZGlvX292ZXJyaWRlKSBpZiByZXEucmVmX2F1ZGlvX292ZXJyaWRlIGVsc2Ugdm9pY2UucmVmX2F1ZGlvCiAgICByZWZfdGV4dCA9IHJlcS5yZWZfdGV4dF9vdmVycmlkZSBpZiByZXEucmVmX3RleHRfb3ZlcnJpZGUgZWxzZSB2b2ljZS5yZWZfdGV4dAogICAgaWYgbm90IHJlZl9hdWRpby5leGlzdHMoKToKICAgICAgICByYWlzZSBIVFRQRXhjZXB0aW9uKHN0YXR1c19jb2RlPTUwMCwgZGV0YWlsPWYiUmVmZXJlbmNlIGF1ZGlvIG5vdCBmb3VuZDoge3JlZl9hdWRpb30iKQogICAgaWYgbm90IHJlZl90ZXh0LnN0cmlwKCk6CiAgICAgICAgcmFpc2UgSFRUUEV4Y2VwdGlvbigKICAgICAgICAgICAgc3RhdHVzX2NvZGU9NTAwLAogICAgICAgICAgICBkZXRhaWw9IlJlZmVyZW5jZSB0cmFuc2NyaXB0IGlzIGVtcHR5OyBydW4gc2NyaXB0cy9leHRyYWN0X2plcmVtaWFoX3JlZmVyZW5jZS5weSBvciBzZXQgSkVSRU1JQUhfRjVfUkVGX1RFWFQuIiwKICAgICAgICApCgogICAgc3RhcnRlZCA9IHRpbWUucGVyZl9jb3VudGVyKCkKICAgIG91dHB1dF9wYXRoID0gIiIKICAgIHRyeToKICAgICAgICBmZCwgb3V0cHV0X3BhdGggPSB0ZW1wZmlsZS5ta3N0ZW1wKHByZWZpeD1mInRhbmdvX3R0c197cmVxLnBlcnNvbmFfaWR9XyIsIHN1ZmZpeD0iLndhdiIpCiAgICAgICAgb3MuY2xvc2UoZmQpCgogICAgICAgIGFzeW5jIHdpdGggX3R0c19sb2NrOgogICAgICAgICAgICB0dHMgPSBfbG9hZF9mNV90dHMoKQogICAgICAgICAgICBhd2FpdCBhc3luY2lvLnRvX3RocmVhZCgKICAgICAgICAgICAgICAgIHR0cy5pbmZlciwKICAgICAgICAgICAgICAgIHJlZl9maWxlPXN0cihyZWZfYXVkaW8pLAogICAgICAgICAgICAgICAgcmVmX3RleHQ9cmVmX3RleHQsCiAgICAgICAgICAgICAgICBnZW5fdGV4dD1yZXEudGV4dCwKICAgICAgICAgICAgICAgIGZpbGVfd2F2ZT1vdXRwdXRfcGF0aCwKICAgICAgICAgICAgICAgIHNob3dfaW5mbz1sb2dnZXIuaW5mbywKICAgICAgICAgICAgICAgIHNlZWQ9X2Y1X3R0c19zZWVkKCksCiAgICAgICAgICAgICkKCiAgICAgICAgIyBGNS1UVFMgd3JpdGVzIElFRUVfRkxPQVQgKGZsb2F0MzIpIFdBVi4gUHl0aG9uJ3Mgd2F2ZSBtb2R1bGUgY2Fubm90CiAgICAgICAgIyBwYXJzZSBmbG9hdDMyIFdBViAod2F2ZS5FcnJvcjogdW5rbm93biBmb3JtYXQ6IDMpLCBjYXVzaW5nIGJhY2tlbmQvbWFpbi5weQogICAgICAgICMgdG8gZmFsbCBiYWNrIHRvIHB1c2hpbmcgcmF3IFdBViBieXRlcyAoUklGRiBoZWFkZXIgaW5jbHVkZWQpIHRvIExpdmVLaXQsCiAgICAgICAgIyB3aGljaCBwcm9kdWNlcyBnYXJibGVkIGF1ZGlvLiBDb252ZXJ0IGZsb2F0MzIgLT4gaW50MTYgUENNXzE2IGhlcmUgc28KICAgICAgICAjIHRoZSBiYWNrZW5kJ3Mgd2F2ZS5vcGVuKCkgYWx3YXlzIHN1Y2NlZWRzIGFuZCBMaXZlS2l0IGdldHMgY2xlYW4gUENNLgogICAgICAgIGltcG9ydCBpbyBhcyBfaW8KICAgICAgICBpbXBvcnQgbnVtcHkgYXMgX25wCiAgICAgICAgaW1wb3J0IHNvdW5kZmlsZSBhcyBfc2YKICAgICAgICBfYXVkaW9fZGF0YSwgX3NhbXBsZV9yYXRlID0gX3NmLnJlYWQob3V0cHV0X3BhdGgsIGR0eXBlPSJmbG9hdDMyIiwgYWx3YXlzXzJkPUZhbHNlKQogICAgICAgIF9hdWRpb19pbnQxNiA9IChfbnAuY2xpcChfYXVkaW9fZGF0YSwgLTEuMCwgMS4wKSAqIDMyNzY3KS5hc3R5cGUoX25wLmludDE2KQogICAgICAgIF9idWYgPSBfaW8uQnl0ZXNJTygpCiAgICAgICAgX3NmLndyaXRlKF9idWYsIF9hdWRpb19pbnQxNiwgX3NhbXBsZV9yYXRlLCBmb3JtYXQ9IldBViIsIHN1YnR5cGU9IlBDTV8xNiIpCiAgICAgICAgYXVkaW9fYnl0ZXMgPSBfYnVmLmdldHZhbHVlKCkKICAgIGV4Y2VwdCBFeGNlcHRpb24gYXMgZXhjOgogICAgICAgIGxvZ2dlci5leGNlcHRpb24oIkY1LVRUUyBzeW50aGVzaXMgZmFpbGVkIHBlcnNvbmE9JXMiLCByZXEucGVyc29uYV9pZCkKICAgICAgICByYWlzZSBIVFRQRXhjZXB0aW9uKHN0YXR1c19jb2RlPTUwMCwgZGV0YWlsPXN0cihleGMpKSBmcm9tIGV4YwogICAgZmluYWxseToKICAgICAgICBpZiBvdXRwdXRfcGF0aDoKICAgICAgICAgICAgUGF0aChvdXRwdXRfcGF0aCkudW5saW5rKG1pc3Npbmdfb2s9VHJ1ZSkKCiAgICBlbGFwc2VkX21zID0gaW50KCh0aW1lLnBlcmZfY291bnRlcigpIC0gc3RhcnRlZCkgKiAxMDAwKQogICAgbG9nZ2VyLmluZm8oCiAgICAgICAgIlN5bnRoZXNpemVkICVkIGNoYXJzIGZvciBwZXJzb25hPSVzIGJ5dGVzPSVkIGVsYXBzZWRfbXM9JWQiLAogICAgICAgIGxlbihyZXEudGV4dCksCiAgICAgICAgcmVxLnBlcnNvbmFfaWQsCiAgICAgICAgbGVuKGF1ZGlvX2J5dGVzKSwKICAgICAgICBlbGFwc2VkX21zLAogICAgKQogICAgcmV0dXJuIFJlc3BvbnNlKGNvbnRlbnQ9YXVkaW9fYnl0ZXMsIG1lZGlhX3R5cGU9ImF1ZGlvL3dhdiIpCg==
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import random
+import tempfile
+import time
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
+
+logger = logging.getLogger("project-tango-tts")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+APP_ROOT = Path(os.getenv("TANGO_APP_ROOT", "/opt/Project-Tango"))
+DEFAULT_VOICE_DIR = APP_ROOT / "tts-voices"
+DEFAULT_JEREMIAH_REFERENCE = DEFAULT_VOICE_DIR / "jeremiah_reference.wav"
+DEFAULT_JEREMIAH_REFERENCE_TEXT_PATH = DEFAULT_VOICE_DIR / "jeremiah_reference.txt"
+
+F5_TTS_DEVICE = os.getenv("F5_TTS_DEVICE", "cuda")
+F5_TTS_MODEL = os.getenv("F5_TTS_MODEL", "").strip()
+MAX_PYTHON_HASH_SEED = 4_294_967_295
+
+
+def _jeremiah_reference_text() -> str:
+    env_text = os.getenv("JEREMIAH_F5_REF_TEXT")
+    if env_text is not None:
+        return env_text
+    if DEFAULT_JEREMIAH_REFERENCE_TEXT_PATH.exists():
+        return DEFAULT_JEREMIAH_REFERENCE_TEXT_PATH.read_text().strip()
+    return ""
+
+
+def _f5_tts_seed() -> int:
+    raw_seed = os.getenv("F5_TTS_SEED")
+    if raw_seed:
+        try:
+            return int(raw_seed) % (MAX_PYTHON_HASH_SEED + 1)
+        except ValueError:
+            logger.warning("Invalid F5_TTS_SEED=%r; using a bounded random seed", raw_seed)
+    return random.randint(0, MAX_PYTHON_HASH_SEED)
+
+
+class VoiceConfig(BaseModel):
+    ref_audio: Path
+    ref_text: str
+
+
+VOICE_REGISTRY: dict[str, VoiceConfig] = {
+    "jeremiah": VoiceConfig(
+        ref_audio=Path(os.getenv("JEREMIAH_F5_REF_AUDIO", str(DEFAULT_JEREMIAH_REFERENCE))),
+        ref_text=_jeremiah_reference_text(),
+    ),
+}
+
+
+class SynthesizeRequest(BaseModel):
+    persona_id: str = Field(min_length=1, max_length=64)
+    text: str = Field(min_length=1, max_length=4000)
+    ref_audio_override: str | None = None
+    ref_text_override: str | None = None
+
+
+app = FastAPI(title="Project Tango F5-TTS Server", version="1.0.0")
+_tts = None
+_tts_lock = asyncio.Lock()
+
+
+def _load_f5_tts():
+    global _tts
+    if _tts is not None:
+        return _tts
+
+    try:
+        from f5_tts import F5TTS
+    except ImportError:
+        from f5_tts.api import F5TTS
+
+    _patch_torchaudio_wav_loader()
+
+    kwargs = {"device": F5_TTS_DEVICE}
+    if F5_TTS_MODEL:
+        kwargs["model"] = F5_TTS_MODEL
+
+    logger.info("Loading F5-TTS model device=%s model=%s", F5_TTS_DEVICE, F5_TTS_MODEL or "default")
+    _tts = F5TTS(**kwargs)
+    logger.info("F5-TTS model ready")
+    return _tts
+
+
+def _patch_torchaudio_wav_loader() -> None:
+    import soundfile as sf
+    import torch
+    import torchaudio
+
+    if getattr(torchaudio.load, "_tango_soundfile_wav_loader", False):
+        return
+
+    original_load = torchaudio.load
+
+    def load_with_soundfile_for_wav(uri, *args, **kwargs):
+        path = Path(uri) if isinstance(uri, str | Path) else None
+        if path is None or path.suffix.lower() != ".wav" or not path.exists():
+            return original_load(uri, *args, **kwargs)
+
+        frame_offset = kwargs.get("frame_offset", 0)
+        num_frames = kwargs.get("num_frames", -1)
+        channels_first = kwargs.get("channels_first", True)
+        frames = -1 if num_frames is None or num_frames < 0 else num_frames
+        data, sample_rate = sf.read(
+            str(path),
+            dtype="float32",
+            always_2d=True,
+            start=frame_offset,
+            frames=frames,
+        )
+        if channels_first:
+            data = data.T
+        return torch.from_numpy(data.copy()), sample_rate
+
+    load_with_soundfile_for_wav._tango_soundfile_wav_loader = True
+    torchaudio.load = load_with_soundfile_for_wav
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    await asyncio.to_thread(_load_f5_tts)
+
+
+@app.get("/healthz")
+async def healthz() -> dict[str, object]:
+    return {
+        "status": "ok",
+        "model": "f5-tts",
+        "device": F5_TTS_DEVICE,
+        "voices": sorted(VOICE_REGISTRY),
+    }
+
+
+@app.post("/synthesize")
+async def synthesize(req: SynthesizeRequest) -> Response:
+    voice = VOICE_REGISTRY.get(req.persona_id)
+    if voice is None and not req.ref_audio_override:
+        raise HTTPException(status_code=404, detail=f"No F5-TTS voice registered for {req.persona_id!r}")
+
+    ref_audio = Path(req.ref_audio_override) if req.ref_audio_override else voice.ref_audio
+    ref_text = req.ref_text_override if req.ref_text_override else voice.ref_text
+    if not ref_audio.exists():
+        raise HTTPException(status_code=500, detail=f"Reference audio not found: {ref_audio}")
+    if not ref_text.strip():
+        raise HTTPException(
+            status_code=500,
+            detail="Reference transcript is empty; run scripts/extract_jeremiah_reference.py or set JEREMIAH_F5_REF_TEXT.",
+        )
+
+    started = time.perf_counter()
+    output_path = ""
+    try:
+        fd, output_path = tempfile.mkstemp(prefix=f"tango_tts_{req.persona_id}_", suffix=".wav")
+        os.close(fd)
+
+        async with _tts_lock:
+            tts = _load_f5_tts()
+            await asyncio.to_thread(
+                tts.infer,
+                ref_file=str(ref_audio),
+                ref_text=ref_text,
+                gen_text=req.text,
+                file_wave=output_path,
+                show_info=logger.info,
+                seed=_f5_tts_seed(),
+            )
+
+        # F5-TTS writes IEEE_FLOAT (float32) WAV. Python's wave module cannot
+        # parse float32 WAV (wave.Error: unknown format: 3), causing backend/main.py
+        # to fall back to pushing raw WAV bytes (RIFF header included) to LiveKit,
+        # which produces garbled audio. Convert float32 -> int16 PCM_16 here so
+        # the backend's wave.open() always succeeds and LiveKit gets clean PCM.
+        import io as _io
+        import numpy as _np
+        import soundfile as _sf
+        _audio_data, _sample_rate = _sf.read(output_path, dtype="float32", always_2d=False)
+        _audio_int16 = (_np.clip(_audio_data, -1.0, 1.0) * 32767).astype(_np.int16)
+        _buf = _io.BytesIO()
+        _sf.write(_buf, _audio_int16, _sample_rate, format="WAV", subtype="PCM_16")
+        audio_bytes = _buf.getvalue()
+    except Exception as exc:
+        logger.exception("F5-TTS synthesis failed persona=%s", req.persona_id)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        if output_path:
+            Path(output_path).unlink(missing_ok=True)
+
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
+    logger.info(
+        "Synthesized %d chars for persona=%s bytes=%d elapsed_ms=%d",
+        len(req.text),
+        req.persona_id,
+        len(audio_bytes),
+        elapsed_ms,
+    )
+    return Response(content=audio_bytes, media_type="audio/wav")
