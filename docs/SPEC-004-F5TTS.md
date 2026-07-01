@@ -1,17 +1,17 @@
-# SPEC-004: F5-TTS Self-Hosted Voice Engine (Jacob Pilot)
+# SPEC-004: F5-TTS Self-Hosted Voice Engine (Jeremiah Pilot)
 
 **Project:** Project Tango  
 **Author:** Geronimo AI  
 **Date:** June 30, 2026  
 **Status:** Ready for Codex  
-**Target Persona:** Jacob (`qYwy2TckibCF9cBuhI46`)  
+**Target Persona:** Jeremiah (`EqHdTYoEuDQCxN1CVbi0`)  
 **Server:** Schubert — NVIDIA RTX PRO 4500 Blackwell, 32GB VRAM, CUDA 12.0, Python 3.14, Ubuntu  
 
 ---
 
 ## Overview
 
-This spec installs F5-TTS on Schubert as a self-hosted text-to-speech engine, wires it into Project Tango's backend as an optional per-persona TTS backend, and validates it against Jacob using a reference audio sample extracted from his current ElevenLabs voice. All other personas remain on ElevenLabs. This is a non-destructive pilot — ElevenLabs is the unchanged fallback.
+This spec installs F5-TTS on Schubert as a self-hosted text-to-speech engine, wires it into Project Tango's backend as an optional per-persona TTS backend, and validates it against Jeremiah using a reference audio sample extracted from his current ElevenLabs voice. All other personas remain on ElevenLabs. This is a non-destructive pilot — ElevenLabs is the unchanged fallback.
 
 The goal is to validate that F5-TTS produces acceptable real-time speech quality for a live LiveKit voice agent session running on Schubert hardware, paving the way for full persona voice ownership.
 
@@ -23,47 +23,48 @@ The goal is to validate that F5-TTS produces acceptable real-time speech quality
 Current:  LLM response text → ElevenLabs API (cloud) → PCM audio → LiveKit room
 New:      LLM response text → F5-TTS API (localhost:8020) → PCM audio → LiveKit room
                             ↑
-                     Jacob only (pilot)
+                     Jeremiah only (pilot)
 ```
 
-The F5-TTS service runs as a FastAPI server on Schubert at `http://localhost:8020`. It is NOT exposed publicly — accessed only by `tango-backend` over localhost. A new `tts_backend` field on the `Persona` dataclass switches routing. Jacob is set to `f5-tts`; all others remain `elevenlabs`.
+The F5-TTS service runs as a FastAPI server on Schubert at `http://localhost:8020`. It is NOT exposed publicly — accessed only by `tango-backend` over localhost. A new `tts_backend` field on the `Persona` dataclass switches routing. Jeremiah is set to `f5-tts`; all others remain `elevenlabs`.
 
 ---
 
 ## Phase 1 — Reference Audio Extraction
 
-### 1.1 Generate Jacob Reference Audio via ElevenLabs API
+### 1.1 Generate Jeremiah Reference Audio via ElevenLabs API
 
-Use Jacob's ElevenLabs Voice ID `qYwy2TckibCF9cBuhI46` to generate a clean 45-second reference audio sample. This sample is used by F5-TTS as the voice fingerprint for zero-shot cloning.
+Use Jeremiah's ElevenLabs Voice ID `EqHdTYoEuDQCxN1CVbi0` to generate a clean 45-second reference audio sample. This sample is used by F5-TTS as the voice fingerprint for zero-shot cloning.
 
-Write a Python script at `/opt/Project-Tango/scripts/extract_jacob_reference.py`:
+Write a Python script at `/opt/Project-Tango/scripts/extract_jeremiah_reference.py`:
 
 ```python
 #!/usr/bin/env python3
 """
-Extract a reference audio sample for Jacob from ElevenLabs for F5-TTS cloning.
-Usage: python extract_jacob_reference.py
-Output: /opt/Project-Tango/tts-voices/jacob_reference.wav
+Extract a reference audio sample for Jeremiah from ElevenLabs for F5-TTS cloning.
+Usage: python extract_jeremiah_reference.py
+Output: /opt/Project-Tango/tts-voices/jeremiah_reference.wav
 """
 import os
 import requests
 
 ELEVENLABS_API_KEY = os.environ["ELEVENLABS_API_KEY"]
-JACOB_VOICE_ID = "qYwy2TckibCF9cBuhI46"
-OUTPUT_PATH = "/opt/Project-Tango/tts-voices/jacob_reference.wav"
+JEREMIAH_VOICE_ID = "EqHdTYoEuDQCxN1CVbi0"
+OUTPUT_PATH = "/opt/Project-Tango/tts-voices/jeremiah_reference.wav"
 OUTPUT_DIR = "/opt/Project-Tango/tts-voices"
 
 # 45-second natural monologue — varied pacing, natural sentences
 REFERENCE_TEXT = (
-    "Hello, I'm Jacob. I'm here to help you think through whatever's on your mind. "
-    "Whether you have a question, a problem to work through, or just something you'd like to explore, "
-    "I'm a good place to start. I tend to take my time with things — I think that's usually better "
-    "than rushing to an answer. When you're ready, just go ahead and ask."
+    "Hi, I'm Jeremiah. I'm an agent whose voice is based on my creator, Jeff Geronimo. "
+    "I'm here to help — ask me anything and I'll give you a straight answer. "
+    "I don't hedge, I don't over-explain, and I respect your time. "
+    "Whether it's a quick question or something you really want to dig into, I'm ready. "
+    "What's on your mind?"
 )
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-url = f"https://api.elevenlabs.io/v1/text-to-speech/{JACOB_VOICE_ID}"
+url = f"https://api.elevenlabs.io/v1/text-to-speech/{JEREMIAH_VOICE_ID}"
 headers = {
     "xi-api-key": ELEVENLABS_API_KEY,
     "Content-Type": "application/json",
@@ -81,7 +82,7 @@ payload = {
     "output_format": "pcm_24000",
 }
 
-print(f"Generating Jacob reference audio ({len(REFERENCE_TEXT)} chars)...")
+print(f"Generating Jeremiah reference audio ({len(REFERENCE_TEXT)} chars)...")
 resp = requests.post(url, json=payload, headers=headers, timeout=30)
 resp.raise_for_status()
 
@@ -107,13 +108,13 @@ Run it:
 ```bash
 cd /opt/Project-Tango
 source .env  # loads ELEVENLABS_API_KEY
-python scripts/extract_jacob_reference.py
+python scripts/extract_jeremiah_reference.py
 ```
 
 Verify output exists and is >30s:
 ```bash
-ls -lh /opt/Project-Tango/tts-voices/jacob_reference.wav
-python3 -c "import wave; w=wave.open('/opt/Project-Tango/tts-voices/jacob_reference.wav'); print(f'{w.getnframes()/w.getframerate():.1f}s')"
+ls -lh /opt/Project-Tango/tts-voices/jeremiah_reference.wav
+python3 -c "import wave; w=wave.open('/opt/Project-Tango/tts-voices/jeremiah_reference.wav'); print(f'{w.getnframes()/w.getframerate():.1f}s')"
 ```
 
 **Expected:** File exists, duration ≥ 30 seconds.
@@ -177,18 +178,19 @@ from f5_tts import F5TTS
 
 tts = F5TTS(device="cuda")
 audio = tts.generate(
-    text="Hello, I'm Jacob. How can I help you today?",
-    ref_audio="/opt/Project-Tango/tts-voices/jacob_reference.wav",
+    text="Hello, I'm Jeremiah. How can I help you today?",
+    ref_audio="/opt/Project-Tango/tts-voices/jeremiah_reference.wav",
     ref_text=(
-        "Hello, I'm Jacob. I'm here to help you think through whatever's on your mind."
+        "Hi, I'm Jeremiah. I'm an agent whose voice is based on my creator, Jeff Geronimo. "
+        "I'm here to help — ask me anything and I'll give you a straight answer."
     ),
-    output_path="/tmp/jacob_smoke_test.wav"
+    output_path="/tmp/jeremiah_smoke_test.wav"
 )
-print("Smoke test passed — output: /tmp/jacob_smoke_test.wav")
+print("Smoke test passed — output: /tmp/jeremiah_smoke_test.wav")
 PY
 ```
 
-Listen to `/tmp/jacob_smoke_test.wav` to confirm voice quality before proceeding.
+Listen to `/tmp/jeremiah_smoke_test.wav` to confirm voice quality before proceeding.
 
 ---
 
@@ -224,12 +226,12 @@ app = FastAPI(title="Project Tango TTS Server", version="1.0.0")
 
 # Voice registry: persona_id → reference audio path + text
 VOICE_REGISTRY: dict[str, dict] = {
-    "jacob": {
-        "ref_audio": "/opt/Project-Tango/tts-voices/jacob_reference.wav",
+    "jeremiah": {
+        "ref_audio": "/opt/Project-Tango/tts-voices/jeremiah_reference.wav",
         "ref_text": (
-            "Hello, I'm Jacob. I'm here to help you think through whatever's on your mind. "
-            "Whether you have a question, a problem to work through, or just something you'd "
-            "like to explore, I'm a good place to start."
+            "Hi, I'm Jeremiah. I'm an agent whose voice is based on my creator, Jeff Geronimo. "
+            "I'm here to help — ask me anything and I'll give you a straight answer. "
+            "I don't hedge, I don't over-explain, and I respect your time."
         ),
     },
 }
@@ -380,11 +382,11 @@ Add `tts_backend` field to the `Persona` dataclass (add after existing fields):
 tts_backend: str = "elevenlabs"  # "elevenlabs" | "f5-tts"
 ```
 
-Set Jacob's `tts_backend` to `f5-tts`:
+Set Jeremiah's `tts_backend` to `f5-tts`:
 
 ```python
-"jacob": Persona(
-    id="jacob",
+"jeremiah": Persona(
+    id="jeremiah",
     # ... all existing fields unchanged ...
     tts_backend="f5-tts",   # ← ADD THIS LINE
 ),
@@ -444,13 +446,13 @@ Then replace the hardcoded `tts=elevenlabs.TTS(...)` with `tts=build_tts(persona
 
 ### 4.3 Update `frontend/lib/personas.ts`
 
-Add a `ttsBackend` field to the Jacob persona type annotation so the UI badge can optionally show "F5-TTS" for clarity during testing. Mark it as optional so no other personas need changes:
+Add a `ttsBackend` field to the Jeremiah persona type annotation so the UI badge can optionally show "F5-TTS" for clarity during testing. Mark it as optional so no other personas need changes:
 
 ```typescript
 // In the Persona interface / type definition, add:
 ttsBackend?: "elevenlabs" | "f5-tts";
 
-// In jacob's persona object, add:
+// In jeremiah's persona object, add:
 ttsBackend: "f5-tts",
 ```
 
@@ -487,17 +489,17 @@ curl https://tango-api.schubert.life/healthz
 
 ### 5.4 End-to-End Synthesis Test
 
-Test that Jacob synthesis works through the full API stack:
+Test that Jeremiah synthesis works through the full API stack:
 ```bash
 curl -X POST http://localhost:8020/synthesize \
   -H "Content-Type: application/json" \
-  -d '{"persona_id": "jacob", "text": "Hello. I am Jacob, now running on a self-hosted voice engine."}' \
-  --output /tmp/jacob_e2e_test.wav
+  -d '{"persona_id": "jeremiah", "text": "Hello. I am Jeremiah, now running on a self-hosted voice engine."}' \
+  --output /tmp/jeremiah_e2e_test.wav
 
 # Verify file is a valid WAV and has audio content
 python3 -c "
 import wave
-w = wave.open('/tmp/jacob_e2e_test.wav')
+w = wave.open('/tmp/jeremiah_e2e_test.wav')
 duration = w.getnframes() / w.getframerate()
 print(f'WAV OK: {duration:.2f}s, {w.getnchannels()}ch, {w.getframerate()}Hz')
 assert duration > 1.0, 'Audio too short — synthesis may have failed'
@@ -508,20 +510,20 @@ print('E2E test PASSED')
 ### 5.5 Live Session Test
 
 In the Project Tango web UI at `https://project-tango.schubert.life`:
-1. Select **Jacob** persona
+1. Select **Jeremiah** persona
 2. Click **Start Conversation**
 3. Verify no initialization errors
-4. Speak a question — verify response audio plays (Jacob's voice, not silence)
+4. Speak a question — verify response audio plays (Jeremiah's voice, not silence)
 5. Check `tango-tts` logs for synthesis events:
    ```bash
    sudo journalctl -u tango-tts.service -f
    ```
-   Expected log line: `Synthesized N chars for persona=jacob`
+   Expected log line: `Synthesized N chars for persona=jeremiah`
 6. Check `tango-backend` logs for F5-TTS routing confirmation:
    ```bash
    sudo journalctl -u tango-backend.service -n 20 --no-pager | grep -i f5
    ```
-   Expected: `Using F5-TTS for persona=jacob`
+   Expected: `Using F5-TTS for persona=jeremiah`
 
 ### 5.6 Latency Assessment
 
@@ -540,15 +542,15 @@ Once all validation passes:
 ```bash
 cd /opt/Project-Tango
 git add backend/personas.py backend/main.py frontend/lib/personas.ts \
-        tts_server/main.py scripts/extract_jacob_reference.py
-git commit -m "feat(SPEC-004): add F5-TTS self-hosted TTS engine — Jacob pilot
+        tts_server/main.py scripts/extract_jeremiah_reference.py
+git commit -m "feat(SPEC-004): add F5-TTS self-hosted TTS engine — Jeremiah pilot
 
 - Install F5-TTS in /opt/tts-lab/f5-venv (cu128 PyTorch for Blackwell GPU)
 - Add tango-tts.service FastAPI server on localhost:8020
 - Add F5TTSAdapter in backend/main.py for LiveKit-compatible TTS routing
-- Add tts_backend field to Persona dataclass; Jacob set to f5-tts
+- Add tts_backend field to Persona dataclass; Jeremiah set to f5-tts
 - All other personas remain on ElevenLabs (non-destructive pilot)
-- Reference audio extracted from ElevenLabs voice qYwy2TckibCF9cBuhI46
+- Reference audio extracted from ElevenLabs voice EqHdTYoEuDQCxN1CVbi0
 
 Ref: SPEC-004"
 git push origin main
@@ -562,15 +564,15 @@ git push origin main
 /opt/Project-Tango/
 ├── backend/
 │   ├── main.py              ← F5TTSAdapter + build_tts() added
-│   └── personas.py          ← tts_backend field + jacob tts_backend="f5-tts"
+│   └── personas.py          ← tts_backend field + jeremiah tts_backend="f5-tts"
 ├── frontend/
-│   └── lib/personas.ts      ← ttsBackend?: "f5-tts" on Jacob
+│   └── lib/personas.ts      ← ttsBackend?: "f5-tts" on Jeremiah
 ├── tts_server/
 │   └── main.py              ← NEW: FastAPI TTS server
 ├── scripts/
-│   └── extract_jacob_reference.py  ← NEW: reference audio extractor
+│   └── extract_jeremiah_reference.py  ← NEW: reference audio extractor
 └── tts-voices/
-    └── jacob_reference.wav  ← NEW: 45s ElevenLabs reference sample
+    └── jeremiah_reference.wav  ← NEW: 45s ElevenLabs reference sample
 
 /opt/tts-lab/
 └── f5-venv/                 ← NEW: isolated Python venv w/ F5-TTS + cu128 PyTorch
@@ -585,9 +587,9 @@ git push origin main
 
 If F5-TTS produces poor quality or causes session errors:
 
-1. Remove `tts_backend="f5-tts"` from Jacob in `personas.py` (delete the one line)
+1. Remove `tts_backend="f5-tts"` from Jeremiah in `personas.py` (delete the one line)
 2. Restart `tango-backend.service`
-3. Jacob immediately reverts to ElevenLabs
+3. Jeremiah immediately reverts to ElevenLabs
 4. `tango-tts.service` can be left running or stopped — it has no effect once no persona routes to it
 
 The F5-TTS installation (`/opt/tts-lab/`) and service (`tango-tts.service`) do not interfere with any existing services and can be safely left in place for future testing.
@@ -598,7 +600,7 @@ The F5-TTS installation (`/opt/tts-lab/`) and service (`tango-tts.service`) do n
 
 - **Do not install Coqui XTTS v2** — this is F5-TTS only
 - **Do not expose port 8020 publicly** — TTS server is localhost only
-- **Do not modify Jeremiah, Chris, or any other persona's TTS backend** — Jacob is the only pilot
+- **Do not modify Jeremiah, Chris, or any other persona's TTS backend** — Jeremiah is the only pilot
 - **Preserve all existing ElevenLabs voice settings** in `personas.py` — only add the new `tts_backend` field
 - **The `F5TTSAdapter` must be LiveKit Agents 1.x compatible** — check `livekit-agents` version before writing the adapter; the internal TTS API may differ slightly from the skeleton above. Adjust accordingly.
 - **Run `sudo systemctl daemon-reload` before `systemctl enable`** after writing the service file
