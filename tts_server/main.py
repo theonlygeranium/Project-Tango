@@ -102,6 +102,11 @@ async def synthesize(req: SynthesizeRequest) -> Response:
     ref_text = req.ref_text_override if req.ref_text_override else voice.ref_text
     if not ref_audio.exists():
         raise HTTPException(status_code=500, detail=f"Reference audio not found: {ref_audio}")
+    if not ref_text.strip():
+        raise HTTPException(
+            status_code=500,
+            detail="Reference transcript is empty; run scripts/extract_jeremiah_reference.py or set JEREMIAH_F5_REF_TEXT.",
+        )
 
     started = time.perf_counter()
     output_path = ""

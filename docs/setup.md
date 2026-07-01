@@ -115,9 +115,10 @@ python3 -c "import wave; w=wave.open('/opt/Project-Tango/tts-voices/jeremiah_ref
 ```
 
 If Jeremiah's ElevenLabs voice is not fine-tuned for text generation, the
-extractor falls back to the existing ElevenLabs voice sample audio and writes an
-empty `tts-voices/jeremiah_reference.txt`; F5-TTS then transcribes the
-reference internally.
+extractor falls back to the existing ElevenLabs voice sample audio. When
+`DEEPGRAM_API_KEY` is available, the extractor transcribes that sample with
+Deepgram `nova-3` and writes `tts-voices/jeremiah_reference.txt` so F5-TTS does
+not need to run its internal Whisper transcription path.
 
 ---
 

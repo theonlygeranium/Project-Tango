@@ -16,7 +16,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   PyTorch/F5-TTS venv. The helper defaults to PyTorch `2.9.1+cu128` for
   Schubert's Python 3.14 runtime.
 - The Jeremiah reference extractor falls back to existing ElevenLabs voice
-  sample audio when that voice is not fine-tuned for text-to-speech generation.
+  sample audio when that voice is not fine-tuned for text-to-speech generation,
+  and transcribes that sample with Deepgram before F5-TTS synthesis.
 
 ### Changed
 - Jeremiah now routes TTS through the local F5-TTS adapter when
@@ -29,6 +30,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 - The F5-TTS sidecar now calls the installed `f5_tts.api.F5TTS.infer()`
   method instead of the unavailable sketch `generate()` method from the design
   spec.
+- The F5-TTS sidecar now fails fast with a setup error when Jeremiah's reference
+  transcript is missing instead of invoking F5-TTS's internal ASR path.
 - Preserved the live Schubert 0-token history flush guard by waiting briefly for
   final LiveKit usage events before closing a history session.
 

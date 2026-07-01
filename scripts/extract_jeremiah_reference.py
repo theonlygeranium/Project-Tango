@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 import wave
 from pathlib import Path
-from urllib import error, request
+from urllib import error, parse, request
 
 APP_ROOT = Path(os.getenv("TANGO_APP_ROOT", "/opt/Project-Tango"))
 OUTPUT_DIR = APP_ROOT / "tts-voices"
@@ -17,6 +17,7 @@ JEREMIAH_VOICE_ID = "EqHdTYoEuDQCxN1CVbi0"
 SAMPLE_RATE = 24000
 CHANNELS = 1
 SAMPLE_WIDTH = 2
+DEEPGRAM_LISTEN_URL = "https://api.deepgram.com/v1/listen"
 REFERENCE_TEXT = (
     "Hi, I'm Jeremiah. I'm an agent whose voice is based on my creator, Jeff Geronimo. "
     "I'm here to help - ask me anything and I'll give you a straight answer. "
@@ -59,6 +60,46 @@ def write_pcm_wav(pcm_data: bytes, reference_text: str) -> float:
     return len(pcm_data) / (SAMPLE_RATE * CHANNELS * SAMPLE_WIDTH)
 
 
+def transcribe_reference_with_deepgram(audio_path: Path) -> str:
+    api_key = os.environ.get("DEEPGRAM_API_KEY")
+    if not api_key:
+        print("DEEPGRAM_API_KEY is not set; leaving reference transcript empty.")
+        return ""
+
+    query = parse.urlencode(
+        {
+            "model": os.getenv("JEREMIAH_REFERENCE_STT_MODEL", "nova-3"),
+            "smart_format": "true",
+        }
+    )
+    req = request.Request(
+        f"{DEEPGRAM_LISTEN_URL}?{query}",
+        data=audio_path.read_bytes(),
+        headers={
+            "Authorization": f"Token {api_key}",
+            "Content-Type": "audio/wav",
+        },
+        method="POST",
+    )
+    try:
+        with request.urlopen(req, timeout=120) as response:
+            payload = json.loads(response.read().decode())
+    except error.HTTPError as exc:
+        detail = exc.read().decode(errors="replace")
+        print(f"Deepgram reference transcription failed: HTTP {exc.code} {detail}")
+        return ""
+
+    try:
+        transcript = payload["results"]["channels"][0]["alternatives"][0]["transcript"].strip()
+    except (KeyError, IndexError, TypeError):
+        print("Deepgram reference transcription response did not include a transcript.")
+        return ""
+
+    if transcript:
+        print(f"Deepgram transcript length: {len(transcript)} chars")
+    return transcript
+
+
 def convert_audio_to_reference(source_path: Path) -> float:
     subprocess.run(
         [
@@ -78,7 +119,7 @@ def convert_audio_to_reference(source_path: Path) -> float:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    REFERENCE_TEXT_PATH.write_text("")
+    REFERENCE_TEXT_PATH.write_text(transcribe_reference_with_deepgram(OUTPUT_PATH))
     with wave.open(str(OUTPUT_PATH), "rb") as wav_file:
         return wav_file.getnframes() / wav_file.getframerate()
 
