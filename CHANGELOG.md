@@ -25,6 +25,7 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   v2.5, and Jeremiah can fall back to ElevenLabs by disabling the pilot env flag.
 - Deployment, preflight, setup, architecture, and recovery docs now include the
   `tango-tts.service` sidecar and localhost port `8020`.
+- Generated `tts-voices/` F5-TTS reference artifacts are now ignored by git.
 
 ### Fixed
 - The F5-TTS sidecar now calls the installed `f5_tts.api.F5TTS.infer()`

@@ -16,6 +16,9 @@ ehthumbs.db
 /.env.*
 !/.env.example
 
+# Runtime F5-TTS reference audio/transcript generated on Schubert.
+tts-voices/
+
 # Virtual Environment
 backend/venv/
 
