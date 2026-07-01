@@ -17,21 +17,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 APP_ROOT = Path(os.getenv("TANGO_APP_ROOT", "/opt/Project-Tango"))
 DEFAULT_VOICE_DIR = APP_ROOT / "tts-voices"
 DEFAULT_JEREMIAH_REFERENCE = DEFAULT_VOICE_DIR / "jeremiah_reference.wav"
-DEFAULT_JEREMIAH_REFERENCE_TEXT = (
-    "Hi, I'm Jeremiah. I'm an agent whose voice is based on my creator, Jeff Geronimo. "
-    "I'm here to help - ask me anything and I'll give you a straight answer. "
-    "I don't hedge, I don't over-explain, and I respect your time. "
-    "Whether it's a quick question or something you really want to dig into, I'm ready. "
-    "What's on your mind? "
-    "For this voice sample, I'll keep a steady pace and a natural rhythm. "
-    "I can sound direct without sounding cold, friendly without wasting words, and calm without dragging the sentence out. "
-    "If you ask me to solve a problem, I'll start with the practical answer, then give you just enough context to make a good decision. "
-    "If the situation needs nuance, I'll say that plainly too. "
-    "The point is simple: useful help, spoken clearly, with a voice that feels familiar and grounded."
-)
+DEFAULT_JEREMIAH_REFERENCE_TEXT_PATH = DEFAULT_VOICE_DIR / "jeremiah_reference.txt"
 
 F5_TTS_DEVICE = os.getenv("F5_TTS_DEVICE", "cuda")
 F5_TTS_MODEL = os.getenv("F5_TTS_MODEL", "").strip()
+
+
+def _jeremiah_reference_text() -> str:
+    env_text = os.getenv("JEREMIAH_F5_REF_TEXT")
+    if env_text is not None:
+        return env_text
+    if DEFAULT_JEREMIAH_REFERENCE_TEXT_PATH.exists():
+        return DEFAULT_JEREMIAH_REFERENCE_TEXT_PATH.read_text().strip()
+    return ""
 
 
 class VoiceConfig(BaseModel):
@@ -42,7 +40,7 @@ class VoiceConfig(BaseModel):
 VOICE_REGISTRY: dict[str, VoiceConfig] = {
     "jeremiah": VoiceConfig(
         ref_audio=Path(os.getenv("JEREMIAH_F5_REF_AUDIO", str(DEFAULT_JEREMIAH_REFERENCE))),
-        ref_text=os.getenv("JEREMIAH_F5_REF_TEXT", DEFAULT_JEREMIAH_REFERENCE_TEXT),
+        ref_text=_jeremiah_reference_text(),
     ),
 }
 

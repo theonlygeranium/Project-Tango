@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import tempfile
 import wave
 from pathlib import Path
 from urllib import error, request
@@ -10,6 +12,7 @@ from urllib import error, request
 APP_ROOT = Path(os.getenv("TANGO_APP_ROOT", "/opt/Project-Tango"))
 OUTPUT_DIR = APP_ROOT / "tts-voices"
 OUTPUT_PATH = OUTPUT_DIR / "jeremiah_reference.wav"
+REFERENCE_TEXT_PATH = OUTPUT_DIR / "jeremiah_reference.txt"
 JEREMIAH_VOICE_ID = "EqHdTYoEuDQCxN1CVbi0"
 SAMPLE_RATE = 24000
 CHANNELS = 1
@@ -44,6 +47,91 @@ def elevenlabs_base_url() -> str:
     if not base_url.endswith("/v1"):
         base_url = f"{base_url}/v1"
     return base_url
+
+
+def write_pcm_wav(pcm_data: bytes, reference_text: str) -> float:
+    with wave.open(str(OUTPUT_PATH), "wb") as wav_file:
+        wav_file.setnchannels(CHANNELS)
+        wav_file.setsampwidth(SAMPLE_WIDTH)
+        wav_file.setframerate(SAMPLE_RATE)
+        wav_file.writeframes(pcm_data)
+    REFERENCE_TEXT_PATH.write_text(reference_text)
+    return len(pcm_data) / (SAMPLE_RATE * CHANNELS * SAMPLE_WIDTH)
+
+
+def convert_audio_to_reference(source_path: Path) -> float:
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(source_path),
+            "-t",
+            "45",
+            "-ar",
+            str(SAMPLE_RATE),
+            "-ac",
+            str(CHANNELS),
+            str(OUTPUT_PATH),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    REFERENCE_TEXT_PATH.write_text("")
+    with wave.open(str(OUTPUT_PATH), "rb") as wav_file:
+        return wav_file.getnframes() / wav_file.getframerate()
+
+
+def request_json(url: str, api_key: str) -> dict:
+    req = request.Request(url, headers={"xi-api-key": api_key})
+    with request.urlopen(req, timeout=30) as response:
+        return json.loads(response.read().decode())
+
+
+def download_binary(url: str, api_key: str | None = None) -> bytes:
+    headers = {"xi-api-key": api_key} if api_key else {}
+    req = request.Request(url, headers=headers)
+    with request.urlopen(req, timeout=90) as response:
+        return response.read()
+
+
+def fallback_to_existing_voice_sample(api_key: str) -> float:
+    voice = request_json(f"{elevenlabs_base_url()}/voices/{JEREMIAH_VOICE_ID}", api_key)
+    samples = voice.get("samples") or []
+    source_bytes: bytes
+    suffix = ".mp3"
+
+    if samples:
+        sample = max(samples, key=lambda item: int(item.get("size_bytes") or 0))
+        sample_id = sample["sample_id"]
+        print(f"Falling back to existing ElevenLabs sample {sample_id} ({sample.get('file_name')})...")
+        try:
+            source_bytes = download_binary(
+                f"{elevenlabs_base_url()}/voices/{JEREMIAH_VOICE_ID}/samples/{sample_id}/audio",
+                api_key,
+            )
+        except error.HTTPError as exc:
+            if not voice.get("preview_url"):
+                raise
+            detail = exc.read().decode(errors="replace")
+            print(f"Sample download failed: HTTP {exc.code} {detail}")
+            print("Falling back to ElevenLabs preview_url...")
+            source_bytes = download_binary(voice["preview_url"])
+        suffix = Path(sample.get("file_name") or "sample.mp3").suffix or ".mp3"
+    elif voice.get("preview_url"):
+        print("Falling back to ElevenLabs preview_url...")
+        source_bytes = download_binary(voice["preview_url"])
+    else:
+        raise SystemExit("No ElevenLabs voice sample or preview_url available for fallback")
+
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as source_file:
+        source_file.write(source_bytes)
+        source_path = Path(source_file.name)
+    try:
+        return convert_audio_to_reference(source_path)
+    finally:
+        source_path.unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -85,16 +173,13 @@ def main() -> int:
             pcm_data = response.read()
     except error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
-        raise SystemExit(f"ElevenLabs request failed: HTTP {exc.code} {detail}") from exc
+        print(f"ElevenLabs TTS request failed: HTTP {exc.code} {detail}")
+        duration_s = fallback_to_existing_voice_sample(api_key)
+    else:
+        duration_s = write_pcm_wav(pcm_data, REFERENCE_TEXT)
 
-    with wave.open(str(OUTPUT_PATH), "wb") as wav_file:
-        wav_file.setnchannels(CHANNELS)
-        wav_file.setsampwidth(SAMPLE_WIDTH)
-        wav_file.setframerate(SAMPLE_RATE)
-        wav_file.writeframes(pcm_data)
-
-    duration_s = len(pcm_data) / (SAMPLE_RATE * CHANNELS * SAMPLE_WIDTH)
     print(f"Saved: {OUTPUT_PATH}")
+    print(f"Transcript: {REFERENCE_TEXT_PATH}")
     print(f"Duration: {duration_s:.1f}s")
     if duration_s < 30:
         raise SystemExit("Reference audio is shorter than 30 seconds")

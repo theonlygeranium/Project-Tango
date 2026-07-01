@@ -114,6 +114,11 @@ python3 -c "import wave; w=wave.open('/opt/Project-Tango/tts-voices/jeremiah_ref
 # Expected: >= 30.0s
 ```
 
+If Jeremiah's ElevenLabs voice is not fine-tuned for text generation, the
+extractor falls back to the existing ElevenLabs voice sample audio and writes an
+empty `tts-voices/jeremiah_reference.txt`; F5-TTS then transcribes the
+reference internally.
+
 ---
 
 ## Step 5 — Database Initialization

@@ -15,6 +15,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   audio extraction script, and an idempotent setup helper for Schubert's cu128
   PyTorch/F5-TTS venv. The helper defaults to PyTorch `2.9.1+cu128` for
   Schubert's Python 3.14 runtime.
+- The Jeremiah reference extractor falls back to existing ElevenLabs voice
+  sample audio when that voice is not fine-tuned for text-to-speech generation.
 
 ### Changed
 - Jeremiah now routes TTS through the local F5-TTS adapter when
