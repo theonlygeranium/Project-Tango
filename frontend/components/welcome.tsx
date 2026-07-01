@@ -246,7 +246,7 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
           </Button>
         </div>
 
-        <div className="pointer-events-none fixed bottom-6 left-1/2 flex w-full max-w-prose -translate-x-1/2 flex-col items-center gap-1 text-center text-xs">
+        <div className="pointer-events-none fixed bottom-6 left-1/2 flex w-full max-w-prose -translate-x-1/2 flex-col items-center gap-1 px-4 text-center text-xs">
           <p className="font-medium text-sky-500 dark:text-sky-400">
             Developed by Geronimo AI &mdash; Proprietary & Confidential
           </p>
