@@ -120,6 +120,10 @@ extractor falls back to the existing ElevenLabs voice sample audio. When
 Deepgram `nova-3` and writes `tts-voices/jeremiah_reference.txt` so F5-TTS does
 not need to run its internal Whisper transcription path.
 
+The sidecar loads the local reference WAV through `soundfile` because
+`torchaudio` 2.9 routes file loading through `torchcodec`, which requires a CUDA
+runtime library not present in Schubert's isolated F5-TTS venv.
+
 ---
 
 ## Step 5 — Database Initialization

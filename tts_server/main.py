@@ -67,6 +67,8 @@ def _load_f5_tts():
     except ImportError:
         from f5_tts.api import F5TTS
 
+    _patch_torchaudio_wav_loader()
+
     kwargs = {"device": F5_TTS_DEVICE}
     if F5_TTS_MODEL:
         kwargs["model"] = F5_TTS_MODEL
@@ -75,6 +77,40 @@ def _load_f5_tts():
     _tts = F5TTS(**kwargs)
     logger.info("F5-TTS model ready")
     return _tts
+
+
+def _patch_torchaudio_wav_loader() -> None:
+    import soundfile as sf
+    import torch
+    import torchaudio
+
+    if getattr(torchaudio.load, "_tango_soundfile_wav_loader", False):
+        return
+
+    original_load = torchaudio.load
+
+    def load_with_soundfile_for_wav(uri, *args, **kwargs):
+        path = Path(uri) if isinstance(uri, str | Path) else None
+        if path is None or path.suffix.lower() != ".wav" or not path.exists():
+            return original_load(uri, *args, **kwargs)
+
+        frame_offset = kwargs.get("frame_offset", 0)
+        num_frames = kwargs.get("num_frames", -1)
+        channels_first = kwargs.get("channels_first", True)
+        frames = None if num_frames is None or num_frames < 0 else num_frames
+        data, sample_rate = sf.read(
+            str(path),
+            dtype="float32",
+            always_2d=True,
+            start=frame_offset,
+            frames=frames,
+        )
+        if channels_first:
+            data = data.T
+        return torch.from_numpy(data.copy()), sample_rate
+
+    load_with_soundfile_for_wav._tango_soundfile_wav_loader = True
+    torchaudio.load = load_with_soundfile_for_wav
 
 
 @app.on_event("startup")

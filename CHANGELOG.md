@@ -32,6 +32,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   spec.
 - The F5-TTS sidecar now fails fast with a setup error when Jeremiah's reference
   transcript is missing instead of invoking F5-TTS's internal ASR path.
+- The F5-TTS sidecar now shims local WAV loading through `soundfile` to avoid
+  `torchaudio`/`torchcodec` requiring unavailable `libnvrtc.so.13` on Schubert.
 - Preserved the live Schubert 0-token history flush guard by waiting briefly for
   final LiveKit usage events before closing a history session.
 
