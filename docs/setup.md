@@ -68,6 +68,9 @@ TANGO_F5_TTS_ENABLED=true
 TANGO_F5_TTS_BASE_URL=http://127.0.0.1:8020
 TANGO_F5_TTS_SAMPLE_RATE=24000
 TANGO_F5_TTS_TIMEOUT_SECONDS=60
+# Optional deterministic synthesis seed. Values are bounded to Python's
+# PYTHONHASHSEED range before F5-TTS is called.
+# F5_TTS_SEED=12345
 
 # Database
 DATABASE_URL=postgresql://tango_user:<password>@localhost:5432/tango

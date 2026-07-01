@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import random
 import tempfile
 import time
 from pathlib import Path
@@ -21,6 +22,7 @@ DEFAULT_JEREMIAH_REFERENCE_TEXT_PATH = DEFAULT_VOICE_DIR / "jeremiah_reference.t
 
 F5_TTS_DEVICE = os.getenv("F5_TTS_DEVICE", "cuda")
 F5_TTS_MODEL = os.getenv("F5_TTS_MODEL", "").strip()
+MAX_PYTHON_HASH_SEED = 4_294_967_295
 
 
 def _jeremiah_reference_text() -> str:
@@ -30,6 +32,16 @@ def _jeremiah_reference_text() -> str:
     if DEFAULT_JEREMIAH_REFERENCE_TEXT_PATH.exists():
         return DEFAULT_JEREMIAH_REFERENCE_TEXT_PATH.read_text().strip()
     return ""
+
+
+def _f5_tts_seed() -> int:
+    raw_seed = os.getenv("F5_TTS_SEED")
+    if raw_seed:
+        try:
+            return int(raw_seed) % (MAX_PYTHON_HASH_SEED + 1)
+        except ValueError:
+            logger.warning("Invalid F5_TTS_SEED=%r; using a bounded random seed", raw_seed)
+    return random.randint(0, MAX_PYTHON_HASH_SEED)
 
 
 class VoiceConfig(BaseModel):
@@ -159,6 +171,7 @@ async def synthesize(req: SynthesizeRequest) -> Response:
                 gen_text=req.text,
                 file_wave=output_path,
                 show_info=logger.info,
+                seed=_f5_tts_seed(),
             )
 
         audio_bytes = Path(output_path).read_bytes()

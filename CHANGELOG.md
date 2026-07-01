@@ -37,6 +37,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   transcript is missing instead of invoking F5-TTS's internal ASR path.
 - The F5-TTS sidecar now shims local WAV loading through `soundfile` to avoid
   `torchaudio`/`torchcodec` requiring unavailable `libnvrtc.so.13` on Schubert.
+- F5-TTS synthesis now passes a Python-compatible bounded seed to prevent
+  spawned helper processes from inheriting an invalid `PYTHONHASHSEED`.
 - Preserved the live Schubert 0-token history flush guard by waiting briefly for
   final LiveKit usage events before closing a history session.
 
