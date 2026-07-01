@@ -97,7 +97,7 @@ def _patch_torchaudio_wav_loader() -> None:
         frame_offset = kwargs.get("frame_offset", 0)
         num_frames = kwargs.get("num_frames", -1)
         channels_first = kwargs.get("channels_first", True)
-        frames = None if num_frames is None or num_frames < 0 else num_frames
+        frames = -1 if num_frames is None or num_frames < 0 else num_frames
         data, sample_rate = sf.read(
             str(path),
             dtype="float32",
