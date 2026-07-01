@@ -13,7 +13,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 - SPEC-004 F5-TTS Jeremiah pilot: added a localhost-only `tango-tts.service`
   sidecar on `127.0.0.1:8020`, an F5-TTS FastAPI server, a Jeremiah reference
   audio extraction script, and an idempotent setup helper for Schubert's cu128
-  PyTorch/F5-TTS venv.
+  PyTorch/F5-TTS venv. The helper defaults to PyTorch `2.9.1+cu128` for
+  Schubert's Python 3.14 runtime.
 
 ### Changed
 - Jeremiah now routes TTS through the local F5-TTS adapter when

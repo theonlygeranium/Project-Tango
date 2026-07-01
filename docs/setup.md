@@ -98,6 +98,8 @@ echo "Python compile: OK"
 
 This is required for the SPEC-004 Jeremiah pilot. It uses a separate venv so
 cu128 PyTorch and F5-TTS do not alter the main backend venv.
+The setup helper defaults to `F5_TORCH_VERSION=2.9.1` for Schubert's Python
+3.14 runtime and installs the matching `+cu128` PyTorch wheels.
 
 ```bash
 cd /opt/Project-Tango

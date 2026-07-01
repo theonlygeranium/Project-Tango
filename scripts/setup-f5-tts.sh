@@ -4,6 +4,7 @@ set -euo pipefail
 APP_ROOT=${APP_ROOT:-/opt/Project-Tango}
 VENV_DIR=${F5_TTS_VENV_DIR:-/opt/tts-lab/f5-venv}
 PYTHON_BIN=${PYTHON_BIN:-}
+TORCH_VERSION=${F5_TORCH_VERSION:-2.9.1}
 
 if [[ -z "$PYTHON_BIN" ]]; then
   for candidate in python3.12 python3.11 python3; do
@@ -28,8 +29,8 @@ mkdir -p "$(dirname "$VENV_DIR")"
 "$PYTHON_BIN" -m venv "$VENV_DIR"
 "$VENV_DIR/bin/pip" install --upgrade pip
 "$VENV_DIR/bin/pip" install \
-  torch==2.8.0+cu128 \
-  torchaudio==2.8.0+cu128 \
+  "torch==${TORCH_VERSION}+cu128" \
+  "torchaudio==${TORCH_VERSION}+cu128" \
   --extra-index-url https://download.pytorch.org/whl/cu128
 "$VENV_DIR/bin/pip" install -r "$APP_ROOT/tts_server/requirements.txt"
 
