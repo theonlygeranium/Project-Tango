@@ -65,6 +65,7 @@ LLM via LiteLLM proxy (localhost:4000)
 TTS routing
         ├── Jeremiah pilot → F5-TTS sidecar (127.0.0.1:8020)
         │     Reference voice: /opt/Project-Tango/tts-voices/jeremiah_reference.wav
+        │     Runtime reference: short source-sample clip plus matched transcript
         └── All other personas → ElevenLabs Flash v2.5 (api.us.elevenlabs.io)
         │  use_tts_aligned_transcript=False  (prevents race condition pauses)
         │  Audio stream
@@ -135,7 +136,7 @@ Schema: `tango` (PostgreSQL 18)
 |---|---|---|---|---|---|
 | `therapy` | Damian | ElevenLabs `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | Flux | `en-US` |
 | `general-info` (Chris) | Chris (British) | ElevenLabs `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | Flux | `en-US` |
-| `general-info` (Jeremiah) | Jeremiah | F5-TTS pilot, reference from `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | Flux | `en-US` |
+| `general-info` (Jeremiah) | Jeremiah | F5-TTS pilot, short source-sample reference from `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | Flux | `en-US` |
 | `general-info` (Jacob) | Jacob | ElevenLabs `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | Flux | `en-US` |
 | `meditation` | Nathaniel | ElevenLabs `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | Flux | `en-US` |
 | `pinoy-pride` (Mama Lulu) | Mama Lulu | ElevenLabs `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | Nova-3 | `tl` |

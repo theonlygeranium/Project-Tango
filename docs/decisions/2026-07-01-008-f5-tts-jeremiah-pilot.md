@@ -34,6 +34,9 @@ Run F5-TTS as a dedicated FastAPI sidecar named `tango-tts.service`, bound only 
 - `tango-tts.service` must be installed and healthy for Jeremiah's F5 route.
 - `/opt/tts-lab/f5-venv` is a new isolated runtime dependency on Schubert.
 - `/opt/Project-Tango/tts-voices/jeremiah_reference.wav` must exist before enabling the pilot.
+- The installed F5-TTS preprocessing path clips reference audio over 12 seconds;
+  Jeremiah's runtime reference must stay short and transcript-matched until the
+  inference stack explicitly supports longer aligned references.
 - If F5-TTS quality or latency is poor, Jeremiah can fall back to ElevenLabs without affecting other personas.
 
 ## References

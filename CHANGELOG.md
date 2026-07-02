@@ -39,6 +39,10 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   instead of a long excerpt whose transcript can drift from F5-TTS preprocessing.
 
 ### Fixed
+- Restored Jeremiah's F5-TTS reference extractor after commit `a657411b`
+  encoded it as non-executable Python, and now build the runtime reference from
+  the uploaded ElevenLabs source sample with Deepgram transcript validation
+  while respecting the deployed F5-TTS 12-second preprocessing limit.
 - The F5-TTS sidecar now calls the installed `f5_tts.api.F5TTS.infer()`
   method instead of the unavailable sketch `generate()` method from the design
   spec.
