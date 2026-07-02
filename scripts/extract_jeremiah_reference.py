@@ -22,7 +22,7 @@ APP_ROOT = Path(os.getenv("TANGO_APP_ROOT", "/opt/Project-Tango"))
 OUTPUT_DIR = APP_ROOT / "tts-voices"
 OUTPUT_PATH = OUTPUT_DIR / "jeremiah_reference.wav"
 REFERENCE_TEXT_PATH = OUTPUT_DIR / "jeremiah_reference.txt"
-JEREMIAH_VOICE_ID = "EqHdTYoEuDQCxN1CVbi0"
+JEREMIAH_VOICE_ID = "HTWtz3n5aNvKG6QpVzv1"  # Jeff Geronimo - Instant Voice (IVC)
 
 SAMPLE_RATE = 24000
 CHANNELS = 1
