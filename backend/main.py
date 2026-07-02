@@ -291,11 +291,11 @@ def _build_f5_tts_adapter(persona: Persona) -> Any:
                     actual_sample_rate = wf.getframerate()
                     actual_channels = wf.getnchannels()
                     pcm_frames = wf.readframes(wf.getnframes())
-            except Exception:
-                # Fallback: WAV parse failed, pass raw bytes with declared values
-                actual_sample_rate = self._tts.sample_rate
-                actual_channels = self._tts.num_channels
-                pcm_frames = response.content
+            except Exception as exc:
+                raise APIError(
+                    message="F5-TTS returned audio that could not be parsed as PCM WAV",
+                    body=response.content[:64].hex(),
+                ) from exc
 
             output_emitter.initialize(
                 request_id=response.headers.get("x-request-id") or utils.shortuuid(),

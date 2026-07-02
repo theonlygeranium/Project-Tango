@@ -28,6 +28,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 - Generated `tts-voices/` F5-TTS reference artifacts are now ignored by git.
 - The deploy script now builds and copies Next.js frontend artifacts as
   `z121532` so `.next` remains writable by the `tango-web.service` user.
+- The Jeremiah reference extractor now saves a short, aligned reference clip
+  instead of a long excerpt whose transcript can drift from F5-TTS preprocessing.
 
 ### Fixed
 - The F5-TTS sidecar now calls the installed `f5_tts.api.F5TTS.infer()`
@@ -39,6 +41,11 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   `torchaudio`/`torchcodec` requiring unavailable `libnvrtc.so.13` on Schubert.
 - F5-TTS synthesis now passes a Python-compatible bounded seed to prevent
   spawned helper processes from inheriting an invalid `PYTHONHASHSEED`.
+- Jeremiah F5-TTS output clarity now depends on a transcript matched to the
+  actual short reference audio, preventing valid PCM output from sounding like
+  garbled non-words.
+- The LiveKit F5-TTS adapter now rejects unreadable WAV data instead of falling
+  back to pushing container bytes as raw PCM.
 - Preserved the live Schubert 0-token history flush guard by waiting briefly for
   final LiveKit usage events before closing a history session.
 

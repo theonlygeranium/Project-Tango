@@ -17,18 +17,12 @@ JEREMIAH_VOICE_ID = "EqHdTYoEuDQCxN1CVbi0"
 SAMPLE_RATE = 24000
 CHANNELS = 1
 SAMPLE_WIDTH = 2
+REFERENCE_DURATION_SECONDS = 12
+MIN_REFERENCE_DURATION_SECONDS = 5
 DEEPGRAM_LISTEN_URL = "https://api.deepgram.com/v1/listen"
 REFERENCE_TEXT = (
-    "Hi, I'm Jeremiah. I'm an agent whose voice is based on my creator, Jeff Geronimo. "
-    "I'm here to help - ask me anything and I'll give you a straight answer. "
-    "I don't hedge, I don't over-explain, and I respect your time. "
-    "Whether it's a quick question or something you really want to dig into, I'm ready. "
-    "What's on your mind? "
-    "For this voice sample, I'll keep a steady pace and a natural rhythm. "
-    "I can sound direct without sounding cold, friendly without wasting words, and calm without dragging the sentence out. "
-    "If you ask me to solve a problem, I'll start with the practical answer, then give you just enough context to make a good decision. "
-    "If the situation needs nuance, I'll say that plainly too. "
-    "The point is simple: useful help, spoken clearly, with a voice that feels familiar and grounded."
+    "Hi, I'm Jeremiah. I'm an agent whose voice is based on Jeff Geronimo. "
+    "Ask me anything and I'll give you a clear, direct answer."
 )
 
 
@@ -108,7 +102,7 @@ def convert_audio_to_reference(source_path: Path) -> float:
             "-i",
             str(source_path),
             "-t",
-            "45",
+            str(REFERENCE_DURATION_SECONDS),
             "-ar",
             str(SAMPLE_RATE),
             "-ac",
@@ -222,8 +216,10 @@ def main() -> int:
     print(f"Saved: {OUTPUT_PATH}")
     print(f"Transcript: {REFERENCE_TEXT_PATH}")
     print(f"Duration: {duration_s:.1f}s")
-    if duration_s < 30:
-        raise SystemExit("Reference audio is shorter than 30 seconds")
+    if duration_s < MIN_REFERENCE_DURATION_SECONDS:
+        raise SystemExit(
+            f"Reference audio is shorter than {MIN_REFERENCE_DURATION_SECONDS} seconds"
+        )
     return 0
 
 

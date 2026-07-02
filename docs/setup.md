@@ -114,7 +114,7 @@ Verify the reference audio:
 
 ```bash
 python3 -c "import wave; w=wave.open('/opt/Project-Tango/tts-voices/jeremiah_reference.wav'); print(f'{w.getnframes()/w.getframerate():.1f}s')"
-# Expected: >= 30.0s
+# Expected: roughly 12.0s and at least 5.0s
 ```
 
 If Jeremiah's ElevenLabs voice is not fine-tuned for text generation, the
@@ -122,6 +122,9 @@ extractor falls back to the existing ElevenLabs voice sample audio. When
 `DEEPGRAM_API_KEY` is available, the extractor transcribes that sample with
 Deepgram `nova-3` and writes `tts-voices/jeremiah_reference.txt` so F5-TTS does
 not need to run its internal Whisper transcription path.
+The saved reference is intentionally short so the audio and transcript remain
+aligned after F5-TTS preprocessing; long excerpts with long transcripts can make
+generated speech sound garbled even when the WAV container is valid.
 
 The sidecar loads the local reference WAV through `soundfile` because
 `torchaudio` 2.9 routes file loading through `torchcodec`, which requires a CUDA
