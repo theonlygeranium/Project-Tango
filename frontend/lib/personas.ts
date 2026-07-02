@@ -49,7 +49,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     label: 'General Info',
     displayName: 'Jeremiah',
     roleDescription: 'General assistant',
-    defaultLlmModel: 'writer/palmyra-x5-voice',
+    defaultLlmModel: 'local/qwen3-fast',
     ttsBackend: 'f5-tts',
     initials: 'JE',
     accentClassName:

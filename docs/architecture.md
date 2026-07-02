@@ -1,7 +1,7 @@
 # Project Tango — System Architecture
 
 > Keep this document in sync with the actual state of Schubert. Do not add aspirational content.
-> Last updated: 2026-07-01 — SPEC-004 F5-TTS Jeremiah pilot
+> Last updated: 2026-07-02 — Jeremiah local Qwen + F5-TTS routing
 
 ---
 
@@ -135,7 +135,7 @@ Schema: `tango` (PostgreSQL 18)
 |---|---|---|---|---|---|
 | `therapy` | Damian | ElevenLabs `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | Flux | `en-US` |
 | `general-info` (Chris) | Chris (British) | ElevenLabs `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | Flux | `en-US` |
-| `general-info` (Jeremiah) | Jeremiah | F5-TTS pilot, reference from `EqHdTYoEuDQCxN1CVbi0` | `writer/palmyra-x5-voice` | Flux | `en-US` |
+| `general-info` (Jeremiah) | Jeremiah | F5-TTS pilot, reference from `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | Flux | `en-US` |
 | `general-info` (Jacob) | Jacob | ElevenLabs `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | Flux | `en-US` |
 | `meditation` | Nathaniel | ElevenLabs `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | Flux | `en-US` |
 | `pinoy-pride` (Mama Lulu) | Mama Lulu | ElevenLabs `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | Nova-3 | `tl` |

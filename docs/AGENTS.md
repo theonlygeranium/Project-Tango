@@ -92,7 +92,7 @@ Do not use `ollama/qwen3.6`, `ollama/qwen3.6:latest`, or `writer/palmyra` as Tan
 | --- | --- | --- | --- | --- |
 | Therapy | Damian | `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | `en-US` |
 | General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | `en-US` |
-| General Info | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` via F5-TTS pilot | `writer/palmyra-x5-voice` | `en-US` |
+| General Info | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` via F5-TTS pilot | `local/qwen3-fast` | `en-US` |
 | General Info | Jacob | `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | `en-US` |
 | General Info | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | `tl` |
 | Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | `en-US` |

@@ -99,7 +99,7 @@ PostgreSQL 18  (schema: tango — session & turn history)
 |---|---|---|---|---|
 | Therapy | Damian | ElevenLabs `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | Flux EN |
 | General Info | Chris (British) | ElevenLabs `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | Flux EN |
-| General Info | Jeremiah | F5-TTS pilot from ElevenLabs reference `EqHdTYoEuDQCxN1CVbi0` | `writer/palmyra-x5-voice` | Flux EN |
+| General Info | Jeremiah | F5-TTS pilot from ElevenLabs reference `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | Flux EN |
 | General Info | Jacob | ElevenLabs `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | Flux EN |
 | Meditation | Nathaniel | ElevenLabs `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | Flux EN |
 | Pinoy Pride | Mama Lulu | ElevenLabs `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | Nova-3 TL |

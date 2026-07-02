@@ -23,6 +23,13 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 - Jeremiah now routes TTS through the local F5-TTS adapter when
   `TANGO_F5_TTS_ENABLED=true`; all other personas remain on ElevenLabs Flash
   v2.5, and Jeremiah can fall back to ElevenLabs by disabling the pilot env flag.
+- Jeremiah now defaults to the local LiteLLM alias `local/qwen3-fast` while
+  keeping F5-TTS for the self-hosted voice route.
+- Jeremiah's voice-session prompt now avoids describing the live agent as
+  text-only and keeps model answers grounded in the active LiteLLM route and
+  F5-TTS voice engine.
+- Jeremiah now passes Deepgram keyterms for his name and model vocabulary to
+  improve recognition of phrases like `Jeremiah`, `Qwen`, and `Project Tango`.
 - Deployment, preflight, setup, architecture, and recovery docs now include the
   `tango-tts.service` sidecar and localhost port `8020`.
 - Generated `tts-voices/` F5-TTS reference artifacts are now ignored by git.
