@@ -39,6 +39,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   instead of a long excerpt whose transcript can drift from F5-TTS preprocessing.
 
 ### Fixed
+- Formatted the persona selector's imports and utility classes so the
+  production Next.js build passes Prettier validation.
 - Restored Jeremiah's F5-TTS reference extractor after commit `a657411b`
   encoded it as non-executable Python, and now build the runtime reference from
   the uploaded ElevenLabs source sample with Deepgram transcript validation
