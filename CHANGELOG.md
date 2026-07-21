@@ -39,6 +39,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   instead of a long excerpt whose transcript can drift from F5-TTS preprocessing.
 
 ### Fixed
+- Completed the persona grid's model-selection wiring and consolidated its model
+  imports so the production frontend type-check passes cleanly.
 - Formatted the persona selector's imports and utility classes so the
   production Next.js build passes Prettier validation.
 - Restored Jeremiah's F5-TTS reference extractor after commit `a657411b`

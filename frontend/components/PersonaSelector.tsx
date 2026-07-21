@@ -1,7 +1,6 @@
 'use client';
 
-import { LLM_MODEL_OPTIONS, type LlmModelId } from '@/lib/llm-models';
-import { type LlmModelSelectionId } from '@/lib/llm-models';
+import { LLM_MODEL_OPTIONS, type LlmModelId, type LlmModelSelectionId } from '@/lib/llm-models';
 import { type PersonaId, TANGO_PERSONAS } from '@/lib/personas';
 import { cn } from '@/lib/utils';
 
@@ -49,7 +48,7 @@ export function PersonaSelector({
             aria-checked={selected}
             onClick={() => onPersonaChange(persona.id)}
             className={cn(
-              'group bg-background/70 relative flex min-h-[5.5rem] w-full flex-col items-start gap-1.5 rounded-lg border p-3 text-left shadow-sm backdrop-blur-md transition',
+              'bg-background/70 group relative flex min-h-[5.5rem] w-full flex-col items-start gap-1.5 rounded-lg border p-3 text-left shadow-sm backdrop-blur-md transition',
               'hover:border-ring/45 hover:bg-muted/80 focus-visible:ring-ring/60 focus-visible:ring-2 focus-visible:outline-none',
               'disabled:pointer-events-none disabled:opacity-60',
               selected ? 'border-primary/70 bg-primary/10 ring-primary/20 ring-1' : 'border-border'

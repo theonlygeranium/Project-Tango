@@ -217,6 +217,7 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
             </span>
             <PersonaSelector
               selectedPersonaId={selectedPersonaId}
+              selectedLlmModelId={selectedLlmModelId}
               onPersonaChange={onPersonaChange}
               disabled={disabled}
             />
