@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import dynamic from 'next/dynamic';
 import { FaReact } from 'react-icons/fa';
+import dynamic from 'next/dynamic';
 import { useReducedMotion } from 'motion/react';
 import { LlmModelSelector } from '@/components/LlmModelSelector';
 import { LoopBanner } from '@/components/LoopBanner';
@@ -197,11 +197,7 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
         inert={disabled}
         className="fixed inset-0 z-10 mx-auto flex h-svh flex-col items-center justify-start overflow-y-auto px-3 pt-[calc(env(safe-area-inset-top)+3.25rem)] pb-[calc(env(safe-area-inset-bottom)+4.5rem)] text-center sm:justify-center sm:overflow-hidden sm:p-0"
       >
-        <AnimatedSquares
-          direction="diagonal"
-          speed={0.5}
-          squareSize={42}
-        />
+        <AnimatedSquares direction="diagonal" speed={0.5} squareSize={42} />
 
         <div className="pointer-events-none relative z-10 flex w-full max-w-[min(94vw,64rem)] flex-col items-center gap-3 p-3 sm:gap-4 sm:p-4">
           <h1 className="text-foreground font-mono text-[6rem] leading-[0.9] sm:text-[7rem] md:text-[8rem] lg:text-[10rem]">
@@ -256,8 +252,8 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
               className="pointer-events-auto underline underline-offset-4 hover:text-sky-300 dark:hover:text-sky-300"
             >
               EdStratum Labs
-            </a>
-            {' '}&mdash; Proprietary & Confidential
+            </a>{' '}
+            &mdash; Proprietary & Confidential
           </p>
           <p className="text-foreground/60">
             Project Tango uses{' '}
