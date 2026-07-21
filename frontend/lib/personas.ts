@@ -4,6 +4,7 @@ export type PersonaId =
   | 'therapy'
   | 'general-info'
   | 'jeremiah'
+  | 'jeremiah-v2'
   | 'jacob'
   | 'mama-lulu'
   | 'meditation'
@@ -54,6 +55,17 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     initials: 'JE',
     accentClassName:
       'border-amber-500/70 bg-amber-500/10 text-amber-700 dark:border-amber-300/70 dark:bg-amber-300/10 dark:text-amber-100',
+  },
+  {
+    id: 'jeremiah-v2',
+    label: 'General Info',
+    displayName: 'Jeremiah V2',
+    roleDescription: 'General assistant',
+    defaultLlmModel: 'local/qwen3-fast',
+    ttsBackend: 'elevenlabs',
+    initials: 'J2',
+    accentClassName:
+      'border-orange-500/70 bg-orange-500/10 text-orange-700 dark:border-orange-300/70 dark:bg-orange-300/10 dark:text-orange-100',
   },
   {
     id: 'jacob',
