@@ -1,14 +1,21 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { FaReact } from 'react-icons/fa';
+import { useReducedMotion } from 'motion/react';
 import { LlmModelSelector } from '@/components/LlmModelSelector';
 import { LoopBanner } from '@/components/LoopBanner';
 import { PersonaSelector } from '@/components/PersonaSelector';
-import { TippingButton } from '@/components/TippingButton';
 import { Button } from '@/components/ui/button';
 import { type LlmModelSelectionId } from '@/lib/llm-models';
 import { type PersonaId } from '@/lib/personas';
+
+// Lazy-load the heavy TippingButton (~15 KB) — deferred until after first paint
+const TippingButton = dynamic(
+  () => import('@/components/TippingButton').then((m) => m.TippingButton),
+  { ssr: false }
+);
 
 interface AnimatedSquaresProps {
   direction?: 'diagonal' | 'up' | 'right' | 'down' | 'left';
@@ -21,11 +28,10 @@ interface AnimatedSquaresProps {
 const AnimatedSquares: React.FC<AnimatedSquaresProps> = ({
   direction = 'right',
   speed = 0.5,
-  borderColor = '#333',
   squareSize = 40,
-  hoverFillColor = '#222',
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const prefersReducedMotion = useReducedMotion();
   const animationState = useRef({
     requestRef: null as number | null,
     gridOffset: { x: 0, y: 0 },
@@ -39,23 +45,14 @@ const AnimatedSquares: React.FC<AnimatedSquaresProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Read palette from CSS custom properties — single source of truth in globals.css
     const getCanvasPalette = () => {
-      const isDark = document.documentElement.classList.contains('dark');
-
-      if (isDark) {
-        return {
-          border: borderColor,
-          hover: hoverFillColor,
-          center: 'rgba(18, 18, 18, 0)',
-          edge: 'rgba(18, 18, 18, 1)',
-        };
-      }
-
+      const style = getComputedStyle(document.documentElement);
       return {
-        border: 'rgba(0, 44, 242, 0.16)',
-        hover: 'rgba(0, 44, 242, 0.06)',
-        center: 'rgba(249, 249, 246, 0)',
-        edge: 'rgba(249, 249, 246, 1)',
+        border: style.getPropertyValue('--canvas-grid-border').trim(),
+        hover: style.getPropertyValue('--canvas-grid-hover').trim(),
+        center: style.getPropertyValue('--canvas-grid-center').trim(),
+        edge: style.getPropertyValue('--canvas-grid-edge').trim(),
       };
     };
 
@@ -116,10 +113,8 @@ const AnimatedSquares: React.FC<AnimatedSquaresProps> = ({
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
       const state = animationState.current;
-
       const hoveredX = Math.floor((mouseX + state.gridOffset.x) / squareSize);
       const hoveredY = Math.floor((mouseY + state.gridOffset.y) / squareSize);
-
       state.hoveredSquare = { x: hoveredX, y: hoveredY };
     };
 
@@ -141,7 +136,14 @@ const AnimatedSquares: React.FC<AnimatedSquaresProps> = ({
     };
 
     resizeCanvas();
-    updateAnimation();
+
+    // Respect prefers-reduced-motion: draw a static grid, skip rAF loop
+    if (prefersReducedMotion) {
+      drawGrid();
+    } else {
+      updateAnimation();
+    }
+
     window.addEventListener('resize', resizeCanvas);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('touchmove', handleTouchMove, { passive: true });
@@ -157,7 +159,7 @@ const AnimatedSquares: React.FC<AnimatedSquaresProps> = ({
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('mouseleave', handleMouseLeave);
     };
-  }, [direction, speed, borderColor, squareSize, hoverFillColor]);
+  }, [direction, speed, squareSize, prefersReducedMotion]);
 
   return <canvas ref={canvasRef} className="absolute inset-0 -z-10 h-full w-full" />;
 };
@@ -198,9 +200,7 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
         <AnimatedSquares
           direction="diagonal"
           speed={0.5}
-          borderColor="#333"
           squareSize={42}
-          hoverFillColor="#222"
         />
 
         <div className="pointer-events-none relative z-10 flex w-full max-w-[min(94vw,64rem)] flex-col items-center gap-3 p-3 sm:gap-4 sm:p-4">
