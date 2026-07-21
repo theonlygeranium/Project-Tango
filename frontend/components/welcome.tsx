@@ -248,7 +248,16 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
 
         <div className="pointer-events-none fixed bottom-6 left-1/2 flex w-full max-w-prose -translate-x-1/2 flex-col items-center gap-1 px-4 text-center text-xs">
           <p className="font-medium text-sky-500 dark:text-sky-400">
-            Developed by Geronimo AI &mdash; Proprietary & Confidential
+            Developed by{' '}
+            <a
+              href="https://edstratumlabs.ai/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pointer-events-auto underline underline-offset-4 hover:text-sky-300 dark:hover:text-sky-300"
+            >
+              EdStratum Labs
+            </a>
+            {' '}&mdash; Proprietary & Confidential
           </p>
           <p className="text-foreground/60">
             Project Tango uses{' '}
