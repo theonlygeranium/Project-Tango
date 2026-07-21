@@ -63,6 +63,12 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Canvas animated background (light mode) */
+  --canvas-grid-border: rgba(0, 44, 242, 0.16);
+  --canvas-grid-hover: rgba(0, 44, 242, 0.06);
+  --canvas-grid-center: rgba(249, 249, 246, 0);
+  --canvas-grid-edge: rgba(249, 249, 246, 1);
 }
 
 .dark {
@@ -124,6 +130,12 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.439 0 0);
+
+  /* Canvas animated background (dark mode) */
+  --canvas-grid-border: #333333;
+  --canvas-grid-hover: #222222;
+  --canvas-grid-center: rgba(18, 18, 18, 0);
+  --canvas-grid-edge: rgba(18, 18, 18, 1);
 }
 
 @theme inline {
