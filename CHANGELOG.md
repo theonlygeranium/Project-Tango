@@ -10,6 +10,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 ## [Unreleased]
 
 ### Added
+- Groq Llama 4 Scout is now a source-controlled LiteLLM alias for Tango, and a
+  universal Layer 1 voice-interface prompt is prepended to every persona.
 - SPEC-004 F5-TTS Jeremiah pilot: added a localhost-only `tango-tts.service`
   sidecar on `127.0.0.1:8020`, an F5-TTS FastAPI server, a Jeremiah reference
   audio extraction script, and an idempotent setup helper for Schubert's cu128
@@ -20,6 +22,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   and transcribes that sample with Deepgram before F5-TTS synthesis.
 
 ### Changed
+- Mama Lulu and Tita Baby now default to `groq/llama4-scout` while retaining
+  Deepgram Nova-3 monolingual Tagalog speech recognition.
 - Jeremiah now routes TTS through the local F5-TTS adapter when
   `TANGO_F5_TTS_ENABLED=true`; all other personas remain on ElevenLabs Flash
   v2.5, and Jeremiah can fall back to ElevenLabs by disabling the pilot env flag.

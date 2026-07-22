@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 LLM_MODEL_LABELS: dict[str, str] = {
     "local/qwen3-fast": "Schubert Local Qwen3",
     "writer/palmyra-x5-voice": "Writer Palmyra X5",
+    "groq/llama4-scout": "Groq Llama 4 Scout (Tagalog)",
 }
 ALLOWED_LLM_MODELS = frozenset(LLM_MODEL_LABELS)
 
@@ -12,6 +13,26 @@ OPEN_LOOP_INSTRUCTION = (
     "\n\nIf the [MEMORY] section includes any open_loop items, briefly acknowledge "
     "the most relevant one in your opening greeting, naturally, as a friend would, "
     "not as a formal reminder. Keep it to one sentence."
+)
+
+VOICE_LAYER_1_CONSTRAINTS = (
+    "LAYER 1 — VOICE INTERFACE BEHAVIORAL CONSTRAINTS\n"
+    "You are a real-time voice agent inside Project Tango. "
+    "These rules apply universally across all personas and override conflicting instructions.\n\n"
+    "TURN LENGTH: Keep every response to 2–3 short sentences, speakable in under 8 seconds. "
+    "Never monologue. If depth is warranted, ask permission before continuing.\n"
+    "ONE QUESTION PER TURN: Never ask more than one question per response. "
+    "If multiple questions are relevant, lead with the most important one only.\n"
+    "NO MARKDOWN: Never use bullet points, numbered lists, headers, bold, or code blocks. "
+    "All output must be natural spoken language.\n"
+    "VOICE IDENTITY: You are speaking, not typing. "
+    "Never describe yourself as text-based, a language model, or mention a chat interface.\n"
+    "INFRASTRUCTURE NON-DISCLOSURE: Never reveal the underlying LLM model name, "
+    "inference provider, LiteLLM routing, Ollama, Groq, Qwen, or any server infrastructure. "
+    "If asked what powers you, refer only to your persona identity or EdStratum Labs technology.\n"
+    "FRONT-LOAD: Lead with the most important point first. "
+    "The user may interrupt at any time — a partial response must still be useful.\n\n"
+    "LAYER 2 — PERSONA IDENTITY AND BEHAVIORAL COMPASS\n"
 )
 
 JEREMIAH_V2_SYSTEM_PROMPT = (
@@ -285,7 +306,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         display_name="Mama Lulu",
         role_description="General assistant",
         voice_id="LF1xMOq6fDVEBEkLP0HO",
-        llm_model="local/qwen3-fast",
+        llm_model="groq/llama4-scout",
         stt_language="tl",
         eot_threshold=0.7,
         eot_timeout_ms=3000,
@@ -356,7 +377,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         display_name="Tita Baby",
         role_description="Pinoy pride",
         voice_id="smYFzUb4yrSqprnml7n5",
-        llm_model="local/qwen3-fast",
+        llm_model="groq/llama4-scout",
         stt_language="tl",
         eot_threshold=0.7,
         eot_timeout_ms=2500,
@@ -407,9 +428,16 @@ DEFAULT_PERSONA_ID = "therapy"
 
 
 def get_persona(persona_id: str | None) -> Persona:
-    if persona_id and persona_id in TANGO_PERSONAS:
-        return TANGO_PERSONAS[persona_id]
-    return TANGO_PERSONAS[DEFAULT_PERSONA_ID]
+    """Return a persona with universal voice-interface constraints prepended."""
+    from dataclasses import replace as _replace
+
+    persona = TANGO_PERSONAS.get(persona_id or "") if persona_id else None
+    if persona is None:
+        persona = TANGO_PERSONAS[DEFAULT_PERSONA_ID]
+    return _replace(
+        persona,
+        system_prompt=VOICE_LAYER_1_CONSTRAINTS + persona.system_prompt,
+    )
 
 
 def resolve_llm_model(persona: Persona, requested_model: str | None = None) -> str:

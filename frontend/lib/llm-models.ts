@@ -1,4 +1,4 @@
-export type LlmModelId = 'local/qwen3-fast' | 'writer/palmyra-x5-voice';
+export type LlmModelId = 'local/qwen3-fast' | 'writer/palmyra-x5-voice' | 'groq/llama4-scout';
 export type LlmModelSelectionId = 'persona-default' | LlmModelId;
 
 export type LlmModelOption = {
@@ -26,6 +26,11 @@ export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
     label: 'Writer Palmyra X5',
     shortLabel: 'Palmyra X5',
   },
+  {
+    id: 'groq/llama4-scout',
+    label: 'Groq Llama 4 Scout',
+    shortLabel: 'Groq Scout',
+  },
 ];
 
 const LLM_MODEL_SELECTION_IDS = new Set<string>(LLM_MODEL_OPTIONS.map((option) => option.id));
@@ -37,7 +42,11 @@ export function isLlmModelSelectionId(
 }
 
 export function isLlmModelId(value: string | null | undefined): value is LlmModelId {
-  return value === 'local/qwen3-fast' || value === 'writer/palmyra-x5-voice';
+  return (
+    value === 'local/qwen3-fast' ||
+    value === 'writer/palmyra-x5-voice' ||
+    value === 'groq/llama4-scout'
+  );
 }
 
 export function llmModelRequestValue(selectionId: LlmModelSelectionId): LlmModelId | undefined {

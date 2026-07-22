@@ -82,7 +82,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     label: 'General Info',
     displayName: 'Mama Lulu',
     roleDescription: 'General assistant',
-    defaultLlmModel: 'local/qwen3-fast',
+    defaultLlmModel: 'groq/llama4-scout',
     initials: 'ML',
     accentClassName:
       'border-fuchsia-500/70 bg-fuchsia-500/10 text-fuchsia-700 dark:border-fuchsia-300/70 dark:bg-fuchsia-300/10 dark:text-fuchsia-100',
@@ -102,7 +102,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     label: 'Tita Baby',
     displayName: 'Tita Baby',
     roleDescription: 'The Ultimate Filipina Tita',
-    defaultLlmModel: 'local/qwen3-fast',
+    defaultLlmModel: 'groq/llama4-scout',
     initials: 'TB',
     accentClassName:
       'border-rose-500/70 bg-rose-500/10 text-rose-700 dark:border-rose-300/70 dark:bg-rose-300/10 dark:text-rose-100',
