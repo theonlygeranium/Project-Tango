@@ -63,6 +63,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   instead of a long excerpt whose transcript can drift from F5-TTS preprocessing.
 
 ### Fixed
+- Anonymous protected-page redirects now use Tango's configured public origin
+  instead of Next.js's localhost listener origin behind Caddy and Cloudflare.
 - Restored the GitHub deployment path by matching the runner's actual
   `schubert` label instead of its display name.
 - Standalone deployment continues copying Next.js static and public assets so
