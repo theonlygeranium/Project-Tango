@@ -260,7 +260,12 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
           </Button>
         </div>
 
-        <div className="pointer-events-none fixed bottom-6 left-1/2 flex w-full max-w-prose -translate-x-1/2 flex-col items-center gap-1 px-4 text-center text-xs">
+        <div
+          className={cn(
+            'pointer-events-none flex w-full max-w-prose flex-col items-center gap-1 px-4 text-center text-xs',
+            isAdmin ? 'relative z-10 mt-1 pb-4' : 'fixed bottom-6 left-1/2 -translate-x-1/2'
+          )}
+        >
           <p className="font-medium text-sky-500 dark:text-sky-400">
             Developed by{' '}
             <a
@@ -287,13 +292,15 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
           </p>
         </div>
 
-        <TippingButton
-          onTip={handleTipComplete}
-          coinIcon={<FaReact size="100%" color="currentColor" />}
-          instructionText="Click to show appreciation"
-        >
-          Support Creator
-        </TippingButton>
+        {!isAdmin && (
+          <TippingButton
+            onTip={handleTipComplete}
+            coinIcon={<FaReact size="100%" color="currentColor" />}
+            instructionText="Click to show appreciation"
+          >
+            Support Creator
+          </TippingButton>
+        )}
       </div>
     );
   }

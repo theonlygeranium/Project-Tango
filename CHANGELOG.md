@@ -71,6 +71,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 ### Fixed
 - Compact admin persona controls use readable short model names in the card
   while retaining full backend labels in the dropdown and accessible name.
+- The admin footer now follows the expanded persona grid, and its decorative
+  appreciation widget is omitted so neither can cover model controls on short
+  viewports.
 - Anonymous protected-page redirects now use Tango's configured public origin
   instead of Next.js's localhost listener origin behind Caddy and Cloudflare.
 - Restored the GitHub deployment path by matching the runner's actual
