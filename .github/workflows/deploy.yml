@@ -5,23 +5,68 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      force_remote:
+        description: 'Force remote deployment via Tailscale OAuth (use if self-hosted runner is offline)'
+        required: false
+        default: 'false'
+        type: boolean
 
 jobs:
-  deploy:
+  # ── PRIMARY PATH ──────────────────────────────────────────────────────────────
+  # Runs directly on Schubert via the self-hosted runner.
+  # No Tailscale, no SSH — LAN-native, fastest path.
+  deploy-local:
+    name: Deploy (self-hosted · LAN)
+    runs-on: [self-hosted, schubert-local]
+    if: ${{ github.event.inputs.force_remote != 'true' }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Write frontend .env.local
+        run: |
+          printf 'NEXT_PUBLIC_LIVEKIT_URL=wss://project-tango-0xs3szq3.livekit.cloud\nNEXT_PUBLIC_SITE_URL=https://project-tango.schubert.life\nNEXT_PUBLIC_API_BASE_URL=https://tango-api.schubert.life\nNEXT_PUBLIC_CONN_DETAILS_ENDPOINT=https://tango-api.schubert.life/api/connection-details\n' \
+            > /opt/Project-Tango/frontend/.env.local
+
+      - name: Run deploy script
+        run: |
+          set -e
+          cd /opt/Project-Tango
+          if [ -f .env ]; then
+            cp .env /tmp/project-tango.env.backup
+          fi
+          git pull origin main
+          if [ -f /tmp/project-tango.env.backup ]; then
+            mv /tmp/project-tango.env.backup .env
+            chmod 600 .env
+          fi
+          sudo bash scripts/deploy.sh
+
+  # ── FALLBACK PATH ─────────────────────────────────────────────────────────────
+  # Runs on a GitHub-hosted runner and connects to Schubert over Tailscale OAuth.
+  # Use when the self-hosted runner is offline (trigger via workflow_dispatch →
+  # force_remote: true).
+  deploy-remote:
+    name: Deploy (remote · Tailscale OAuth fallback)
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.force_remote == 'true' }}
     steps:
       - name: Validate required secrets
         run: |
           missing=""
-          if [ -z "${{ secrets.TAILSCALE_AUTHKEY }}" ]; then
-            missing="$missing TAILSCALE_AUTHKEY"
+          if [ -z "${{ secrets.TS_OAUTH_CLIENT_ID }}" ]; then
+            missing="$missing TS_OAUTH_CLIENT_ID"
+          fi
+          if [ -z "${{ secrets.TS_OAUTH_SECRET }}" ]; then
+            missing="$missing TS_OAUTH_SECRET"
           fi
           if [ -z "${{ secrets.SCHUBERT_SSH_KEY }}" ]; then
             missing="$missing SCHUBERT_SSH_KEY"
           fi
           if [ -n "$missing" ]; then
-            echo "ERROR: The following required secrets are missing or empty:$missing"
-            echo "Please set them in Settings > Secrets and variables > Actions."
+            echo "ERROR: Missing required secrets:$missing"
             exit 1
           fi
           echo "All required secrets present."
@@ -29,10 +74,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Connect to Tailscale
+      - name: Connect to Tailscale (OAuth · non-expiring)
         uses: tailscale/github-action@v3
         with:
-          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
           args: --accept-routes
 
       - name: Write SSH key
@@ -42,28 +89,16 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keygen -l -f ~/.ssh/deploy_key && echo "KEY VALID"
 
-      - name: Write frontend .env.local on Schubert
-        run: |
-          ssh -i ~/.ssh/deploy_key \
-            -o StrictHostKeyChecking=no \
-            -o ConnectTimeout=30 \
-            z121532@100.86.47.6 \
-            "printf 'NEXT_PUBLIC_LIVEKIT_URL=wss://project-tango-0xs3szq3.livekit.cloud\nNEXT_PUBLIC_SITE_URL=https://project-tango.schubert.life\nNEXT_PUBLIC_API_BASE_URL=https://tango-api.schubert.life\nNEXT_PUBLIC_CONN_DETAILS_ENDPOINT=https://tango-api.schubert.life/api/connection-details\n' > /opt/Project-Tango/frontend/.env.local"
-
-      - name: Deploy via Tailscale SSH
+      - name: Deploy to Schubert (single SSH session)
         run: |
           ssh -i ~/.ssh/deploy_key \
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout=30 \
             z121532@100.86.47.6 \
             'set -e
+            printf "NEXT_PUBLIC_LIVEKIT_URL=wss://project-tango-0xs3szq3.livekit.cloud\nNEXT_PUBLIC_SITE_URL=https://project-tango.schubert.life\nNEXT_PUBLIC_API_BASE_URL=https://tango-api.schubert.life\nNEXT_PUBLIC_CONN_DETAILS_ENDPOINT=https://tango-api.schubert.life/api/connection-details\n" > /opt/Project-Tango/frontend/.env.local
             cd /opt/Project-Tango
-            if [ -f .env ]; then
-              cp .env /tmp/project-tango.env.backup
-            fi
+            if [ -f .env ]; then cp .env /tmp/project-tango.env.backup; fi
             git pull origin main
-            if [ -f /tmp/project-tango.env.backup ]; then
-              mv /tmp/project-tango.env.backup .env
-              chmod 600 .env
-            fi
+            if [ -f /tmp/project-tango.env.backup ]; then mv /tmp/project-tango.env.backup .env && chmod 600 .env; fi
             sudo bash scripts/deploy.sh'
