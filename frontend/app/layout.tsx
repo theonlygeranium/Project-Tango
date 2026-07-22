@@ -3,6 +3,7 @@ import { Public_Sans } from 'next/font/google';
 import localFont from 'next/font/local';
 import { headers } from 'next/headers';
 import { ApplyThemeScript, ThemeToggle } from '@/components/theme-toggle';
+import { Toaster } from '@/components/ui/sonner';
 import { getAppConfig } from '@/lib/utils';
 import './globals.css';
 
@@ -79,6 +80,7 @@ export default async function RootLayout({ children }: RootLayoutProps) {
         className={`${publicSans.variable} ${commitMono.variable} overflow-x-hidden antialiased`}
       >
         {children}
+        <Toaster />
         <div className="fixed top-3 right-3 z-[80]">
           <ThemeToggle className="shadow-sm backdrop-blur-md" />
         </div>

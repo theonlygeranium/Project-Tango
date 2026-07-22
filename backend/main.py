@@ -5,14 +5,15 @@ import json
 import logging
 import os
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
@@ -21,6 +22,9 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
+from account_routes import router as account_router
+from accounts import list_user_access, resolve_persona_policy
+from auth import CurrentUser, require_csrf, require_user, validate_auth_config
 from db import close_pool, get_pool
 from history import (
     close_session,
@@ -44,12 +48,16 @@ from sip import SIP_GREETING_ADDENDUM, persona_key_from_room_name
 dotenv_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 logger = logging.getLogger("project-tango")
 
 LITELLM_BASE_URL = os.getenv("LITELLM_BASE_URL", "http://localhost:4000")
 LITELLM_MASTER_KEY = os.getenv("LITELLM_MASTER_KEY", "dummy")
-ELEVENLABS_BASE_URL = os.getenv("ELEVENLABS_BASE_URL", "https://api.us.elevenlabs.io/v1").rstrip("/")
+ELEVENLABS_BASE_URL = os.getenv(
+    "ELEVENLABS_BASE_URL", "https://api.us.elevenlabs.io/v1"
+).rstrip("/")
 if not ELEVENLABS_BASE_URL.endswith("/v1"):
     ELEVENLABS_BASE_URL = f"{ELEVENLABS_BASE_URL}/v1"
 LIVEKIT_URL = os.getenv("LIVEKIT_URL")
@@ -67,6 +75,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_auth_config()
     await get_pool()
     try:
         yield
@@ -74,7 +83,14 @@ async def lifespan(_: FastAPI):
         await close_pool()
 
 
-app = FastAPI(title="Project Tango Backend", version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="Project Tango Backend",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
@@ -88,6 +104,15 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
+app.include_router(account_router)
+
+
+@app.middleware("http")
+async def no_store_sensitive_responses(request: Request, call_next: Any) -> Any:
+    response = await call_next(request)
+    if request.url.path != "/healthz":
+        response.headers.setdefault("Cache-Control", "no-store")
+    return response
 
 
 class TokenRequest(BaseModel):
@@ -113,7 +138,10 @@ def _require_livekit_env() -> None:
         if not value
     ]
     if missing:
-        raise HTTPException(status_code=500, detail=f"Missing environment variables: {', '.join(missing)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Missing environment variables: {', '.join(missing)}",
+        )
 
 
 def _room_name(persona: Persona, requested_room: str | None = None) -> str:
@@ -166,10 +194,17 @@ def _env_int(name: str, default: int) -> int:
     try:
         value = int(raw_value)
     except ValueError:
-        logger.warning("Invalid integer for %s=%r; using default %d", name, raw_value, default)
+        logger.warning(
+            "Invalid integer for %s=%r; using default %d", name, raw_value, default
+        )
         return default
     if value <= 0:
-        logger.warning("Invalid non-positive integer for %s=%r; using default %d", name, raw_value, default)
+        logger.warning(
+            "Invalid non-positive integer for %s=%r; using default %d",
+            name,
+            raw_value,
+            default,
+        )
         return default
     return value
 
@@ -181,10 +216,17 @@ def _env_float(name: str, default: float) -> float:
     try:
         value = float(raw_value)
     except ValueError:
-        logger.warning("Invalid number for %s=%r; using default %.1f", name, raw_value, default)
+        logger.warning(
+            "Invalid number for %s=%r; using default %.1f", name, raw_value, default
+        )
         return default
     if value <= 0:
-        logger.warning("Invalid non-positive number for %s=%r; using default %.1f", name, raw_value, default)
+        logger.warning(
+            "Invalid non-positive number for %s=%r; using default %.1f",
+            name,
+            raw_value,
+            default,
+        )
         return default
     return value
 
@@ -236,7 +278,9 @@ def _build_f5_tts_adapter(persona: Persona) -> Any:
             *,
             conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS,
         ) -> lk_tts.ChunkedStream:
-            return F5TTSChunkedStream(tts=self, input_text=text, conn_options=conn_options)
+            return F5TTSChunkedStream(
+                tts=self, input_text=text, conn_options=conn_options
+            )
 
         async def aclose(self) -> None:
             return None
@@ -256,11 +300,16 @@ def _build_f5_tts_adapter(persona: Persona) -> Any:
             timeout_seconds = _f5_tts_timeout_seconds()
             try:
                 async with httpx.AsyncClient(
-                    timeout=httpx.Timeout(timeout_seconds, connect=self._conn_options.timeout)
+                    timeout=httpx.Timeout(
+                        timeout_seconds, connect=self._conn_options.timeout
+                    )
                 ) as client:
                     response = await client.post(
                         f"{self._tts._base_url}/synthesize",
-                        json={"persona_id": self._tts._persona_id, "text": self._input_text},
+                        json={
+                            "persona_id": self._tts._persona_id,
+                            "text": self._input_text,
+                        },
                     )
             except httpx.TimeoutException as exc:
                 raise APITimeoutError("F5-TTS request timed out") from exc
@@ -275,9 +324,13 @@ def _build_f5_tts_adapter(persona: Persona) -> Any:
                     body=response.text[:1000],
                 )
 
-            content_type = response.headers.get("content-type", "audio/wav").split(";", 1)[0]
+            content_type = response.headers.get("content-type", "audio/wav").split(
+                ";", 1
+            )[0]
             if not content_type.lower().startswith("audio/"):
-                raise APIError(message="F5-TTS returned non-audio data", body=response.text[:1000])
+                raise APIError(
+                    message="F5-TTS returned non-audio data", body=response.text[:1000]
+                )
 
             # Strip the WAV/RIFF container header before pushing to LiveKit AudioEmitter.
             # push() expects raw PCM frames. Passing the full WAV bytes (RIFF header included)
@@ -286,6 +339,7 @@ def _build_f5_tts_adapter(persona: Persona) -> Any:
             # when the vocoder's native rate differs from the declared DEFAULT_F5_TTS_SAMPLE_RATE.
             import io as _io
             import wave as _wave
+
             try:
                 with _wave.open(_io.BytesIO(response.content), "rb") as wf:
                     actual_sample_rate = wf.getframerate()
@@ -332,7 +386,10 @@ def _build_tts(persona: Persona, elevenlabs: Any) -> Any:
             )
             return _build_f5_tts_adapter(persona)
 
-        logger.warning("F5-TTS disabled by env; using ElevenLabs fallback for persona=%s", persona.id)
+        logger.warning(
+            "F5-TTS disabled by env; using ElevenLabs fallback for persona=%s",
+            persona.id,
+        )
 
     return _build_elevenlabs_tts(persona, elevenlabs)
 
@@ -388,7 +445,9 @@ def _token_metadata(
     return json.dumps(payload)
 
 
-def _token_attributes(persona: Persona, request: TokenRequest, llm_model: str) -> dict[str, str]:
+def _token_attributes(
+    persona: Persona, request: TokenRequest, llm_model: str
+) -> dict[str, str]:
     return {
         **request.participant_attributes,
         "tango.persona": persona.id,
@@ -409,11 +468,14 @@ def create_participant_token(
     from livekit import api
 
     token = api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
+    token = token.with_ttl(timedelta(minutes=15))
     token = token.with_identity(
         request.participant_identity or f"tango_user_{uuid.uuid4().hex[:8]}"
     ).with_name(request.participant_name or "Project Tango User")
     token = token.with_metadata(
-        _token_metadata(persona, llm_model, request.participant_metadata, history_context)
+        _token_metadata(
+            persona, llm_model, request.participant_metadata, history_context
+        )
     )
     token = token.with_attributes(_token_attributes(persona, request, llm_model))
     token = token.with_grants(
@@ -431,12 +493,16 @@ def create_participant_token(
     return token.to_jwt()
 
 
-def connection_details(request: TokenRequest, http_request: Request | None = None) -> dict[str, Any]:
+def connection_details(
+    request: TokenRequest, http_request: Request | None = None
+) -> dict[str, Any]:
     persona = get_persona(request.persona_id or request.persona)
     llm_model = resolve_llm_model(persona, request.llm_model)
     room_name = _room_name(persona, request.room_name)
     history_context = _request_history_context(http_request)
-    participant_token = create_participant_token(request, persona, llm_model, room_name, history_context)
+    participant_token = create_participant_token(
+        request, persona, llm_model, room_name, history_context
+    )
     persona_payload = persona.public_dict()
 
     logger.info(
@@ -464,8 +530,98 @@ def connection_details(request: TokenRequest, http_request: Request | None = Non
     }
 
 
+async def authorized_connection_details(
+    token_request: TokenRequest,
+    http_request: Request,
+    user: CurrentUser,
+) -> dict[str, Any]:
+    pool = await get_pool()
+    requested_persona_id = (
+        token_request.persona_id or token_request.persona or DEFAULT_PERSONA_ID
+    )
+    policy = await resolve_persona_policy(
+        pool,
+        user_id=user.id,
+        role=user.role,
+        persona_id=requested_persona_id,
+        requested_model=token_request.llm_model,
+    )
+    if policy is None:
+        raise HTTPException(status_code=403, detail="Persona access denied")
+    persona, llm_model = policy
+    room_name = _room_name(persona)
+    participant_identity = f"tango_user_{user.id.hex[:8]}_{uuid.uuid4().hex[:8]}"
+    participant_name = f"{user.first_name} {user.last_name}".strip()
+    server_request = TokenRequest(
+        participant_identity=participant_identity,
+        participant_name=participant_name,
+        participant_metadata=json.dumps(
+            {
+                "account_id": str(user.id),
+                "user_id": str(user.id),
+            }
+        ),
+        participant_attributes={"tango.account_id": str(user.id)},
+        persona_id=persona.id,
+        llm_model=llm_model,
+    )
+    history_context = _request_history_context(http_request)
+    participant_token = create_participant_token(
+        server_request,
+        persona,
+        llm_model,
+        room_name,
+        history_context,
+    )
+    try:
+        await pool.execute(
+            """
+            INSERT INTO tango.voice_room_grants
+                (room_name, user_id, persona_id, effective_llm_model,
+                 participant_identity, expires_at)
+            VALUES ($1, $2, $3, $4, $5, now() + interval '15 minutes')
+            """,
+            room_name,
+            user.id,
+            persona.id,
+            llm_model,
+            participant_identity,
+        )
+    except Exception:
+        logger.exception(
+            "Could not persist Tango room grant user_id=%s persona_id=%s",
+            user.id,
+            persona.id,
+        )
+        raise HTTPException(
+            status_code=500, detail="Could not create voice room"
+        ) from None
+
+    logger.info(
+        "Issued authenticated Tango token user_id=%s room=%s persona_id=%s model=%s",
+        user.id,
+        room_name,
+        persona.id,
+        llm_model,
+    )
+    persona_payload = persona.public_dict()
+    return {
+        "server_url": LIVEKIT_URL,
+        "participant_token": participant_token,
+        "serverUrl": LIVEKIT_URL,
+        "participantToken": participant_token,
+        "room_name": room_name,
+        "roomName": room_name,
+        "participant_name": participant_name,
+        "participantName": participant_name,
+        "llm_model": llm_model,
+        "llmModel": llm_model,
+        "persona": persona_payload,
+    }
+
+
 @app.get("/health")
-async def health() -> dict[str, Any]:
+async def health(_: CurrentUser = Depends(require_user)) -> dict[str, Any]:
     return {
         "status": "ok",
         "service": "project-tango-backend",
@@ -481,35 +637,46 @@ async def healthz() -> str:
 
 
 @app.get("/api/personas")
-async def personas() -> dict[str, Any]:
+async def personas(user: CurrentUser = Depends(require_user)) -> dict[str, Any]:
+    pool = await get_pool()
+    if user.is_admin:
+        allowed = {
+            persona["id"]: {"effective_llm_model": persona["llm_model"]}
+            for persona in list_personas()
+        }
+    else:
+        allowed = {
+            item["persona_id"]: item for item in await list_user_access(pool, user.id)
+        }
+    visible_personas: list[dict[str, Any]] = []
+    for persona in list_personas():
+        policy = allowed.get(persona["id"])
+        if policy is None:
+            continue
+        visible_personas.append(
+            {
+                **persona,
+                "default_llm_model": persona["llm_model"],
+                "llm_model": policy["effective_llm_model"],
+            }
+        )
     return {
-        "default_persona_id": DEFAULT_PERSONA_ID,
-        "personas": list_personas(),
+        "default_persona_id": (
+            DEFAULT_PERSONA_ID
+            if DEFAULT_PERSONA_ID in allowed
+            else (visible_personas[0]["id"] if visible_personas else None)
+        ),
+        "personas": visible_personas,
         "llm_models": list_llm_models(),
     }
 
 
-@app.get("/api/connection-details")
-async def get_connection_details(
-    request: Request,
-    persona: str | None = None,
-    persona_id: str | None = None,
-    llm_model: str | None = None,
-    room_name: str | None = None,
-) -> dict[str, Any]:
-    details = connection_details(
-        TokenRequest(persona_id=persona_id or persona, llm_model=llm_model, room_name=room_name),
-        http_request=request,
-    )
-    return details
-
-
 @app.post("/api/connection-details", status_code=201)
-@app.post("/getToken", status_code=201)
-async def post_connection_details(request: Request) -> dict[str, Any]:
+async def post_connection_details(
+    request: Request, user: CurrentUser = Depends(require_csrf)
+) -> dict[str, Any]:
     body = await request.json()
-    details = connection_details(TokenRequest(**body), http_request=request)
-    return details
+    return await authorized_connection_details(TokenRequest(**body), request, user)
 
 
 def _api_database_error() -> JSONResponse:
@@ -547,12 +714,19 @@ def _serialize_open_loop(row: Any) -> dict[str, Any]:
 
 @app.get("/api/history")
 @limiter.limit("30/minute")
-async def history_endpoint(request: Request, limit: int = 20, offset: int = 0) -> Any:
+async def history_endpoint(
+    request: Request,
+    limit: int = 20,
+    offset: int = 0,
+    user: CurrentUser = Depends(require_user),
+) -> Any:
     del request
     try:
         bounded_limit = min(max(limit, 1), 100)
         bounded_offset = max(offset, 0)
-        sessions = await get_sessions(limit=bounded_limit, offset=bounded_offset)
+        sessions = await get_sessions(
+            user.id, limit=bounded_limit, offset=bounded_offset
+        )
         return {
             "sessions": [_serialize_session(session) for session in sessions],
             "limit": bounded_limit,
@@ -565,7 +739,11 @@ async def history_endpoint(request: Request, limit: int = 20, offset: int = 0) -
 
 @app.get("/api/history/{session_id}")
 @limiter.limit("30/minute")
-async def history_detail_endpoint(request: Request, session_id: str) -> Any:
+async def history_detail_endpoint(
+    request: Request,
+    session_id: str,
+    user: CurrentUser = Depends(require_user),
+) -> Any:
     del request
     try:
         parsed_session_id = str(uuid.UUID(session_id))
@@ -573,7 +751,7 @@ async def history_detail_endpoint(request: Request, session_id: str) -> Any:
         raise HTTPException(status_code=400, detail="Invalid session id") from None
 
     try:
-        turns = await get_session_turns(parsed_session_id)
+        turns = await get_session_turns(parsed_session_id, user.id)
         return {
             "session_id": parsed_session_id,
             "turns": [_serialize_turn(turn) for turn in turns],
@@ -585,7 +763,11 @@ async def history_detail_endpoint(request: Request, session_id: str) -> Any:
 
 @app.get("/api/memory/open-loops")
 @limiter.limit("30/minute")
-async def get_open_loops(request: Request, persona: str | None = None) -> Any:
+async def get_open_loops(
+    request: Request,
+    persona: str | None = None,
+    user: CurrentUser = Depends(require_user),
+) -> Any:
     del request
     try:
         pool = await get_pool()
@@ -595,13 +777,15 @@ async def get_open_loops(request: Request, persona: str | None = None) -> Any:
                     """
                     SELECT id, persona, content, created_at
                     FROM tango.memories
-                    WHERE memory_type = 'open_loop'
+                    WHERE user_id = $1
+                      AND memory_type = 'open_loop'
                       AND resolved_at IS NULL
                       AND (expires_at IS NULL OR expires_at > now())
-                      AND persona = $1
+                      AND persona = $2
                     ORDER BY created_at DESC
                     LIMIT 5
                     """,
+                    user.id,
                     persona,
                 )
             else:
@@ -609,12 +793,14 @@ async def get_open_loops(request: Request, persona: str | None = None) -> Any:
                     """
                     SELECT id, persona, content, created_at
                     FROM tango.memories
-                    WHERE memory_type = 'open_loop'
+                    WHERE user_id = $1
+                      AND memory_type = 'open_loop'
                       AND resolved_at IS NULL
                       AND (expires_at IS NULL OR expires_at > now())
                     ORDER BY created_at DESC
                     LIMIT 10
-                    """
+                    """,
+                    user.id,
                 )
         return {"open_loops": [_serialize_open_loop(row) for row in rows]}
     except Exception:
@@ -624,7 +810,12 @@ async def get_open_loops(request: Request, persona: str | None = None) -> Any:
 
 @app.patch("/api/memory/open-loops/{loop_id}/resolve")
 @limiter.limit("30/minute")
-async def resolve_open_loop(request: Request, loop_id: str, note: str | None = None) -> Any:
+async def resolve_open_loop(
+    request: Request,
+    loop_id: str,
+    note: str | None = None,
+    user: CurrentUser = Depends(require_csrf),
+) -> Any:
     del request
     try:
         parsed_loop_id = uuid.UUID(loop_id)
@@ -640,18 +831,22 @@ async def resolve_open_loop(request: Request, loop_id: str, note: str | None = N
                 SET resolved_at = now(),
                     resolution_note = $2
                 WHERE id = $1
+                  AND user_id = $3
                   AND memory_type = 'open_loop'
                   AND resolved_at IS NULL
                 """,
                 parsed_loop_id,
                 note,
+                user.id,
             )
     except Exception:
         logger.exception("Open loop resolve failed loop_id=%s", loop_id)
         return _api_database_error()
 
     if result == "UPDATE 0":
-        raise HTTPException(status_code=404, detail="Open loop not found or already resolved")
+        raise HTTPException(
+            status_code=404, detail="Open loop not found or already resolved"
+        )
 
     return {"status": "resolved", "id": str(parsed_loop_id)}
 
@@ -697,6 +892,17 @@ def _history_context_from_participant(participant: Any | None) -> dict[str, str]
     llm_model = payload.get("llm_model") or attributes.get("tango.llm_model")
     if isinstance(llm_model, str):
         context["llm_model"] = llm_model
+
+    raw_user_id = (
+        payload.get("user_id")
+        or payload.get("account_id")
+        or attributes.get("tango.account_id")
+    )
+    if isinstance(raw_user_id, str):
+        try:
+            context["user_id"] = str(uuid.UUID(raw_user_id))
+        except ValueError:
+            logger.warning("Ignoring invalid participant account id")
 
     client_ip = history_context.get("client_ip") or attributes.get("tango.client_ip")
     if isinstance(client_ip, str):
@@ -763,12 +969,16 @@ def _usage_total_tokens(usage: Any) -> int:
             total += max(total_tokens, 0)
             continue
 
-        for field_name in ("input_tokens", "output_tokens", "prompt_tokens", "completion_tokens"):
+        for field_name in (
+            "input_tokens",
+            "output_tokens",
+            "prompt_tokens",
+            "completion_tokens",
+        ):
             value = getattr(model_usage, field_name, None)
             if isinstance(value, int):
                 total += max(value, 0)
     return total
-
 
 
 async def _dispatch_agent(room_name: str) -> None:
@@ -777,25 +987,109 @@ async def _dispatch_agent(room_name: str) -> None:
     The worker has an agent_name, so LiveKit will not auto-dispatch it to every
     room. The frontend calls this endpoint after the participant joins.
     """
-    try:
-        from livekit import api as _lkapi
-        async with _lkapi.LiveKitAPI(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET) as _client:
-            await _client.agent_dispatch.create_dispatch(
-                _lkapi.CreateAgentDispatchRequest(room=room_name, agent_name=TANGO_AGENT_NAME)
+    _require_livekit_env()
+    from livekit import api as _lkapi
+
+    async with _lkapi.LiveKitAPI(
+        LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET
+    ) as _client:
+        await _client.agent_dispatch.create_dispatch(
+            _lkapi.CreateAgentDispatchRequest(
+                room=room_name, agent_name=TANGO_AGENT_NAME
             )
-        logger.info("Agent dispatched room=%s agent_name=%s", room_name, TANGO_AGENT_NAME)
-    except Exception:
-        logger.exception("Agent dispatch failed room=%s agent_name=%s", room_name, TANGO_AGENT_NAME)
+        )
+    logger.info("Agent dispatched room=%s agent_name=%s", room_name, TANGO_AGENT_NAME)
 
 
 @app.post("/api/dispatch")
-async def dispatch_agent_to_room(request: Request) -> dict:
+async def dispatch_agent_to_room(
+    request: Request, user: CurrentUser = Depends(require_csrf)
+) -> dict:
     body = await request.json()
     rn = body.get("room_name")
-    if not rn or not isinstance(rn, str):
+    if not rn or not isinstance(rn, str) or len(rn) > 200:
         raise HTTPException(status_code=400, detail="room_name required")
-    asyncio.create_task(_dispatch_agent(rn))
+    pool = await get_pool()
+    grant = await pool.fetchrow(
+        """
+        UPDATE tango.voice_room_grants
+        SET dispatched_at = now()
+        WHERE room_name = $1
+          AND user_id = $2
+          AND expires_at > now()
+          AND revoked_at IS NULL
+          AND dispatched_at IS NULL
+        RETURNING room_name
+        """,
+        rn,
+        user.id,
+    )
+    if grant is None:
+        raise HTTPException(status_code=403, detail="Invalid or expired room grant")
+    try:
+        await _dispatch_agent(rn)
+    except Exception as exc:
+        logger.exception(
+            "Authenticated agent dispatch failed room=%s user_id=%s", rn, user.id
+        )
+        await pool.execute(
+            """
+            UPDATE tango.voice_room_grants
+            SET dispatched_at = NULL
+            WHERE room_name = $1
+              AND user_id = $2
+              AND expires_at > now()
+              AND revoked_at IS NULL
+            """,
+            rn,
+            user.id,
+        )
+        raise HTTPException(status_code=502, detail="Agent dispatch failed") from exc
     return {"dispatched": True, "room_name": rn}
+
+
+async def _account_access_monitor(
+    ctx: Any,
+    user_id: uuid.UUID,
+    room_name: str,
+    *,
+    interval_seconds: float = 15.0,
+) -> None:
+    """Stop a web voice worker after its account or room grant is revoked."""
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            access_is_current = await (await get_pool()).fetchval(
+                """
+                SELECT users.is_active AND EXISTS (
+                    SELECT 1
+                    FROM tango.voice_room_grants AS grants
+                    WHERE grants.user_id = users.id
+                      AND grants.room_name = $2
+                      AND grants.revoked_at IS NULL
+                )
+                FROM tango.users AS users
+                WHERE users.id = $1
+                """,
+                user_id,
+                room_name,
+            )
+        except Exception:
+            logger.exception(
+                "Could not revalidate voice account room=%s user_id=%s",
+                room_name,
+                user_id,
+            )
+            continue
+        if access_is_current is not True:
+            logger.warning(
+                "Stopping voice session for inactive account room=%s user_id=%s",
+                room_name,
+                user_id,
+            )
+            ctx.shutdown("account access revoked")
+            return
+
 
 async def entrypoint(ctx: Any) -> None:
     from jarvis_agent import Jarvis
@@ -818,17 +1112,65 @@ async def entrypoint(ctx: Any) -> None:
         return
     participant_context = _history_context_from_participant(participant)
     room_name = getattr(getattr(ctx, "room", None), "name", "unknown")
-    metadata_persona_id = participant_context.get("persona_id") or _persona_id_from_job_context(ctx)
-    sip_persona_id = persona_key_from_room_name(room_name) if not metadata_persona_id else None
+    metadata_persona_id = participant_context.get(
+        "persona_id"
+    ) or _persona_id_from_job_context(ctx)
+    sip_persona_id = (
+        persona_key_from_room_name(room_name) if not metadata_persona_id else None
+    )
     is_sip = sip_persona_id is not None
     persona = get_persona(metadata_persona_id or sip_persona_id)
     llm_model = resolve_llm_model(persona, participant_context.get("llm_model"))
+    account_user_id = participant_context.get("user_id")
+    if is_sip and not account_user_id:
+        configured_sip_owner = os.getenv("TANGO_SIP_OWNER_USER_ID", "").strip()
+        if configured_sip_owner:
+            try:
+                account_user_id = str(uuid.UUID(configured_sip_owner))
+            except ValueError:
+                logger.error("TANGO_SIP_OWNER_USER_ID is invalid; SIP history disabled")
+                account_user_id = None
+    account_uuid: uuid.UUID | None = None
+    if account_user_id:
+        try:
+            account_uuid = uuid.UUID(account_user_id)
+            account_is_active = await (await get_pool()).fetchval(
+                "SELECT is_active FROM tango.users WHERE id = $1",
+                account_uuid,
+            )
+        except (TypeError, ValueError):
+            logger.error("Invalid account id on voice participant room=%s", room_name)
+            ctx.shutdown("invalid account identity")
+            return
+        except Exception:
+            logger.exception(
+                "Could not validate voice account room=%s user_id=%s",
+                room_name,
+                account_user_id,
+            )
+            ctx.shutdown("account validation unavailable")
+            return
+        if account_is_active is not True:
+            logger.warning(
+                "Rejecting voice session for inactive account room=%s user_id=%s",
+                room_name,
+                account_user_id,
+            )
+            ctx.shutdown("account access revoked")
+            return
     augmented_system_prompt = persona.system_prompt
     prior_context = ""
-    try:
-        prior_context = await load_context_for_session(await get_pool(), persona.id)
-    except Exception:
-        logger.exception("entrypoint: memory context unavailable room=%s persona_id=%s", room_name, persona.id)
+    if account_user_id:
+        try:
+            prior_context = await load_context_for_session(
+                await get_pool(), account_user_id, persona.id
+            )
+        except Exception:
+            logger.exception(
+                "entrypoint: memory context unavailable room=%s persona_id=%s",
+                room_name,
+                persona.id,
+            )
     if prior_context:
         augmented_system_prompt = f"{augmented_system_prompt}{prior_context}"
     if is_sip:
@@ -837,7 +1179,9 @@ async def entrypoint(ctx: Any) -> None:
         replace(
             persona,
             system_prompt=augmented_system_prompt,
-            greeting=(persona.greeting or _sip_greeting(persona)) if is_sip else persona.greeting,
+            greeting=(persona.greeting or _sip_greeting(persona))
+            if is_sip
+            else persona.greeting,
         )
         if prior_context or is_sip
         else persona
@@ -870,23 +1214,32 @@ async def entrypoint(ctx: Any) -> None:
     )
 
     history_session_id: str | None = None
-    try:
-        history_session_id = await create_session(
-            persona_id=persona.id,
-            persona_name=persona.display_name,
-            livekit_room=room_name,
-            llm_model=llm_model,
-            user_agent=participant_context.get("user_agent"),
-            client_ip=participant_context.get("client_ip"),
-        )
-        logger.info(
-            "Tango history session created session_id=%s room=%s persona_id=%s",
-            history_session_id,
+    if account_user_id:
+        try:
+            history_session_id = await create_session(
+                user_id=account_user_id,
+                persona_id=persona.id,
+                persona_name=persona.display_name,
+                livekit_room=room_name,
+                llm_model=llm_model,
+                user_agent=participant_context.get("user_agent"),
+                client_ip=participant_context.get("client_ip"),
+            )
+            logger.info(
+                "Tango history session created session_id=%s room=%s persona_id=%s",
+                history_session_id,
+                room_name,
+                persona.id,
+            )
+        except Exception:
+            logger.exception(
+                "Could not create Tango history session; voice session will continue."
+            )
+    else:
+        logger.warning(
+            "Voice participant has no account id; history and memory disabled room=%s",
             room_name,
-            persona.id,
         )
-    except Exception:
-        logger.exception("Could not create Tango history session; voice session will continue.")
 
     vision_context = LiveVideoContext(ctx.room, vision_config)
     if _use_nova3:
@@ -953,8 +1306,12 @@ async def entrypoint(ctx: Any) -> None:
             if history_flushed or history_session_id is None:
                 return
 
-            await asyncio.sleep(1.0)  # 0-token guard: allow final usage events to arrive.
-            total_tokens = total_tokens or _usage_total_tokens(getattr(session, "usage", None))
+            await asyncio.sleep(
+                1.0
+            )  # 0-token guard: allow final usage events to arrive.
+            total_tokens = total_tokens or _usage_total_tokens(
+                getattr(session, "usage", None)
+            )
             try:
                 await close_session(
                     history_session_id,
@@ -963,7 +1320,10 @@ async def entrypoint(ctx: Any) -> None:
                     error_code=close_error_code,
                 )
             except Exception:
-                logger.exception("Could not flush Tango history session session_id=%s", history_session_id)
+                logger.exception(
+                    "Could not flush Tango history session session_id=%s",
+                    history_session_id,
+                )
                 return
 
             history_flushed = True
@@ -978,6 +1338,7 @@ async def entrypoint(ctx: Any) -> None:
                     generate_session_memory(
                         await get_pool(),
                         history_session_id,
+                        account_user_id,
                         persona.id,
                         LITELLM_MASTER_KEY,
                     )
@@ -994,16 +1355,37 @@ async def entrypoint(ctx: Any) -> None:
         nonlocal close_error_code
         if ev.error is not None:
             close_error_code = str(ev.reason)
-        logger.info("Tango agent session closed reason=%s turns=%d", ev.reason, len(session_turns))
+        logger.info(
+            "Tango agent session closed reason=%s turns=%d",
+            ev.reason,
+            len(session_turns),
+        )
         asyncio.create_task(vision_context.aclose())
         asyncio.create_task(flush_history())
 
     ctx.add_shutdown_callback(flush_history)
     ctx.add_shutdown_callback(vision_context.aclose)
 
+    account_monitor_task = (
+        asyncio.create_task(_account_access_monitor(ctx, account_uuid, room_name))
+        if account_uuid is not None and not is_sip
+        else None
+    )
+
+    async def stop_account_monitor() -> None:
+        if account_monitor_task is None:
+            return
+        account_monitor_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await account_monitor_task
+
+    ctx.add_shutdown_callback(stop_account_monitor)
+
     try:
         await session.start(
-            agent=Jarvis(persona_for_agent, llm_model=llm_model, vision_context=vision_context),
+            agent=Jarvis(
+                persona_for_agent, llm_model=llm_model, vision_context=vision_context
+            ),
             room=ctx.room,
         )
     except Exception as exc:

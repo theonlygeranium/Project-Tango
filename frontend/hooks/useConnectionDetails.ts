@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ConnectionDetails } from '@/app/api/connection-details/route';
-import {
-  DEFAULT_LLM_MODEL_SELECTION_ID,
-  type LlmModelSelectionId,
-  llmModelRequestValue,
-} from '@/lib/llm-models';
 import { DEFAULT_PERSONA_ID, type PersonaId } from '@/lib/personas';
 
 export default function useConnectionDetails(
   personaId: PersonaId = DEFAULT_PERSONA_ID,
-  llmModelSelectionId: LlmModelSelectionId = DEFAULT_LLM_MODEL_SELECTION_ID,
   enabled = true
 ) {
   // Generate room connection details, including:
@@ -25,25 +19,29 @@ export default function useConnectionDetails(
 
   const fetchConnectionDetails = useCallback(() => {
     setConnectionDetails(null);
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-    const endpoint =
-      process.env.NEXT_PUBLIC_CONN_DETAILS_ENDPOINT ??
-      (apiBaseUrl ? `${apiBaseUrl.replace(/\/$/, '')}/api/connection-details` : '/api/connection-details');
-    const url = new URL(endpoint, window.location.origin);
-    url.searchParams.set('persona_id', personaId);
-    const llmModel = llmModelRequestValue(llmModelSelectionId);
-    if (llmModel) {
-      url.searchParams.set('llm_model', llmModel);
-    }
-    fetch(url.toString())
-      .then((res) => res.json())
+    fetch('/api/connection-details', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ persona_id: personaId }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Connection details failed with HTTP ${res.status}`);
+        return res.json();
+      })
       .then((data) => {
-        setConnectionDetails(data);
+        setConnectionDetails({
+          ...data,
+          serverUrl: data.serverUrl ?? data.server_url,
+          roomName: data.roomName ?? data.room_name,
+          participantName: data.participantName ?? data.participant_name,
+          participantToken: data.participantToken ?? data.participant_token,
+          llmModel: data.llmModel ?? data.llm_model,
+        });
       })
       .catch((error) => {
         console.error('Error fetching connection details:', error);
       });
-  }, [personaId, llmModelSelectionId]);
+  }, [personaId]);
 
   // Clears the cached connection details without triggering a new fetch.
   // Use this on session end so a persona switch starts with a clean slate.
@@ -52,7 +50,9 @@ export default function useConnectionDetails(
   }, []);
 
   useEffect(() => {
-    if (enabled) { fetchConnectionDetails(); }
+    if (enabled) {
+      fetchConnectionDetails();
+    }
   }, [fetchConnectionDetails, enabled]);
 
   return {

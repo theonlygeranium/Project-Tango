@@ -80,8 +80,9 @@ Live inspection on 2026-06-22 showed Docker container `asr-gateway` listening on
 
 | Alias | Actual model | Use |
 | --- | --- | --- |
-| `local/qwen3-fast` | `ollama/qwen3.6:latest` | Therapy, Jeremiah, Jacob, Mama Lulu, Meditation, Pinoy Pride |
+| `local/qwen3-fast` | `ollama/qwen3.6:latest` | Default for Damian, Jeremiah, Jeremiah V2, Jacob, and Nathaniel |
 | `writer/palmyra-x5-voice` | Writer Palmyra X5 voice-tuned route | Chris default; selectable override for all personas |
+| `groq/llama4-scout` | Groq Llama 4 Scout | Mama Lulu and Tita Baby defaults; selectable override |
 
 Do not use `ollama/qwen3.6`, `ollama/qwen3.6:latest`, or `writer/palmyra` as Tango
 `model_name` values; they are not registered LiteLLM aliases.
@@ -93,15 +94,18 @@ Do not use `ollama/qwen3.6`, `ollama/qwen3.6:latest`, or `writer/palmyra` as Tan
 | Therapy | Damian | `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | `en-US` |
 | General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | `en-US` |
 | General Info | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` via F5-TTS pilot | `local/qwen3-fast` | `en-US` |
+| General Info | Jeremiah V2 | ElevenLabs | `local/qwen3-fast` | `en-US` |
 | General Info | Jacob | `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | `en-US` |
-| General Info | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | `tl` |
+| General Info | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO` | `groq/llama4-scout` | `tl` |
 | Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | `en-US` |
-| Pinoy Pride | Tita | `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` | `tl` |
+| Pinoy Pride | Tita Baby | `smYFzUb4yrSqprnml7n5` | `groq/llama4-scout` | `tl` |
 
-Persona selection starts in the frontend, is sent to `/api/connection-details`, and is encoded in
-the LiveKit token metadata, participant attributes, and generated room name. The backend worker must
-use that persona to choose the ElevenLabs voice, LiteLLM model string, Deepgram STT language, and
-system prompt.
+Persona selection starts from the authenticated catalog returned by FastAPI. A
+regular user can request only an assigned persona, and FastAPI—not the
+browser—resolves its default or admin-configured model policy. The signed user
+and persona are encoded in LiveKit metadata, participant attributes, and a
+server-generated room grant. The worker uses that data to choose voice,
+LiteLLM model, Deepgram language, prompt, and account-scoped memory.
 
 If the user shares camera or screen video, the worker subscribes to video tracks and may inject a
 short visual summary into the current turn. The default summary model is `openai/gpt-4o-mini`
@@ -117,10 +121,16 @@ the visual/OCR context is injected before the persona model starts answering. Se
 `TANGO_VISION_DEBUG_SUMMARIES=true` only for diagnostics when the injected visual summary text
 must be visible in logs.
 
-The frontend may request a specific LiteLLM alias through `llm_model`, but the backend must validate
-that value against the allowlist in `backend/personas.py`. Unknown model strings must fall back to
-the persona default. Do not expose arbitrary model names to LiveKit token metadata or the OpenAI
+Only an admin session may request an interactive model override. Regular-user
+requests ignore client model input and use the stored persona policy. Every
+override must match the allowlist in `backend/personas.py`; never expose
+arbitrary model names, provider URLs, or credentials to LiveKit or the OpenAI
 plugin constructor.
+
+Authentication is server-side. Do not add a frontend-only gate or reintroduce
+direct browser calls to `tango-api.schubert.life`. Protected browser traffic
+must use the Next.js same-origin route handlers, and FastAPI must validate the
+opaque database session, CSRF token for mutations, role, and resource owner.
 
 ## Validation Floor
 
@@ -128,7 +138,7 @@ Run these before marking the bootstrap complete:
 
 1. `cd backend && uvicorn main:app --host 127.0.0.1 --port 8030 --reload`
 2. `cd frontend && npm run dev -- --port 3006`
-3. Open `http://localhost:3006` and confirm all seven personas are selectable.
+3. Open `http://localhost:3006`, sign in, and confirm only the account's assigned personas are selectable.
 4. Select Damian, connect, and confirm LiveKit reaches the listening state.
 5. Speak and confirm interim Deepgram captions render.
 6. Confirm ElevenLabs audio playback and speaking animation.
@@ -136,14 +146,14 @@ Run these before marking the bootstrap complete:
 8. Confirm worker startup logs show `num_idle_processes=1`.
 9. Confirm Therapy logs show `local/qwen3-fast`.
 10. Switch to Chris and confirm logs show `writer/palmyra-x5-voice`.
-11. Select Chris with the local model switcher option and confirm logs show
-    `local/qwen3-fast`.
+11. Assign Chris a local-model override in the admin dashboard and confirm logs
+    show `local/qwen3-fast`; a regular user must not see a model switcher.
 12. Select Jeremiah with Persona default and confirm logs show
     `local/qwen3-fast` plus voice ID `EqHdTYoEuDQCxN1CVbi0`.
 13. Select Jacob with Persona default and confirm logs show
     `local/qwen3-fast` plus voice ID `qYwy2TckibCF9cBuhI46`.
 14. Select Mama Lulu with Persona default and confirm logs show
-    `local/qwen3-fast`, `stt_language=tl`, and voice ID `LF1xMOq6fDVEBEkLP0HO`.
+    `groq/llama4-scout`, `stt_language=tl`, and voice ID `LF1xMOq6fDVEBEkLP0HO`.
 15. Confirm `deploy/tango-backend.service`, `deploy/tango-web.service`, and
     `deploy/Caddyfile.tango-api` exist and are deploy-safe.
 16. Run `bash -n deploy/schubert-preflight.sh`.

@@ -1,7 +1,7 @@
 # Project Tango — System Architecture
 
 > Keep this document in sync with the actual state of Schubert. Do not add aspirational content.
-> Last updated: 2026-07-02 — Jeremiah local Qwen + F5-TTS routing
+> Last updated: 2026-07-22 — account authentication, persona authorization, and Groq Tagalog routing
 
 ---
 
@@ -9,7 +9,9 @@
 
 Project Tango is a real-time AI voice agent platform. Users visit a web interface, select a persona, and have a live voice conversation. Audio flows through LiveKit's WebRTC infrastructure, speech is transcribed by Deepgram, the LLM generates a response through LiteLLM, and the configured persona TTS backend synthesizes the reply as speech.
 
-All compute runs on Schubert, a privately owned AI workstation. No managed cloud inference is used — all LLM requests proxy through the existing LiteLLM service on Schubert.
+The application services and local model route run on Schubert, a privately
+owned AI workstation. Approved hosted model routes are also available, but all
+LLM requests—local or hosted—must pass through Schubert's LiteLLM service.
 
 ---
 
@@ -28,9 +30,10 @@ Schubert Nexus (192.168.86.77 / Tailscale)
         │
         ├── tango-web.service (port 3006)
         │     Next.js 15 standalone server
+        │     Login + admin UI + authenticated same-origin API routes
         │
         └── tango-backend.service (port 8030)
-              FastAPI: /api/connection-details, /api/dispatch, /api/history/*
+              FastAPI: accounts, policy, tokens, dispatch, history, memory
               LiveKit Agent Worker: voice pipeline per room
         └── tango-tts.service (127.0.0.1:8020)
               FastAPI F5-TTS sidecar for Jeremiah pilot only
@@ -58,8 +61,9 @@ LiveKit AgentSession (turn_handling={"turn_detection": "stt"})
         │  User message
         ▼
 LLM via LiteLLM proxy (localhost:4000)
-        ├── local/qwen3-fast    →  Ollama qwen3.6:latest (GPU inference)
-        └── writer/palmyra-x5-voice  →  WRITER Palmyra X5 (cloud API)
+        ├── local/qwen3-fast         → Ollama qwen3.6:latest (GPU inference)
+        ├── writer/palmyra-x5-voice  → WRITER Palmyra X5
+        └── groq/llama4-scout        → Groq Llama 4 Scout
         │  LLM response text
         ▼
 TTS routing
@@ -110,6 +114,7 @@ Schema: `tango` (PostgreSQL 18)
 | Column | Type | Notes |
 |---|---|---|
 | `id` | UUID | Primary key |
+| `user_id` | UUID | Owning account; FK to `tango.users` |
 | `persona` | TEXT | e.g. `therapy`, `general-info` |
 | `room_name` | TEXT | LiveKit room name |
 | `started_at` | TIMESTAMPTZ | Session start |
@@ -128,6 +133,22 @@ Schema: `tango` (PostgreSQL 18)
 
 **Orphan guard:** History API filters with `WHERE ended_at IS NOT NULL` to hide sessions that never properly closed.
 
+### Account and authorization tables
+
+| Table | Purpose |
+|---|---|
+| `tango.users` | Profile, role, Argon2id hash, keyed password lookup, active state |
+| `tango.user_persona_access` | Enabled personas and optional allowlisted LLM override per user |
+| `tango.auth_sessions` | Digests of opaque session and CSRF tokens with idle/absolute expiry |
+| `tango.auth_rate_limits` | Persistent failed-login throttling by network and credential digest |
+| `tango.voice_room_grants` | Short-lived account/persona/model binding for LiveKit dispatch |
+| `tango.admin_audit_log` | Non-secret account administration audit events |
+| `tango.schema_migrations` | Applied migration filename and checksum ledger |
+
+`tango.memories.user_id` and `tango.sessions.user_id` are mandatory for new web
+voice sessions. History, open loops, and prompt memory are filtered by that
+owner. Legacy rows are adopted by the initial admin during bootstrap.
+
 ---
 
 ## Personas
@@ -136,11 +157,16 @@ Schema: `tango` (PostgreSQL 18)
 |---|---|---|---|---|---|
 | `therapy` | Damian | ElevenLabs `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | Flux | `en-US` |
 | `general-info` (Chris) | Chris (British) | ElevenLabs `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | Flux | `en-US` |
-| `general-info` (Jeremiah) | Jeremiah | F5-TTS pilot, short source-sample reference from `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | Flux | `en-US` |
-| `general-info` (Jacob) | Jacob | ElevenLabs `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | Flux | `en-US` |
+| `jeremiah` | Jeremiah | F5-TTS pilot, short source-sample reference from `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | Flux | `en-US` |
+| `jeremiah-v2` | Jeremiah V2 | ElevenLabs | `local/qwen3-fast` | Flux | `en-US` |
+| `jacob` | Jacob | ElevenLabs `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | Flux | `en-US` |
 | `meditation` | Nathaniel | ElevenLabs `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | Flux | `en-US` |
-| `pinoy-pride` (Mama Lulu) | Mama Lulu | ElevenLabs `LF1xMOq6fDVEBEkLP0HO` | `local/qwen3-fast` | Nova-3 | `tl` |
-| `pinoy-pride` (Tita Baby) | Tita Baby | ElevenLabs `smYFzUb4yrSqprnml7n5` | `local/qwen3-fast` | Nova-3 | `tl` |
+| `mama-lulu` | Mama Lulu | ElevenLabs `LF1xMOq6fDVEBEkLP0HO` | `groq/llama4-scout` | Nova-3 | `tl` |
+| `pinoy-pride` | Tita Baby | ElevenLabs `smYFzUb4yrSqprnml7n5` | `groq/llama4-scout` | Nova-3 | `tl` |
+
+Every resolved persona receives the universal Layer 1 voice constraints before
+its identity-specific prompt. The account policy may retain the default above
+or choose another source-allowlisted LiteLLM alias.
 
 ---
 
@@ -148,13 +174,18 @@ Schema: `tango` (PostgreSQL 18)
 
 - **Framework:** Next.js 15 (App Router, standalone build)
 - **LiveKit integration:** `@livekit/components-react`
+- **Browser security boundary:** the browser calls only same-origin `/api/*`
+  route handlers. Server code forwards the host-only auth cookies to FastAPI.
+- **Routes:** `/login` has one password field; `/` hosts Tango; `/admin` is
+  server-gated to the admin role.
 - **Session flow:**
-  1. User selects persona → stored in localStorage
-  2. `useConnectionDetails` fetches `/api/connection-details` (gated by `personaStorageReady`)
-  3. `room.connect()` establishes WebRTC session
-  4. Frontend calls `POST /api/dispatch` to deploy agent into room
-  5. Voice chat active — History drawer hidden during session
-  6. User clicks End Call → `clearConnectionDetails()` → ready for next persona
+  1. The server validates the opaque session and loads the user's persona catalog.
+  2. The user selects only from assigned personas.
+  3. `POST /api/connection-details` checks CSRF and asks FastAPI for a signed,
+     account-bound LiveKit token and short-lived room grant.
+  4. `room.connect()` establishes the WebRTC session.
+  5. `POST /api/dispatch` atomically consumes the same user's room grant.
+  6. Voice history and memory are recorded under the signed account ID.
 
 ---
 
@@ -162,29 +193,45 @@ Schema: `tango` (PostgreSQL 18)
 
 - **Framework:** FastAPI + `uvicorn`
 - **Production runner:** `run_production.py` — starts both FastAPI and LiveKit worker
+- **Password verification:** Argon2id plus keyed HMAC lookup for the one-field login
+- **Web session:** opaque random token; only its SHA-256 digest is stored
+- **Cookies:** host-only, `HttpOnly` session plus JS-readable CSRF token;
+  `Secure`, `SameSite=Strict`, `Path=/` in production
+- **Authorization:** admin dependency for provisioning and server-authoritative
+  persona/model policy for token issuance
 - **Key endpoints:**
   - `GET /healthz` — health check
+  - `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`
+  - `/api/admin/*` — admin-only account and policy management
+  - `GET /api/personas` — authenticated user's permitted catalog
   - `POST /api/connection-details` — generates LiveKit access token with persona metadata
-  - `POST /api/dispatch` — dispatches LiveKit agent worker into the room
-  - `GET /api/history/sessions` — paginated session list (ended sessions only)
-  - `GET /api/history/sessions/{id}` — session detail with turns
+  - `POST /api/dispatch` — consumes an authenticated room grant and dispatches the worker
+  - `GET /api/history` and `GET /api/history/{id}` — owner-scoped ended sessions and turns
+  - `/api/memory/open-loops/*` — owner-scoped memory operations
 
 ---
 
 ## CI/CD Pipeline
 
 ```
-git push → GitHub
-        └── .github/workflows/deploy.yml  (workflow_dispatch trigger)
-                        │  Tailscale SSH to Schubert
+git push main → GitHub
+        └── .github/workflows/deploy.yml
+                        │  self-hosted Schubert runner
+                        │  Tailscale SSH fallback on explicit request
                         ▼
                 Schubert (as z121532):
-                  git pull origin main
+                  refuse dirty worktree
+                  git pull --ff-only origin main
                   venv/bin/pip install -r requirements.txt
                   npm run build (frontend)
                   cp static assets into standalone
+                  python backend/migrate.py
                   systemctl restart tango-backend tango-web
 ```
+
+Production deploys serialize through one concurrency group. An in-progress
+deployment is never cancelled during artifact replacement, migration, or
+restart; the next queued run fast-forwards to the newest `main`.
 
 ---
 
@@ -202,3 +249,5 @@ See `docs/decisions/` for full ADRs.
 | POST /api/dispatch after room.connect() | Prevents agent timeout on empty rooms | ADR-006 |
 | LiteLLM proxy for all LLM calls | Centralized credentials, model switching | ADR-007 |
 | F5-TTS sidecar for Jeremiah pilot | Self-hosted TTS without disrupting other personas | ADR-008 |
+| Groq Tagalog defaults + universal voice layer | Reproduce current live persona behavior | ADR-009 |
+| Password accounts + server persona authorization | Protect every browser/API path and isolate account data | ADR-010 |

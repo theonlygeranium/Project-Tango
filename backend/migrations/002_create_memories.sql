@@ -2,7 +2,6 @@
 -- Schubert pgvector check on 2026-06-28 found no installed vector extension.
 -- TODO: migrate embedding_vec from TEXT to vector(1536) when pgvector is available.
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE SCHEMA IF NOT EXISTS tango;
 
 CREATE TABLE IF NOT EXISTS tango.memories (

@@ -8,11 +8,11 @@ export const useDebugMode = ({ logLevel }: { logLevel?: LogLevel } = {}) => {
   React.useEffect(() => {
     setLogLevel(logLevel ?? 'debug');
 
-    // @ts-expect-error
+    // @ts-expect-error -- LiveKit exposes this debug handle outside the Window type.
     window.__lk_room = room;
 
     return () => {
-      // @ts-expect-error
+      // @ts-expect-error -- Clear the LiveKit debug handle added above.
       window.__lk_room = undefined;
     };
   }, [room, logLevel]);

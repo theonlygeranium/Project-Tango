@@ -4,12 +4,10 @@ import React, { useEffect, useRef } from 'react';
 import { FaReact } from 'react-icons/fa';
 import dynamic from 'next/dynamic';
 import { useReducedMotion } from 'motion/react';
-import { LlmModelSelector } from '@/components/LlmModelSelector';
 import { LoopBanner } from '@/components/LoopBanner';
 import { PersonaSelector } from '@/components/PersonaSelector';
 import { Button } from '@/components/ui/button';
-import { type LlmModelSelectionId } from '@/lib/llm-models';
-import { type PersonaId } from '@/lib/personas';
+import { type PersonaId, type TangoPersona } from '@/lib/personas';
 
 // Lazy-load the heavy TippingButton (~15 KB) — deferred until after first paint
 const TippingButton = dynamic(
@@ -168,23 +166,14 @@ interface WelcomeProps {
   disabled: boolean;
   startButtonText: string;
   selectedPersonaId: PersonaId;
-  selectedLlmModelId: LlmModelSelectionId;
+  personas: TangoPersona[];
   onPersonaChange: (personaId: PersonaId) => void;
-  onLlmModelChange: (llmModelId: LlmModelSelectionId) => void;
   onStartCall: () => void;
 }
 
 export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
   (
-    {
-      disabled,
-      startButtonText,
-      selectedPersonaId,
-      selectedLlmModelId,
-      onPersonaChange,
-      onLlmModelChange,
-      onStartCall,
-    },
+    { disabled, startButtonText, selectedPersonaId, personas, onPersonaChange, onStartCall },
     ref
   ) => {
     function handleTipComplete(): void {
@@ -217,17 +206,8 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
             </span>
             <PersonaSelector
               selectedPersonaId={selectedPersonaId}
-              selectedLlmModelId={selectedLlmModelId}
+              personas={personas}
               onPersonaChange={onPersonaChange}
-              disabled={disabled}
-            />
-          </div>
-
-          <div className="pointer-events-auto flex w-full flex-col items-center gap-2">
-            <span className="text-foreground/60 font-mono text-xs font-bold uppercase">Model</span>
-            <LlmModelSelector
-              selectedLlmModelId={selectedLlmModelId}
-              onLlmModelChange={onLlmModelChange}
               disabled={disabled}
             />
           </div>

@@ -7,14 +7,12 @@ import { RoomAudioRenderer, RoomContext, StartAudio } from '@livekit/components-
 import { HistoryPanel } from '@/components/HistoryPanel';
 import { toastAlert } from '@/components/alert-toast';
 import { SessionView } from '@/components/session-view';
-import { Toaster } from '@/components/ui/sonner';
 import { Welcome } from '@/components/welcome';
 import useConnectionDetails from '@/hooks/useConnectionDetails';
-import { DEFAULT_LLM_MODEL_SELECTION_ID, type LlmModelSelectionId } from '@/lib/llm-models';
 import {
-  DEFAULT_PERSONA_ID,
   PERSONA_STORAGE_KEY,
   type PersonaId,
+  type TangoPersona,
   isPersonaId,
 } from '@/lib/personas';
 import type { AppConfig } from '@/lib/types';
@@ -22,39 +20,44 @@ import type { AppConfig } from '@/lib/types';
 const MotionWelcome = motion.create(Welcome);
 const MotionSessionView = motion.create(SessionView);
 
-function readStoredPersonaId(): PersonaId {
+function readStoredPersonaId(
+  authorizedPersonas: TangoPersona[],
+  defaultPersonaId: PersonaId
+): PersonaId {
   if (typeof window === 'undefined') {
-    return DEFAULT_PERSONA_ID;
+    return defaultPersonaId;
   }
 
   try {
     const storedPersonaId = window.localStorage.getItem(PERSONA_STORAGE_KEY);
-    return isPersonaId(storedPersonaId) ? storedPersonaId : DEFAULT_PERSONA_ID;
+    return isPersonaId(storedPersonaId) &&
+      authorizedPersonas.some((persona) => persona.id === storedPersonaId)
+      ? storedPersonaId
+      : defaultPersonaId;
   } catch {
-    return DEFAULT_PERSONA_ID;
+    return defaultPersonaId;
   }
 }
 
 interface AppProps {
   appConfig: AppConfig;
+  authorizedPersonas: TangoPersona[];
+  defaultPersonaId: PersonaId;
 }
 
-export function App({ appConfig }: AppProps) {
+export function App({ appConfig, authorizedPersonas, defaultPersonaId }: AppProps) {
   const room = useMemo(() => new Room(), []);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [canPlayAudio, setCanPlayAudio] = useState(room.canPlaybackAudio);
-  const [selectedPersonaId, setSelectedPersonaId] = useState<PersonaId>(DEFAULT_PERSONA_ID);
-  const [selectedLlmModelId, setSelectedLlmModelId] = useState<LlmModelSelectionId>(
-    DEFAULT_LLM_MODEL_SELECTION_ID
-  );
+  const [selectedPersonaId, setSelectedPersonaId] = useState<PersonaId>(defaultPersonaId);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const { connectionDetails, refreshConnectionDetails, clearConnectionDetails } =
-    useConnectionDetails(selectedPersonaId, selectedLlmModelId, preferencesReady && sessionStarted);
+    useConnectionDetails(selectedPersonaId, preferencesReady && sessionStarted);
 
   useEffect(() => {
-    setSelectedPersonaId(readStoredPersonaId());
+    setSelectedPersonaId(readStoredPersonaId(authorizedPersonas, defaultPersonaId));
     setPreferencesReady(true);
-  }, []);
+  }, [authorizedPersonas, defaultPersonaId]);
 
   useEffect(() => {
     if (preferencesReady) {
@@ -123,8 +126,7 @@ export function App({ appConfig }: AppProps) {
         }
 
         try {
-          const apiBase = 'https://tango-api.schubert.life';
-          const dispatchResponse = await fetch(apiBase + '/api/dispatch', {
+          const dispatchResponse = await fetch('/api/dispatch', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ room_name: connectionDetails.roomName }),
@@ -181,7 +183,6 @@ export function App({ appConfig }: AppProps) {
   const { startButtonText } = appConfig;
   const handlePersonaChange = useCallback((personaId: PersonaId) => {
     setSelectedPersonaId(personaId);
-    setSelectedLlmModelId(DEFAULT_LLM_MODEL_SELECTION_ID);
   }, []);
 
   return (
@@ -190,9 +191,8 @@ export function App({ appConfig }: AppProps) {
         key="welcome"
         startButtonText={startButtonText}
         selectedPersonaId={selectedPersonaId}
+        personas={authorizedPersonas}
         onPersonaChange={handlePersonaChange}
-        selectedLlmModelId={selectedLlmModelId}
-        onLlmModelChange={setSelectedLlmModelId}
         onStartCall={() => {
           void room
             .startAudio()
@@ -219,7 +219,6 @@ export function App({ appConfig }: AppProps) {
           key="session-view"
           appConfig={appConfig}
           selectedPersonaId={selectedPersonaId}
-          selectedLlmModelId={selectedLlmModelId}
           disabled={!sessionStarted}
           sessionStarted={sessionStarted}
           initial={{ opacity: 0 }}
@@ -232,7 +231,6 @@ export function App({ appConfig }: AppProps) {
         />
       </RoomContext.Provider>
 
-      <Toaster />
       <HistoryPanel hidden={sessionStarted} />
     </>
   );

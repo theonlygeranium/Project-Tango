@@ -1,7 +1,6 @@
 -- Migration 001: Initial Project Tango schema
 -- Run as: psql -U z121532 -d tango -f migrations/001_initial_schema.sql
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE SCHEMA IF NOT EXISTS tango;
 
 CREATE TABLE IF NOT EXISTS tango.sessions (

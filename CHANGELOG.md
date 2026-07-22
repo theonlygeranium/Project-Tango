@@ -10,6 +10,16 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 ## [Unreleased]
 
 ### Added
+- Password-only user accounts with Argon2id verification, keyed credential
+  lookup, opaque database sessions, persistent login throttling, CSRF defense,
+  and a one-time administrator bootstrap command.
+- A responsive dark-mode `/admin` dashboard for regular-user provisioning,
+  profile editing, account activation, generated-password reset, persona access,
+  and per-persona default or allowlisted model policy.
+- PostgreSQL migration `004` for accounts, persona policy, auth sessions,
+  room grants, audit events, and account ownership on history and memory.
+- Same-origin Next.js API routes for authentication, persona catalog, LiveKit
+  tokens and dispatch, history, memory, and administration.
 - Groq Llama 4 Scout is now a source-controlled LiteLLM alias for Tango, and a
   universal Layer 1 voice-interface prompt is prepended to every persona.
 - SPEC-004 F5-TTS Jeremiah pilot: added a localhost-only `tango-tts.service`
@@ -22,6 +32,16 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   and transcribes that sample with Deepgram before F5-TTS synthesis.
 
 ### Changed
+- Conversation history, open loops, and injected memories are now isolated by
+  authenticated account ID. LiveKit tokens and dispatch grants bind the same
+  account, persona, and effective model server-side.
+- Regular users now see only assigned personas and cannot choose models. Admin
+  policy resolves every default or override against the backend LiteLLM
+  allowlist.
+- Deployment now refuses dirty Schubert checkouts, uses the correct self-hosted
+  runner label, serializes deploys without interrupting in-progress migrations,
+  fast-forwards Git noninteractively, applies checksum-ledgered migrations, and
+  builds only same-origin API config.
 - Mama Lulu and Tita Baby now default to `groq/llama4-scout` while retaining
   Deepgram Nova-3 monolingual Tagalog speech recognition.
 - Jeremiah now routes TTS through the local F5-TTS adapter when
@@ -43,6 +63,10 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   instead of a long excerpt whose transcript can drift from F5-TTS preprocessing.
 
 ### Fixed
+- Restored the GitHub deployment path by matching the runner's actual
+  `schubert` label instead of its display name.
+- Standalone deployment continues copying Next.js static and public assets so
+  authenticated pages retain CSS and JavaScript after each build.
 - Completed the persona grid's model-selection wiring and consolidated its model
   imports so the production frontend type-check passes cleanly.
 - Formatted the persona selector's imports and utility classes so the
@@ -67,6 +91,17 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   back to pushing container bytes as raw PCM.
 - Preserved the live Schubert 0-token history flush guard by waiting briefly for
   final LiveKit usage events before closing a history session.
+
+### Security
+- All application APIs except `/healthz` now require a valid database session;
+  admin and mutation routes add role, exact-origin, and double-submit CSRF
+  enforcement.
+- Plaintext generated passwords are returned only on create/reset, are never
+  stored or audited, and a reset or deactivation revokes web sessions and voice
+  grants, removes connected LiveKit participants, and is reinforced by periodic
+  worker-side account checks.
+- Argon2 verification concurrency is bounded, and failed-login counters now use
+  atomic database increments so simultaneous attempts cannot lose throttle data.
 
 ---
 

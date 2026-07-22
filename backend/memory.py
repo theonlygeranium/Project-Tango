@@ -47,6 +47,7 @@ TRANSCRIPT:
 async def generate_session_memory(
     pool: asyncpg.Pool,
     session_id: str,
+    user_id: str | uuid.UUID,
     persona: str,
     litellm_api_key: str,
 ) -> None:
@@ -72,13 +73,15 @@ async def generate_session_memory(
         if not memory_data:
             return
 
-        await _write_memory_records(pool, session_id, persona, memory_data)
+        await _write_memory_records(pool, session_id, user_id, persona, memory_data)
         logger.info("Wrote memory records session_id=%s persona=%s", session_id, persona)
     except Exception:
         logger.exception("Memory generation failed session_id=%s persona=%s", session_id, persona)
 
 
-async def load_context_for_session(pool: asyncpg.Pool, persona: str) -> str:
+async def load_context_for_session(
+    pool: asyncpg.Pool, user_id: str | uuid.UUID, persona: str
+) -> str:
     """Return formatted prior-session context for a persona, or an empty string."""
     try:
         resolution_filter = ""
@@ -88,16 +91,18 @@ async def load_context_for_session(pool: asyncpg.Pool, persona: str) -> str:
         query = f"""
             SELECT memory_type, content, created_at
             FROM tango.memories
-            WHERE persona = $1
+            WHERE user_id = $1
+              AND persona = $2
               AND (expires_at IS NULL OR expires_at > now())
-              AND created_at >= now() - ($2::text::interval)
+              AND created_at >= now() - ($3::text::interval)
               {resolution_filter}
             ORDER BY created_at DESC
-            LIMIT $3
+            LIMIT $4
         """
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 query,
+                _session_uuid(user_id),
                 persona,
                 f"{MEMORY_MAX_AGE_DAYS} days",
                 MAX_MEMORIES_PER_PERSONA,
@@ -154,11 +159,13 @@ async def _call_litellm_summarize(transcript: str, api_key: str) -> dict[str, An
 async def _write_memory_records(
     pool: asyncpg.Pool,
     session_id: str,
+    user_id: str | uuid.UUID,
     persona: str,
     data: dict[str, Any],
 ) -> None:
     session_uuid = _session_uuid(session_id)
-    records: list[tuple[str, uuid.UUID, str, str, str | None]] = []
+    account_uuid = _session_uuid(user_id)
+    records: list[tuple[uuid.UUID, str, uuid.UUID, str, str, str | None]] = []
 
     summary = _clean_string(data.get("summary"))
     if summary:
@@ -170,13 +177,31 @@ async def _write_memory_records(
             },
             ensure_ascii=True,
         )
-        records.append((persona, session_uuid, "session_summary", summary_content, f"{MEMORY_MAX_AGE_DAYS} days"))
+        records.append(
+            (
+                account_uuid,
+                persona,
+                session_uuid,
+                "session_summary",
+                summary_content,
+                f"{MEMORY_MAX_AGE_DAYS} days",
+            )
+        )
 
     for fact in _clean_string_list(data.get("user_profile_updates"), max_items=5):
-        records.append((persona, session_uuid, "user_profile", fact, None))
+        records.append((account_uuid, persona, session_uuid, "user_profile", fact, None))
 
     for loop in _clean_string_list(data.get("open_loops"), max_items=3):
-        records.append((persona, session_uuid, "open_loop", loop, f"{MEMORY_MAX_AGE_DAYS} days"))
+        records.append(
+            (
+                account_uuid,
+                persona,
+                session_uuid,
+                "open_loop",
+                loop,
+                f"{MEMORY_MAX_AGE_DAYS} days",
+            )
+        )
 
     if not records:
         logger.info("Memory extractor returned no storable records session_id=%s", session_id)
@@ -185,8 +210,12 @@ async def _write_memory_records(
     async with pool.acquire() as conn:
         await conn.executemany(
             """
-            INSERT INTO tango.memories (persona, session_id, memory_type, content, expires_at)
-            VALUES ($1, $2, $3, $4, CASE WHEN $5::text IS NULL THEN NULL ELSE now() + ($5::text::interval) END)
+            INSERT INTO tango.memories
+                (user_id, persona, session_id, memory_type, content, expires_at)
+            VALUES (
+                $1, $2, $3, $4, $5,
+                CASE WHEN $6::text IS NULL THEN NULL ELSE now() + ($6::text::interval) END
+            )
             """,
             records,
         )
@@ -194,9 +223,10 @@ async def _write_memory_records(
 
 async def _has_resolution_columns(pool: asyncpg.Pool) -> bool:
     global _resolution_columns_cache
-    if _resolution_columns_cache is not None:return _resolution_columns_cache
+    if _resolution_columns_cache is not None:
+        return _resolution_columns_cache
     async with pool.acquire() as conn:
-        result=bool(
+        result = bool(
             await conn.fetchval(
                 """
                 SELECT EXISTS (
@@ -209,7 +239,7 @@ async def _has_resolution_columns(pool: asyncpg.Pool) -> bool:
                 """
             )
         )
-    _resolution_columns_cache=result
+    _resolution_columns_cache = result
     return result
 
 

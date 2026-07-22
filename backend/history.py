@@ -36,6 +36,7 @@ def _session_uuid(session_id: str | uuid.UUID) -> uuid.UUID:
 
 
 async def create_session(
+    user_id: str | uuid.UUID | None,
     persona_id: str,
     persona_name: str,
     livekit_room: str,
@@ -48,10 +49,11 @@ async def create_session(
     await pool.execute(
         """
         INSERT INTO tango.sessions
-            (id, persona_id, persona_name, livekit_room, llm_model, user_agent, client_ip)
-        VALUES ($1, $2, $3, $4, $5, $6, $7::inet)
+            (id, user_id, persona_id, persona_name, livekit_room, llm_model, user_agent, client_ip)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::inet)
         """,
         session_id,
+        _session_uuid(user_id) if user_id else None,
         persona_id,
         persona_name,
         livekit_room,
@@ -128,7 +130,9 @@ async def close_session(
             )
 
 
-async def get_sessions(limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
+async def get_sessions(
+    user_id: str | uuid.UUID, limit: int = 20, offset: int = 0
+) -> list[dict[str, Any]]:
     pool = await get_pool()
     bounded_limit = min(max(limit, 1), 100)
     bounded_offset = max(offset, 0)
@@ -138,24 +142,29 @@ async def get_sessions(limit: int = 20, offset: int = 0) -> list[dict[str, Any]]
         SELECT id, persona_id, persona_name, started_at, ended_at,
                duration_secs, livekit_room, llm_model, total_tokens, error_code
         FROM tango.sessions
-        WHERE ended_at IS NOT NULL ORDER BY started_at DESC
-        LIMIT $1 OFFSET $2
+        WHERE user_id = $1 AND ended_at IS NOT NULL ORDER BY started_at DESC
+        LIMIT $2 OFFSET $3
         """,
+        _session_uuid(user_id),
         bounded_limit,
         bounded_offset,
     )
     return [dict(row) for row in rows]
 
 
-async def get_session_turns(session_id: str | uuid.UUID) -> list[dict[str, Any]]:
+async def get_session_turns(
+    session_id: str | uuid.UUID, user_id: str | uuid.UUID
+) -> list[dict[str, Any]]:
     pool = await get_pool()
     rows = await pool.fetch(
         """
         SELECT turn_index, speaker, text, tokens_used, latency_ms, recorded_at
-        FROM tango.turns
-        WHERE session_id = $1
+        FROM tango.turns t
+        JOIN tango.sessions s ON s.id = t.session_id
+        WHERE t.session_id = $1 AND s.user_id = $2
         ORDER BY turn_index ASC
         """,
         _session_uuid(session_id),
+        _session_uuid(user_id),
     )
     return [dict(row) for row in rows]

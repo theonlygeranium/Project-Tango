@@ -1,8 +1,17 @@
+import { redirect } from 'next/navigation';
+import { AccountMenu } from '@/components/auth/AccountMenu';
+import { getCurrentUser } from '@/lib/server/backend';
+
 interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-export default function AppLayout({ children }: AppLayoutProps) {
+export default async function AppLayout({ children }: AppLayoutProps) {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect('/login');
+  }
+
   return (
     <>
       <header className="fixed top-0 left-0 z-50 hidden w-full flex-row justify-between p-6 md:flex">
@@ -42,6 +51,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </a>
         </span>
       </header>
+      <AccountMenu user={user} />
       {children}
     </>
   );

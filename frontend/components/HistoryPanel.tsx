@@ -11,7 +11,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { LLM_MODEL_OPTIONS } from '@/lib/llm-models';
 import { getPersona } from '@/lib/personas';
 import { cn } from '@/lib/utils';
 
@@ -50,11 +49,6 @@ interface HistoryPanelProps {
   hidden?: boolean;
 }
 
-function apiUrl(path: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? '';
-  return `${baseUrl}${path}`;
-}
-
 function formatSessionTime(value: string | null) {
   if (!value) {
     return 'Unknown time';
@@ -88,14 +82,6 @@ function formatDuration(seconds: number | null) {
   return minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${remainingSeconds}s`;
 }
 
-function formatModel(modelId: string | null) {
-  if (!modelId) {
-    return 'Unknown model';
-  }
-
-  return LLM_MODEL_OPTIONS.find((option) => option.id === modelId)?.shortLabel ?? modelId;
-}
-
 export function HistoryPanel({ hidden = false }: HistoryPanelProps) {
   const [open, setOpen] = useState(false);
   const [sessions, setSessions] = useState<HistorySession[]>([]);
@@ -114,7 +100,7 @@ export function HistoryPanel({ hidden = false }: HistoryPanelProps) {
     setLoadingSessions(true);
     setError(null);
     try {
-      const response = await fetch(apiUrl('/api/history'), { cache: 'no-store' });
+      const response = await fetch('/api/history', { cache: 'no-store' });
       if (!response.ok) {
         throw new Error(`History request failed with ${response.status}`);
       }
@@ -133,7 +119,7 @@ export function HistoryPanel({ hidden = false }: HistoryPanelProps) {
     setLoadingTurns(true);
     setError(null);
     try {
-      const response = await fetch(apiUrl(`/api/history/${session.id}`), { cache: 'no-store' });
+      const response = await fetch(`/api/history/${session.id}`, { cache: 'no-store' });
       if (!response.ok) {
         throw new Error(`Transcript request failed with ${response.status}`);
       }
@@ -243,9 +229,6 @@ export function HistoryPanel({ hidden = false }: HistoryPanelProps) {
                       <span className="text-muted-foreground block truncate text-xs">
                         {formatSessionTime(session.started_at)}
                       </span>
-                      <span className="text-muted-foreground block truncate font-mono text-[0.65rem] uppercase">
-                        {formatModel(session.llm_model)}
-                      </span>
                     </span>
                     <span className="text-muted-foreground shrink-0 text-right font-mono text-[0.68rem] uppercase">
                       <span className="block">{formatDuration(session.duration_secs)}</span>
@@ -273,9 +256,6 @@ export function HistoryPanel({ hidden = false }: HistoryPanelProps) {
                     <p className="truncate text-sm font-semibold">{selectedSession.persona_name}</p>
                     <p className="text-muted-foreground truncate text-xs">
                       {formatSessionTime(selectedSession.started_at)}
-                    </p>
-                    <p className="text-muted-foreground truncate font-mono text-[0.65rem] uppercase">
-                      {formatModel(selectedSession.llm_model)}
                     </p>
                   </div>
                 </div>

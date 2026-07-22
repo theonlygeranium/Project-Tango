@@ -12,36 +12,47 @@ on:
         default: 'false'
         type: boolean
 
+# Only one production deployment may run at a time. Never cancel a deployment
+# while it may be replacing artifacts, migrating, or restarting services; the
+# next queued run fast-forwards to the newest main before deploying.
+concurrency:
+  group: project-tango-schubert-production
+  cancel-in-progress: false
+
 jobs:
   # ── PRIMARY PATH ──────────────────────────────────────────────────────────────
   # Runs directly on Schubert via the self-hosted runner.
   # No Tailscale, no SSH — LAN-native, fastest path.
   deploy-local:
     name: Deploy (self-hosted · LAN)
-    runs-on: [self-hosted, schubert-local]
+    runs-on: [self-hosted, schubert]
     if: ${{ github.event.inputs.force_remote != 'true' }}
     timeout-minutes: 10
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Write frontend .env.local
-        run: |
-          printf 'NEXT_PUBLIC_LIVEKIT_URL=wss://project-tango-0xs3szq3.livekit.cloud\nNEXT_PUBLIC_SITE_URL=https://project-tango.schubert.life\nNEXT_PUBLIC_API_BASE_URL=https://tango-api.schubert.life\nNEXT_PUBLIC_CONN_DETAILS_ENDPOINT=https://tango-api.schubert.life/api/connection-details\n' \
-            > /opt/Project-Tango/frontend/.env.local
-
       - name: Run deploy script
         run: |
-          set -e
+          set -euo pipefail
           cd /opt/Project-Tango
+          dirty="$(sudo -u z121532 env HOME=/home/z121532 git status --porcelain --untracked-files=normal)"
+          if [ -n "$dirty" ]; then
+            echo "::error::Refusing to deploy: /opt/Project-Tango has uncommitted or untracked changes."
+            printf '%s\n' "$dirty"
+            exit 1
+          fi
           if [ -f .env ]; then
             cp .env /tmp/project-tango.env.backup
           fi
-          git pull origin main
+          sudo -u z121532 env HOME=/home/z121532 GIT_TERMINAL_PROMPT=0 \
+            git pull --ff-only origin main
           if [ -f /tmp/project-tango.env.backup ]; then
             mv /tmp/project-tango.env.backup .env
             chmod 600 .env
           fi
+          printf 'NEXT_PUBLIC_LIVEKIT_URL=wss://project-tango-0xs3szq3.livekit.cloud\nNEXT_PUBLIC_SITE_URL=https://project-tango.schubert.life\nTANGO_INTERNAL_API_BASE_URL=http://127.0.0.1:8030\n' \
+            > /opt/Project-Tango/frontend/.env.local
           sudo bash scripts/deploy.sh
 
   # ── FALLBACK PATH ─────────────────────────────────────────────────────────────
@@ -95,10 +106,16 @@ jobs:
             -o StrictHostKeyChecking=no \
             -o ConnectTimeout=30 \
             z121532@100.86.47.6 \
-            'set -e
-            printf "NEXT_PUBLIC_LIVEKIT_URL=wss://project-tango-0xs3szq3.livekit.cloud\nNEXT_PUBLIC_SITE_URL=https://project-tango.schubert.life\nNEXT_PUBLIC_API_BASE_URL=https://tango-api.schubert.life\nNEXT_PUBLIC_CONN_DETAILS_ENDPOINT=https://tango-api.schubert.life/api/connection-details\n" > /opt/Project-Tango/frontend/.env.local
+            'set -euo pipefail
             cd /opt/Project-Tango
+            dirty="$(sudo -u z121532 env HOME=/home/z121532 git status --porcelain --untracked-files=normal)"
+            if [ -n "$dirty" ]; then
+              echo "ERROR: Refusing to deploy: /opt/Project-Tango has uncommitted or untracked changes."
+              printf "%s\n" "$dirty"
+              exit 1
+            fi
             if [ -f .env ]; then cp .env /tmp/project-tango.env.backup; fi
-            git pull origin main
+            sudo -u z121532 env HOME=/home/z121532 GIT_TERMINAL_PROMPT=0 git pull --ff-only origin main
             if [ -f /tmp/project-tango.env.backup ]; then mv /tmp/project-tango.env.backup .env && chmod 600 .env; fi
+            printf "NEXT_PUBLIC_LIVEKIT_URL=wss://project-tango-0xs3szq3.livekit.cloud\nNEXT_PUBLIC_SITE_URL=https://project-tango.schubert.life\nTANGO_INTERNAL_API_BASE_URL=http://127.0.0.1:8030\n" > /opt/Project-Tango/frontend/.env.local
             sudo bash scripts/deploy.sh'

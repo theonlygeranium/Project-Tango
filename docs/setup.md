@@ -42,7 +42,7 @@ cd Project-Tango
 ## Step 2 — Configure Environment
 
 ```bash
-cp backend/.env.example backend/.env
+cp backend/.env.example .env
 ```
 
 Edit `backend/.env` and set:
@@ -75,6 +75,13 @@ TANGO_F5_TTS_TIMEOUT_SECONDS=60
 # Database
 DATABASE_URL=postgresql://tango_user:<password>@localhost:5432/tango
 
+# Account authentication (generate a unique value; never commit it)
+TANGO_AUTH_LOOKUP_KEY=<at-least-32-random-bytes>
+TANGO_PUBLIC_ORIGIN=https://project-tango.schubert.life
+TANGO_AUTH_COOKIE_SECURE=true
+TANGO_AUTH_SESSION_TTL_HOURS=168
+TANGO_AUTH_IDLE_TTL_HOURS=12
+
 # Do NOT add WRITER_API_KEY or PALMYRA_API_KEY here
 ```
 
@@ -91,7 +98,7 @@ sudo -u z121532 venv/bin/pip install -r requirements.txt
 Verify:
 
 ```bash
-sudo -u z121532 python3 -m py_compile main.py history.py
+sudo -u z121532 venv/bin/python -m py_compile main.py history.py memory.py auth.py accounts.py account_routes.py
 echo "Python compile: OK"
 ```
 
@@ -146,7 +153,35 @@ GRANT CONNECT ON DATABASE postgres TO tango_user;
 \q
 ```
 
-Tables are created automatically on first backend startup.
+Apply the tracked migrations before starting the services:
+
+```bash
+cd /opt/Project-Tango
+set -a
+. ./.env
+set +a
+sudo -u postgres env DATABASE_URL=postgresql://postgres@localhost/tango \
+  backend/venv/bin/python backend/migrate.py
+```
+
+The migration runner uses a PostgreSQL advisory lock and records each filename
+and checksum in `tango.schema_migrations`. It refuses changed migrations that
+were already applied. Run it as the PostgreSQL migration owner because Tango's
+legacy tables do not all share the application service account as owner; the
+migration grants the application role its required table and sequence access.
+
+Create the initial administrator once. The generated password is printed once;
+copy it directly into the owner's password manager and do not place it in a
+shell script, environment file, or deployment log.
+
+```bash
+sudo -u z121532 env DATABASE_URL="$DATABASE_URL" \
+  TANGO_AUTH_LOOKUP_KEY="$TANGO_AUTH_LOOKUP_KEY" \
+  TANGO_PUBLIC_ORIGIN="$TANGO_PUBLIC_ORIGIN" \
+  backend/venv/bin/python backend/bootstrap_admin.py \
+  --first-name Tango --last-name Admin \
+  --email founder@edstratumlabs.ai --adopt-legacy-data
+```
 
 ---
 
@@ -154,6 +189,7 @@ Tables are created automatically on first backend startup.
 
 ```bash
 cd /opt/Project-Tango/frontend
+printf 'NEXT_PUBLIC_LIVEKIT_URL=wss://project-tango-0xs3szq3.livekit.cloud\nNEXT_PUBLIC_SITE_URL=https://project-tango.schubert.life\nTANGO_INTERNAL_API_BASE_URL=http://127.0.0.1:8030\n' > .env.local
 sudo -u z121532 npm install
 sudo -u z121532 npm run build
 sudo -u z121532 cp -r .next/static .next/standalone/.next/static
@@ -191,13 +227,13 @@ systemctl is-active tango-tts tango-backend tango-web
 curl -s http://127.0.0.1:8020/healthz
 # Expected: {"status":"ok", ...}
 
-# Backend health
+# Public backend health
 curl -s https://tango-api.schubert.life/healthz
-# Expected: {"status":"ok"}
+# Expected: ok
 
-# Frontend loads
+# Anonymous frontend access redirects to login
 curl -sI https://project-tango.schubert.life | head -3
-# Expected: HTTP/2 200
+# Expected: redirect to /login
 
 # Confirm LiteLLM routing
 sudo journalctl -u tango-backend -n 30 --no-pager | grep "llm_base_url"
@@ -218,14 +254,18 @@ sudo journalctl -u tango-tts -n 80 --no-pager | grep "Synthesized"
 
 ```bash
 cd /opt/Project-Tango
-sudo -u z121532 git pull origin main
+sudo -u z121532 git status --short  # must be empty
+sudo -u z121532 git pull --ff-only origin main
 
 # F5-TTS sidecar (if SPEC-004 files changed or first setup is incomplete)
 sudo bash scripts/setup-f5-tts.sh
 sudo -u z121532 python3 scripts/extract_jeremiah_reference.py
 
-# Backend (if requirements changed)
+# Backend dependencies and migrations
 cd backend && sudo -u z121532 venv/bin/pip install -r requirements.txt && cd ..
+set -a; . ./.env; set +a
+sudo -u postgres env DATABASE_URL=postgresql://postgres@localhost/tango \
+  backend/venv/bin/python backend/migrate.py
 
 # Frontend (if frontend changed)
 cd frontend
@@ -234,7 +274,7 @@ sudo -u z121532 cp -r .next/static .next/standalone/.next/static
 sudo -u z121532 cp -r public .next/standalone/public
 cd ..
 
-sudo systemctl restart tango-tts tango-backend tango-web
+sudo systemctl restart tango-backend tango-web
 curl -s https://tango-api.schubert.life/healthz
 ```
 
@@ -248,7 +288,7 @@ curl -s https://tango-api.schubert.life/healthz
 cd backend
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # Fill in dev values
+cp .env.example ../.env  # Fill in dev values; set secure cookies false for HTTP
 uvicorn main:app --host 127.0.0.1 --port 8030 --reload
 ```
 
@@ -257,7 +297,7 @@ uvicorn main:app --host 127.0.0.1 --port 8030 --reload
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local  # Set NEXT_PUBLIC_BACKEND_URL=http://localhost:8030
+cp .env.example .env.local  # Set TANGO_INTERNAL_API_BASE_URL=http://127.0.0.1:8030
 npm run dev -- --port 3006
 ```
 

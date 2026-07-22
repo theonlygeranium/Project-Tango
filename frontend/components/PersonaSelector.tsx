@@ -1,32 +1,18 @@
 'use client';
 
-import { LLM_MODEL_OPTIONS, type LlmModelId, type LlmModelSelectionId } from '@/lib/llm-models';
-import { type PersonaId, TANGO_PERSONAS } from '@/lib/personas';
+import { type PersonaId, type TangoPersona } from '@/lib/personas';
 import { cn } from '@/lib/utils';
 
 interface PersonaSelectorProps {
   selectedPersonaId: PersonaId;
-  selectedLlmModelId: LlmModelSelectionId;
+  personas: TangoPersona[];
   disabled?: boolean;
   onPersonaChange: (personaId: PersonaId) => void;
 }
 
-function resolveModelLabel(
-  personaDefaultModel: LlmModelId,
-  selectedLlmModelId: LlmModelSelectionId
-): string {
-  const effectiveModelId =
-    !selectedLlmModelId || selectedLlmModelId === 'persona-default'
-      ? personaDefaultModel
-      : selectedLlmModelId;
-  return (
-    LLM_MODEL_OPTIONS.find((opt) => opt.id === effectiveModelId)?.shortLabel ?? effectiveModelId
-  );
-}
-
 export function PersonaSelector({
   selectedPersonaId,
-  selectedLlmModelId,
+  personas,
   disabled = false,
   onPersonaChange,
 }: PersonaSelectorProps) {
@@ -36,10 +22,8 @@ export function PersonaSelector({
       aria-label="Choose persona"
       className="grid w-full max-w-4xl grid-cols-2 gap-2 sm:grid-cols-4"
     >
-      {TANGO_PERSONAS.map((persona) => {
+      {personas.map((persona) => {
         const selected = persona.id === selectedPersonaId;
-        const modelLabel = resolveModelLabel(persona.defaultLlmModel, selectedLlmModelId);
-        const isOverride = !!selectedLlmModelId && selectedLlmModelId !== 'persona-default';
 
         return (
           <button
@@ -83,25 +67,6 @@ export function PersonaSelector({
             {/* Role description */}
             <span className="text-muted-foreground w-full truncate pl-10 text-[0.65rem] leading-tight sm:pl-11">
               {persona.roleDescription}
-            </span>
-
-            {/* Bottom row: model badge + TTS badge */}
-            <span className="mt-0.5 flex w-full items-center gap-1.5 pl-10 sm:pl-11">
-              <span
-                className={cn(
-                  'inline-flex items-center rounded-full border px-1.5 py-0.5 text-[0.55rem] leading-tight font-semibold tracking-wide uppercase',
-                  isOverride
-                    ? 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300'
-                    : 'border-border/60 bg-muted/50 text-muted-foreground'
-                )}
-              >
-                {modelLabel}
-              </span>
-              {persona.ttsBackend === 'f5-tts' && (
-                <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[0.55rem] font-bold tracking-wide text-amber-700 uppercase dark:text-amber-200">
-                  F5-TTS
-                </span>
-              )}
             </span>
           </button>
         );

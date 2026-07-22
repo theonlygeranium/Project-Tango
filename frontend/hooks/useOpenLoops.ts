@@ -3,13 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { OpenLoop } from '@/lib/types';
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  process.env.NEXT_PUBLIC_BACKEND_URL ??
-  'https://tango-api.schubert.life';
-
 function openLoopsUrl(persona?: string): string {
-  const url = new URL('/api/memory/open-loops', API_BASE_URL);
+  const url = new URL('/api/memory/open-loops', window.location.origin);
   if (persona) {
     url.searchParams.set('persona', persona);
   }
@@ -53,7 +48,9 @@ export function useOpenLoops(persona?: string) {
 
   const resolveLoop = useCallback(async (id: string) => {
     setLoops((currentLoops) => currentLoops.filter((loop) => loop.id !== id));
-    await fetch(`${openLoopsUrl()}/${id}/resolve`, { method: 'PATCH' }).catch(() => undefined);
+    await fetch(`/api/memory/open-loops/${encodeURIComponent(id)}/resolve`, {
+      method: 'PATCH',
+    }).catch(() => undefined);
   }, []);
 
   return { loops, loading, resolveLoop };
