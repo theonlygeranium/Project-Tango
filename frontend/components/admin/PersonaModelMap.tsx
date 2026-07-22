@@ -145,7 +145,7 @@ export function PersonaModelMap({ catalog }: { catalog: PersonaCatalogResponse }
                   <CpuIcon weight="duotone" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold">{model.label}</span>
+                  <span className="block text-sm leading-5 font-semibold">{model.label}</span>
                   <code className="text-muted-foreground mt-0.5 block truncate text-[0.68rem]">
                     {model.id}
                   </code>

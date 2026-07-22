@@ -73,6 +73,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   instead of a long excerpt whose transcript can drift from F5-TTS preprocessing.
 
 ### Fixed
+- Long backend model names wrap inside the admin model summary rail instead of
+  hiding their qualifier at desktop widths.
 - Compact admin persona controls use readable short model names in the card
   while retaining full backend labels in the dropdown and accessible name.
 - The admin footer now follows the expanded persona grid, and its decorative
