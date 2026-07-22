@@ -7,7 +7,7 @@
 
 ## 1. What This Repository Is
 
-`Project-Tango` is a **proprietary, persona-driven AI voice companion** owned by Jeffrey Geronimo (Geronimo AI). It runs on a private Ubuntu workstation called **Schubert Nexus** and is deployed at `https://project-tango.schubert.life`.
+`Project-Tango` is a **proprietary, persona-driven AI voice companion** owned by EdStratum Labs. It runs on a private Ubuntu workstation called **Schubert Nexus** and is deployed at `https://project-tango.schubert.life`.
 
 The stack is:
 - **LiveKit Agents SDK** (`livekit-agents` PyPI package — not Pipecat)
@@ -302,7 +302,7 @@ Task: Reformat repository to match watson-ai documentation standards
 
 ## 11. Contact and Authorization
 
-**Human owner:** Jeffrey Geronimo (`jg@writer.com`) — Geronimo AI
+**Human owner:** EdStratum Labs (`jg@writer.com`) — EdStratum Labs
 
 For any action outside defined scope — modifying `AGENTS.md`, touching forbidden services, making architectural changes not covered by an ADR, or destructive operations — **stop and ask the human owner for explicit authorization**.
 
