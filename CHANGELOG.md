@@ -10,6 +10,10 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 ## [Unreleased]
 
 ### Added
+- The account administration dashboard now includes a responsive persona model
+  map sourced from the live admin catalog, with allowlisted-model summaries,
+  current default LLM/provider assignments, TTS/STT pipelines, and soft pulsing
+  route glows.
 - Admin-only persona model controls on the main Tango interface now show each
   persona's source default and offer every backend-allowlisted model in a
   compact dropdown with a soft, persona-colored pulsing glow.

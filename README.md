@@ -25,9 +25,11 @@ Administrators also see each persona's source default model on the main Tango
 screen and may choose any allowlisted model for their own next voice session.
 These session choices do not change the persona defaults or regular-user policy.
 
-The admin dashboard lives at `/admin`. Dashboard-created accounts are always
-regular users; the first admin is created with the backend bootstrap command
-documented in [RB-04](docs/runbooks/RB-04-account-administration.md).
+The admin dashboard lives at `/admin`. It includes the current source-controlled
+persona/model and voice-pipeline map alongside account provisioning. Accounts
+created in the dashboard are always regular users; the first admin is created
+with the backend bootstrap command documented in
+[RB-04](docs/runbooks/RB-04-account-administration.md).
 
 ## Development
 

@@ -178,6 +178,10 @@ or choose another source-allowlisted LiteLLM alias.
   route handlers. Server code forwards the host-only auth cookies to FastAPI.
 - **Routes:** `/login` has one password field; `/` hosts Tango; `/admin` is
   server-gated to the admin role.
+- **Admin inventory:** `/admin` renders its persona/model map from the
+  admin-only catalog, including source defaults, allowlisted providers, and the
+  current TTS/STT pipeline for every persona. The chart is informational;
+  account policy remains editable through the account controls.
 - **Persona model controls:** the main interface shows model labels and an
   allowlisted per-persona session dropdown only when the authenticated user is
   an admin. The label always identifies the source default returned by

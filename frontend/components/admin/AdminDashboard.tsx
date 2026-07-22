@@ -14,6 +14,7 @@ import {
   UsersThreeIcon,
 } from '@phosphor-icons/react';
 import { GeneratedPasswordDialog } from '@/components/admin/GeneratedPasswordDialog';
+import { PersonaModelMap } from '@/components/admin/PersonaModelMap';
 import { UserEditorDialog } from '@/components/admin/UserEditorDialog';
 import {
   AlertDialog,
@@ -231,6 +232,8 @@ export function AdminDashboard({
           </CardContent>
         </Card>
       </section>
+
+      <PersonaModelMap catalog={catalog} />
 
       <Card>
         <CardHeader>

@@ -247,6 +247,47 @@
     text-shadow: 0 0 10px rgb(var(--persona-model-glow) / 0.55);
   }
 
+  .persona-route-surface {
+    border: 1px solid rgb(var(--persona-model-glow) / 0.28);
+    border-radius: 0.65rem;
+    background: linear-gradient(
+      135deg,
+      rgb(var(--persona-model-glow) / 0.11),
+      rgb(var(--persona-model-glow) / 0.025) 72%
+    );
+  }
+
+  .persona-route-beacon {
+    width: 0.45rem;
+    height: 0.45rem;
+    flex: none;
+    border-radius: 999px;
+    background: rgb(var(--persona-model-glow));
+    box-shadow: 0 0 12px rgb(var(--persona-model-glow) / 0.8);
+  }
+
+  .persona-route-icon {
+    display: flex;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgb(var(--persona-model-glow) / 0.32);
+    border-radius: 0.6rem;
+    color: color-mix(in srgb, rgb(var(--persona-model-glow)) 70%, var(--foreground));
+    background: rgb(var(--persona-model-glow) / 0.1);
+  }
+
+  .persona-route-icon svg {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+
+  .admin-persona-route-row > td:first-child {
+    box-shadow: inset 2px 0 rgb(var(--persona-model-glow, 56 189 248) / 0.45);
+  }
+
   .persona-model-glow-sky {
     --persona-model-glow: 56 189 248;
   }
