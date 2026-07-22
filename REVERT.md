@@ -100,4 +100,4 @@ git push origin main --force
 
 ---
 
-*Last updated: June 28, 2026 — Geronimo AI / Project Tango*
+*Last updated: June 28, 2026 — EdStratum Labs / Project Tango*
