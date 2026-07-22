@@ -302,7 +302,7 @@ Task: Reformat repository to match watson-ai documentation standards
 
 ## 11. Contact and Authorization
 
-**Human owner:** EdStratum Labs (`jg@writer.com`) — EdStratum Labs
+**Human owner:** EdStratum Labs (`founder@edstratumlabs.ai`) — EdStratum Labs
 
 For any action outside defined scope — modifying `AGENTS.md`, touching forbidden services, making architectural changes not covered by an ADR, or destructive operations — **stop and ask the human owner for explicit authorization**.
 
