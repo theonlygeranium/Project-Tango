@@ -9,6 +9,7 @@ export type LlmModelOption = {
 
 export const DEFAULT_LLM_MODEL_SELECTION_ID: LlmModelSelectionId = 'persona-default';
 export const LLM_MODEL_STORAGE_KEY = 'project-tango.llm-model-id';
+export const ADMIN_LLM_MODEL_STORAGE_KEY = 'project-tango.admin-llm-model-selections';
 
 export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
   {

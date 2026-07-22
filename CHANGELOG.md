@@ -10,6 +10,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 ## [Unreleased]
 
 ### Added
+- Admin-only persona model controls on the main Tango interface now show each
+  persona's source default and offer every backend-allowlisted model in a
+  compact dropdown with a soft, persona-colored pulsing glow.
 - Password-only user accounts with Argon2id verification, keyed credential
   lookup, opaque database sessions, persistent login throttling, CSRF defense,
   and a one-time administrator bootstrap command.
@@ -32,6 +35,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   and transcribes that sample with Deepgram before F5-TTS synthesis.
 
 ### Changed
+- Admin per-persona model choices are remembered in local browser storage and
+  sent as session-specific overrides; regular users retain the simpler
+  persona-only interface and server-resolved account policy.
 - Conversation history, open loops, and injected memories are now isolated by
   authenticated account ID. LiveKit tokens and dispatch grants bind the same
   account, persona, and effective model server-side.

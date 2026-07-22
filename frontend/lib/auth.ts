@@ -44,6 +44,7 @@ export interface BackendPersona {
   display_name: string;
   role_description: string;
   llm_model: LlmModelId;
+  default_llm_model?: LlmModelId;
   llm_model_override?: LlmModelId | null;
   effective_llm_model?: LlmModelId;
   stt_language?: string;

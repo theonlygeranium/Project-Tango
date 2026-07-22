@@ -9,6 +9,14 @@ import { toastAlert } from '@/components/alert-toast';
 import { SessionView } from '@/components/session-view';
 import { Welcome } from '@/components/welcome';
 import useConnectionDetails from '@/hooks/useConnectionDetails';
+import type { BackendLlmModel } from '@/lib/auth';
+import {
+  ADMIN_LLM_MODEL_STORAGE_KEY,
+  DEFAULT_LLM_MODEL_SELECTION_ID,
+  type LlmModelSelectionId,
+  isLlmModelSelectionId,
+  llmModelRequestValue,
+} from '@/lib/llm-models';
 import {
   PERSONA_STORAGE_KEY,
   type PersonaId,
@@ -39,25 +47,74 @@ function readStoredPersonaId(
   }
 }
 
+type AdminModelSelections = Partial<Record<PersonaId, LlmModelSelectionId>>;
+
+function readStoredModelSelections(
+  authorizedPersonas: TangoPersona[],
+  availableLlmModels: BackendLlmModel[]
+): AdminModelSelections {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  try {
+    const rawSelections = window.localStorage.getItem(ADMIN_LLM_MODEL_STORAGE_KEY);
+    const parsedSelections = rawSelections
+      ? (JSON.parse(rawSelections) as Record<string, unknown>)
+      : {};
+    const allowedModelIds = new Set<string>(availableLlmModels.map((model) => model.id));
+
+    return Object.fromEntries(
+      authorizedPersonas.flatMap((persona) => {
+        const selection = parsedSelections[persona.id];
+        return typeof selection === 'string' &&
+          isLlmModelSelectionId(selection) &&
+          (selection === DEFAULT_LLM_MODEL_SELECTION_ID || allowedModelIds.has(selection))
+          ? [[persona.id, selection]]
+          : [];
+      })
+    );
+  } catch {
+    return {};
+  }
+}
+
 interface AppProps {
   appConfig: AppConfig;
   authorizedPersonas: TangoPersona[];
   defaultPersonaId: PersonaId;
+  isAdmin: boolean;
+  availableLlmModels: BackendLlmModel[];
 }
 
-export function App({ appConfig, authorizedPersonas, defaultPersonaId }: AppProps) {
+export function App({
+  appConfig,
+  authorizedPersonas,
+  defaultPersonaId,
+  isAdmin,
+  availableLlmModels,
+}: AppProps) {
   const room = useMemo(() => new Room(), []);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [canPlayAudio, setCanPlayAudio] = useState(room.canPlaybackAudio);
   const [selectedPersonaId, setSelectedPersonaId] = useState<PersonaId>(defaultPersonaId);
+  const [selectedModels, setSelectedModels] = useState<AdminModelSelections>({});
   const [preferencesReady, setPreferencesReady] = useState(false);
+  const selectedModelId = selectedModels[selectedPersonaId] ?? DEFAULT_LLM_MODEL_SELECTION_ID;
   const { connectionDetails, refreshConnectionDetails, clearConnectionDetails } =
-    useConnectionDetails(selectedPersonaId, preferencesReady && sessionStarted);
+    useConnectionDetails(
+      selectedPersonaId,
+      preferencesReady && sessionStarted,
+      isAdmin ? llmModelRequestValue(selectedModelId) : undefined
+    );
 
   useEffect(() => {
     setSelectedPersonaId(readStoredPersonaId(authorizedPersonas, defaultPersonaId));
+    setSelectedModels(
+      isAdmin ? readStoredModelSelections(authorizedPersonas, availableLlmModels) : {}
+    );
     setPreferencesReady(true);
-  }, [authorizedPersonas, defaultPersonaId]);
+  }, [authorizedPersonas, availableLlmModels, defaultPersonaId, isAdmin]);
 
   useEffect(() => {
     if (preferencesReady) {
@@ -68,6 +125,16 @@ export function App({ appConfig, authorizedPersonas, defaultPersonaId }: AppProp
       }
     }
   }, [preferencesReady, selectedPersonaId]);
+
+  useEffect(() => {
+    if (preferencesReady && isAdmin) {
+      try {
+        window.localStorage.setItem(ADMIN_LLM_MODEL_STORAGE_KEY, JSON.stringify(selectedModels));
+      } catch {
+        // Storage can be unavailable in restricted browser contexts.
+      }
+    }
+  }, [isAdmin, preferencesReady, selectedModels]);
 
   useEffect(() => {
     const onDisconnected = () => {
@@ -184,6 +251,9 @@ export function App({ appConfig, authorizedPersonas, defaultPersonaId }: AppProp
   const handlePersonaChange = useCallback((personaId: PersonaId) => {
     setSelectedPersonaId(personaId);
   }, []);
+  const handleModelChange = useCallback((personaId: PersonaId, modelId: LlmModelSelectionId) => {
+    setSelectedModels((current) => ({ ...current, [personaId]: modelId }));
+  }, []);
 
   return (
     <>
@@ -192,7 +262,11 @@ export function App({ appConfig, authorizedPersonas, defaultPersonaId }: AppProp
         startButtonText={startButtonText}
         selectedPersonaId={selectedPersonaId}
         personas={authorizedPersonas}
+        isAdmin={isAdmin}
+        availableLlmModels={availableLlmModels}
+        selectedModels={selectedModels}
         onPersonaChange={handlePersonaChange}
+        onModelChange={handleModelChange}
         onStartCall={() => {
           void room
             .startAudio()

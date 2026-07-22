@@ -1,27 +1,29 @@
 import { headers } from 'next/headers';
 import { App } from '@/components/app';
+import type { BackendLlmModel } from '@/lib/auth';
 import { isLlmModelId } from '@/lib/llm-models';
 import { type TangoPersona, getPersona, isPersonaId } from '@/lib/personas';
-import { getAuthorizedPersonaCatalog } from '@/lib/server/backend';
+import { getAuthorizedPersonaCatalog, getCurrentUser } from '@/lib/server/backend';
 import { getAppConfig } from '@/lib/utils';
 
 export default async function Page() {
   const hdrs = await headers();
-  const [appConfig, catalog] = await Promise.all([
+  const [appConfig, catalog, user] = await Promise.all([
     getAppConfig(hdrs),
     getAuthorizedPersonaCatalog(),
+    getCurrentUser(),
   ]);
   const authorizedPersonas = catalog.personas.flatMap<TangoPersona>((entry) => {
     if (!isPersonaId(entry.id)) return [];
     const local = getPersona(entry.id);
-    const effectiveModel = entry.effective_llm_model ?? entry.llm_model;
+    const defaultModel = entry.default_llm_model ?? entry.llm_model;
     return [
       {
         ...local,
         label: entry.label,
         displayName: entry.display_name,
         roleDescription: entry.role_description,
-        defaultLlmModel: isLlmModelId(effectiveModel) ? effectiveModel : local.defaultLlmModel,
+        defaultLlmModel: isLlmModelId(defaultModel) ? defaultModel : local.defaultLlmModel,
         ttsBackend: entry.tts_backend === 'f5-tts' ? 'f5-tts' : local.ttsBackend,
       },
     ];
@@ -46,12 +48,17 @@ export default async function Page() {
   const defaultPersonaId = authorizedPersonas.some((persona) => persona.id === requestedDefault)
     ? requestedDefault
     : authorizedPersonas[0].id;
+  const availableLlmModels = catalog.llm_models.filter((model): model is BackendLlmModel =>
+    isLlmModelId(model.id)
+  );
 
   return (
     <App
       appConfig={appConfig}
       authorizedPersonas={authorizedPersonas}
       defaultPersonaId={defaultPersonaId}
+      isAdmin={user?.role === 'admin'}
+      availableLlmModels={availableLlmModels}
     />
   );
 }

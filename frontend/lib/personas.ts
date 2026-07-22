@@ -19,6 +19,7 @@ export type TangoPersona = {
   ttsBackend?: 'elevenlabs' | 'f5-tts';
   initials: string;
   accentClassName: string;
+  modelGlowClassName: string;
 };
 
 export const DEFAULT_PERSONA_ID: PersonaId = 'therapy';
@@ -34,6 +35,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     initials: 'DA',
     accentClassName:
       'border-sky-500/70 bg-sky-500/10 text-sky-700 dark:border-sky-300/70 dark:bg-sky-300/10 dark:text-sky-100',
+    modelGlowClassName: 'persona-model-glow-sky',
   },
   {
     id: 'general-info',
@@ -44,6 +46,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     initials: 'CH',
     accentClassName:
       'border-emerald-500/70 bg-emerald-500/10 text-emerald-700 dark:border-emerald-300/70 dark:bg-emerald-300/10 dark:text-emerald-100',
+    modelGlowClassName: 'persona-model-glow-emerald',
   },
   {
     id: 'jeremiah',
@@ -55,6 +58,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     initials: 'JE',
     accentClassName:
       'border-amber-500/70 bg-amber-500/10 text-amber-700 dark:border-amber-300/70 dark:bg-amber-300/10 dark:text-amber-100',
+    modelGlowClassName: 'persona-model-glow-amber',
   },
   {
     id: 'jeremiah-v2',
@@ -66,6 +70,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     initials: 'J2',
     accentClassName:
       'border-orange-500/70 bg-orange-500/10 text-orange-700 dark:border-orange-300/70 dark:bg-orange-300/10 dark:text-orange-100',
+    modelGlowClassName: 'persona-model-glow-orange',
   },
   {
     id: 'jacob',
@@ -76,6 +81,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     initials: 'JA',
     accentClassName:
       'border-teal-500/70 bg-teal-500/10 text-teal-700 dark:border-teal-300/70 dark:bg-teal-300/10 dark:text-teal-100',
+    modelGlowClassName: 'persona-model-glow-teal',
   },
   {
     id: 'mama-lulu',
@@ -86,6 +92,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     initials: 'ML',
     accentClassName:
       'border-fuchsia-500/70 bg-fuchsia-500/10 text-fuchsia-700 dark:border-fuchsia-300/70 dark:bg-fuchsia-300/10 dark:text-fuchsia-100',
+    modelGlowClassName: 'persona-model-glow-fuchsia',
   },
   {
     id: 'meditation',
@@ -96,6 +103,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     initials: 'NA',
     accentClassName:
       'border-indigo-500/70 bg-indigo-500/10 text-indigo-700 dark:border-indigo-300/70 dark:bg-indigo-300/10 dark:text-indigo-100',
+    modelGlowClassName: 'persona-model-glow-indigo',
   },
   {
     id: 'pinoy-pride',
@@ -106,6 +114,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     initials: 'TB',
     accentClassName:
       'border-rose-500/70 bg-rose-500/10 text-rose-700 dark:border-rose-300/70 dark:bg-rose-300/10 dark:text-rose-100',
+    modelGlowClassName: 'persona-model-glow-rose',
   },
 ];
 

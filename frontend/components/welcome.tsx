@@ -7,7 +7,10 @@ import { useReducedMotion } from 'motion/react';
 import { LoopBanner } from '@/components/LoopBanner';
 import { PersonaSelector } from '@/components/PersonaSelector';
 import { Button } from '@/components/ui/button';
+import type { BackendLlmModel } from '@/lib/auth';
+import type { LlmModelSelectionId } from '@/lib/llm-models';
 import { type PersonaId, type TangoPersona } from '@/lib/personas';
+import { cn } from '@/lib/utils';
 
 // Lazy-load the heavy TippingButton (~15 KB) — deferred until after first paint
 const TippingButton = dynamic(
@@ -167,13 +170,28 @@ interface WelcomeProps {
   startButtonText: string;
   selectedPersonaId: PersonaId;
   personas: TangoPersona[];
+  isAdmin: boolean;
+  availableLlmModels: BackendLlmModel[];
+  selectedModels: Partial<Record<PersonaId, LlmModelSelectionId>>;
   onPersonaChange: (personaId: PersonaId) => void;
+  onModelChange: (personaId: PersonaId, modelId: LlmModelSelectionId) => void;
   onStartCall: () => void;
 }
 
 export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
   (
-    { disabled, startButtonText, selectedPersonaId, personas, onPersonaChange, onStartCall },
+    {
+      disabled,
+      startButtonText,
+      selectedPersonaId,
+      personas,
+      isAdmin,
+      availableLlmModels,
+      selectedModels,
+      onPersonaChange,
+      onModelChange,
+      onStartCall,
+    },
     ref
   ) => {
     function handleTipComplete(): void {
@@ -184,12 +202,27 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
       <div
         ref={ref}
         inert={disabled}
-        className="fixed inset-0 z-10 mx-auto flex h-svh flex-col items-center justify-start overflow-y-auto px-3 pt-[calc(env(safe-area-inset-top)+3.25rem)] pb-[calc(env(safe-area-inset-bottom)+4.5rem)] text-center sm:justify-center sm:overflow-hidden sm:p-0"
+        className={cn(
+          'fixed inset-0 z-10 mx-auto flex h-svh flex-col items-center justify-start overflow-y-auto px-3 pt-[calc(env(safe-area-inset-top)+3.25rem)] pb-[calc(env(safe-area-inset-bottom)+4.5rem)] text-center sm:justify-center sm:p-0',
+          isAdmin ? 'sm:justify-start sm:overflow-y-auto sm:pt-8 sm:pb-24' : 'sm:overflow-hidden'
+        )}
       >
         <AnimatedSquares direction="diagonal" speed={0.5} squareSize={42} />
 
-        <div className="pointer-events-none relative z-10 flex w-full max-w-[min(94vw,64rem)] flex-col items-center gap-3 p-3 sm:gap-4 sm:p-4">
-          <h1 className="text-foreground font-mono text-[6rem] leading-[0.9] sm:text-[7rem] md:text-[8rem] lg:text-[10rem]">
+        <div
+          className={cn(
+            'pointer-events-none relative z-10 flex w-full flex-col items-center gap-3 p-3 sm:p-4',
+            isAdmin ? 'max-w-[min(96vw,76rem)] sm:gap-3' : 'max-w-[min(94vw,64rem)] sm:gap-4'
+          )}
+        >
+          <h1
+            className={cn(
+              'text-foreground font-mono leading-[0.9]',
+              isAdmin
+                ? 'text-[4.75rem] sm:text-[5.5rem] md:text-[6.5rem] lg:text-[7rem]'
+                : 'text-[6rem] sm:text-[7rem] md:text-[8rem] lg:text-[10rem]'
+            )}
+          >
             TANGO
           </h1>
 
@@ -202,12 +235,16 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
 
           <div className="pointer-events-auto flex w-full flex-col items-center gap-2">
             <span className="text-foreground/60 font-mono text-xs font-bold uppercase">
-              Persona
+              {isAdmin ? 'Persona · Admin model routing' : 'Persona'}
             </span>
             <PersonaSelector
               selectedPersonaId={selectedPersonaId}
               personas={personas}
+              isAdmin={isAdmin}
+              availableLlmModels={availableLlmModels}
+              selectedModels={selectedModels}
               onPersonaChange={onPersonaChange}
+              onModelChange={onModelChange}
               disabled={disabled}
             />
           </div>

@@ -178,9 +178,16 @@ or choose another source-allowlisted LiteLLM alias.
   route handlers. Server code forwards the host-only auth cookies to FastAPI.
 - **Routes:** `/login` has one password field; `/` hosts Tango; `/admin` is
   server-gated to the admin role.
+- **Persona model controls:** the main interface shows model labels and an
+  allowlisted per-persona session dropdown only when the authenticated user is
+  an admin. The label always identifies the source default returned by
+  FastAPI; a locally remembered selection is sent only as an admin session
+  override. Regular users receive neither the controls nor a browser-selected
+  model override.
 - **Session flow:**
   1. The server validates the opaque session and loads the user's persona catalog.
-  2. The user selects only from assigned personas.
+  2. The user selects only from assigned personas; an admin may additionally
+     select an allowlisted model for the chosen persona's next session.
   3. `POST /api/connection-details` checks CSRF and asks FastAPI for a signed,
      account-bound LiveKit token and short-lived room grant.
   4. `room.connect()` establishes the WebRTC session.

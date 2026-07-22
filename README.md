@@ -21,6 +21,9 @@ Argon2id password hashes, HMAC lookup digests, and opaque server-session token
 digests; plaintext passwords are shown only once when an admin creates or resets
 an account. Regular users see only their assigned personas, and each assignment
 may use the persona default model or an admin-selected allowlisted override.
+Administrators also see each persona's source default model on the main Tango
+screen and may choose any allowlisted model for their own next voice session.
+These session choices do not change the persona defaults or regular-user policy.
 
 The admin dashboard lives at `/admin`. Dashboard-created accounts are always
 regular users; the first admin is created with the backend bootstrap command

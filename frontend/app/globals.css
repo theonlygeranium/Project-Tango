@@ -220,6 +220,89 @@
   }
 }
 
+@layer components {
+  .persona-model-glow {
+    --persona-model-glow: 56 189 248;
+    border-radius: 0.5rem;
+    animation: persona-model-pulse 3.4s ease-in-out infinite;
+  }
+
+  .persona-model-trigger {
+    border-color: rgb(var(--persona-model-glow) / 0.32);
+    background: linear-gradient(
+      135deg,
+      rgb(var(--persona-model-glow) / 0.13),
+      rgb(var(--persona-model-glow) / 0.035)
+    );
+  }
+
+  .persona-model-trigger:hover,
+  .persona-model-trigger:focus {
+    border-color: rgb(var(--persona-model-glow) / 0.58);
+    background: rgb(var(--persona-model-glow) / 0.14);
+  }
+
+  .persona-model-default {
+    color: var(--foreground);
+    text-shadow: 0 0 10px rgb(var(--persona-model-glow) / 0.55);
+  }
+
+  .persona-model-glow-sky {
+    --persona-model-glow: 56 189 248;
+  }
+
+  .persona-model-glow-emerald {
+    --persona-model-glow: 52 211 153;
+  }
+
+  .persona-model-glow-amber {
+    --persona-model-glow: 251 191 36;
+  }
+
+  .persona-model-glow-orange {
+    --persona-model-glow: 251 146 60;
+  }
+
+  .persona-model-glow-teal {
+    --persona-model-glow: 45 212 191;
+  }
+
+  .persona-model-glow-fuchsia {
+    --persona-model-glow: 232 121 249;
+  }
+
+  .persona-model-glow-indigo {
+    --persona-model-glow: 129 140 248;
+  }
+
+  .persona-model-glow-rose {
+    --persona-model-glow: 251 113 133;
+  }
+
+  @keyframes persona-model-pulse {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 1px rgb(var(--persona-model-glow) / 0.12),
+        0 0 9px rgb(var(--persona-model-glow) / 0.14);
+    }
+    50% {
+      box-shadow:
+        0 0 0 1px rgb(var(--persona-model-glow) / 0.28),
+        0 0 18px rgb(var(--persona-model-glow) / 0.34);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .persona-model-glow {
+      animation: none;
+      box-shadow:
+        0 0 0 1px rgb(var(--persona-model-glow) / 0.2),
+        0 0 12px rgb(var(--persona-model-glow) / 0.2);
+    }
+  }
+}
+
 @layer utils {
   .animate-text-shimmer {
     animation-delay: 0.5s;
