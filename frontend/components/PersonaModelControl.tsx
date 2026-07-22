@@ -12,6 +12,7 @@ import type { BackendLlmModel } from '@/lib/auth';
 import {
   DEFAULT_LLM_MODEL_SELECTION_ID,
   type LlmModelSelectionId,
+  getLlmModelOption,
   isLlmModelSelectionId,
 } from '@/lib/llm-models';
 import type { TangoPersona } from '@/lib/personas';
@@ -37,10 +38,15 @@ export function PersonaModelControl({
   const defaultModel = models.find((model) => model.id === persona.defaultLlmModel);
   const selectedModel = models.find((model) => model.id === selectedModelId);
   const defaultLabel = defaultModel?.label ?? persona.defaultLlmModel;
+  const defaultShortLabel = getLlmModelOption(persona.defaultLlmModel).shortLabel;
   const routingLabel =
     selectedModelId === DEFAULT_LLM_MODEL_SELECTION_ID
       ? 'Use persona default'
       : `Use ${selectedModel?.label ?? selectedModelId}`;
+  const routingShortLabel =
+    selectedModelId === DEFAULT_LLM_MODEL_SELECTION_ID
+      ? 'Use persona default'
+      : `Use ${getLlmModelOption(selectedModelId).shortLabel}`;
 
   return (
     <div
@@ -63,10 +69,10 @@ export function PersonaModelControl({
         >
           <span className="min-w-0 flex-1 text-left">
             <span className="persona-model-default block truncate text-[0.625rem] leading-4 font-bold tracking-[0.08em] uppercase">
-              Default · {defaultLabel}
+              Default · {defaultShortLabel}
             </span>
             <span className="text-foreground/75 block truncate text-[0.64rem] leading-4 font-medium">
-              {routingLabel}
+              {routingShortLabel}
             </span>
           </span>
         </SelectTrigger>

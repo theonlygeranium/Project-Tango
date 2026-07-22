@@ -69,6 +69,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   instead of a long excerpt whose transcript can drift from F5-TTS preprocessing.
 
 ### Fixed
+- Compact admin persona controls use readable short model names in the card
+  while retaining full backend labels in the dropdown and accessible name.
 - Anonymous protected-page redirects now use Tango's configured public origin
   instead of Next.js's localhost listener origin behind Caddy and Cloudflare.
 - Restored the GitHub deployment path by matching the runner's actual
