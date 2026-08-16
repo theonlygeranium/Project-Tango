@@ -1,0 +1,19 @@
+[Unit]
+Description=Tango Discord Agent — Level 3 autonomous agent for Project Tango
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/Project-Tango/backend/venv/bin/python /opt/Project-Tango/scripts/tango-discord-agent.py
+WorkingDirectory=/opt/Project-Tango
+User=root
+Group=root
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+EnvironmentFile=/opt/Project-Tango/.env
+
+[Install]
+WantedBy=multi-user.target

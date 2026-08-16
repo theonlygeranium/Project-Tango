@@ -9,7 +9,47 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ## [Unreleased]
 
+### Fixed
+- Fixed Admiral Schubert voice bot DAVE encryption handling. Three root causes
+  were identified and resolved:
+  1. DAVE DecryptionFailed exception: At ~packet #23, DAVE transitions send
+     unencrypted packets causing DecryptionFailed(UnencryptedWhenPassthroughDisabled).
+     Now caught gracefully — returns raw data and continues processing instead of
+     killing the audio pipeline.
+  2. Opus decoder crash on invalid data: 3-byte DAVE transition markers and
+     corrupted packets from DecryptionFailed fallbacks were fed directly to the
+     Opus decoder, causing uncaught exceptions that killed the audio thread after
+     1 frame. Added _safe_decode() wrapper that catches decode errors and returns
+     silence PCM (3840 zero bytes) instead of crashing.
+  3. VAD threshold too high: User speech measured at rms=173.0 but threshold was
+     300, so speech was never detected. Lowered VAD_SPEECH_RMS_THRESHOLD from 300
+     to 100. Confirmed working: speech at rms=6383-10963, silence at rms=44-94.
+- Added diagnostic logging to VoiceAudioSink.write() — logs first 10 audio frames
+  then every 100th frame with user, pcm_len, and state for pipeline debugging.
+
 ### Added
+- Added scripts/patches/patch_dave_opus.py: reproducible patch script that
+  applies the DAVE decryption fix to discord-ext-voice-recv's opus.py in the
+  venv. Re-apply after venv rebuild or discord-ext-voice-recv reinstall.
+  Patches _dave_decrypt(), _dave_log(), and _safe_decode() methods.
+
+### Added
+- Added Discord voice channel support to Admiral Schubert bot. The bot can
+  now join voice channels via !join, receive speech with discord-ext-voice-recv,
+  transcribe with Deepgram Nova-3, reason via writer/claude-sonnet-4-5, and
+  respond with ElevenLabs Flash v2.5 TTS. Includes energy-based VAD for turn
+  detection, PCM format conversion (48kHz stereo to 16kHz mono via ffmpeg),
+  echo cancellation (bot stops listening while speaking), auto-disconnect when
+  admin leaves, and !leave command. Installed PyNaCl 1.5.0 and
+  discord-ext-voice-recv 0.5.3a180 (with DAVE encryption support).
+- Added Admiral Schubert nautical personality to Schubert Bot. The system
+  prompt now defines Admiral Schubert as a distinguished Maine Coon cat of
+  high naval rank who commands the Schubert server as a ship. The bot
+  addresses the user as "Captain", uses nautical terminology, and refers
+  to services as "vessels" or "the fleet". Technical precision is
+  preserved — the persona enhances communication without affecting
+  diagnostic accuracy. Updated help text and on_ready log message to
+  match the persona.
 - Deployed Tango Health Guardian: a six-layer self-healing health monitor that
   runs as a systemd timer every 3 minutes. Checks service health, endpoint health,
   ElevenLabs billing status, TTS synthesis, log anomalies, and LiveKit worker
@@ -19,6 +59,28 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 - Added Discord webhook notifications to the Health Guardian. Alerts for WARN
   and CRITICAL events are sent to the configured Discord channel via webhook.
   The webhook URL is stored in .env (DISCORD_WEBHOOK_URL), not committed to source.
+- Added Tango Discord Bot: a Level 1 command bot that runs as a systemd service
+  and responds to fixed commands (!status, !health, !logs, !restart, !billing,
+  !tts, !help) from the configured admin user in the configured channel.
+  Includes rate limiting, restart confirmation, and full audit logging.
+  Bot token and credentials stored in .env, not committed to source.
+- Added Schubert Bot: a Level 3 server-wide autonomous Discord agent with
+  full access to all Schubert services and projects. Powered by
+  writer/claude-sonnet-4-5 via LiteLLM. Includes server monitoring tools
+  (!status, !services, !disk, !mem, !procs, !net), broader guardrails
+  (critical service restarts require confirmation), and a new Discord bot
+  application (Admiral Schubert#5041). Credentials stored in .env as
+  SCHUBERT_BOT_*. Running as schubert-bot.service.
+- Upgraded Tango Discord Bot to Level 3 autonomous agent. The bot now uses
+  writer/claude-sonnet-4-5 via LiteLLM for reasoning, with a full agentic
+  tool-use loop (run_shell, write_file, health_check). Natural language
+  messages trigger autonomous investigation, code fixes, service restarts,
+  and git commits. Guardrails include hard blocks (rm -rf, mkfs, dd, forbidden
+  services, AGENTS.md, .env, git push to main, package installs, shutdown),
+  confirmation gates (git push only), loop safety (max 20 iterations, 5-min
+  timeout), and full audit logging to /var/log/tango-discord-agent.log.
+  Level 1 quick commands (!status, !health, etc.) remain available without
+  LLM cost.
 
 ### Changed
 - Switched turn detection from STT-based (turn_detection="stt") to LiveKit's audio
