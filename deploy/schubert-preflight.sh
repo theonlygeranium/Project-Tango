@@ -99,7 +99,7 @@ import urllib.request
 
 models_url = sys.argv[1]
 key = os.environ.get("LITELLM_MASTER_KEY") or ""
-required = {"writer/palmyra-x5-voice", "local/qwen3-fast"}
+required = {"writer/palmyra-x5-voice", "local/qwen3-fast", "writer/palmyra-x6", "writer/palmyra-x5", "writer/claude-sonnet-4-5", "writer/claude-opus-4"}
 request = urllib.request.Request(models_url, headers={"Authorization": f"Bearer {key}"})
 
 try:
