@@ -10,6 +10,7 @@ from typing import Any
 from livekit.agents import Agent
 
 from personas import Persona
+from search_tools import SEARCH_TOOLS as WEB_SEARCH_TOOLS
 
 logger = logging.getLogger("project-tango.agent")
 LOCAL_QWEN_MODEL = "local/qwen3-fast"
@@ -88,13 +89,13 @@ class Jarvis(Agent):
                 "describe yourself as text-only or as a text-based version of the agent.\n\n"
                 f"Runtime model route: {llm_model}. If the user asks what model powers you, "
                 "answer with this exact Project Tango LiteLLM route. Do not claim to be "
-                "Palmyra unless the route is writer/palmyra-x5-voice. When visual context "
+                "Palmyra unless the route starts with writer/palmyra. When visual context "
                 "from the user's camera or screen share is provided as a system note, use it "
                 "naturally if it helps answer the user's latest turn; do not claim you are "
                 "watching continuously."
                 f"{local_model_guidance}"
             ),
-            tools=list(_load_tools()),
+            tools=list(_load_tools()) + list(WEB_SEARCH_TOOLS),
         )
 
     async def on_enter(self):

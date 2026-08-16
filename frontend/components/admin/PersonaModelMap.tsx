@@ -16,6 +16,10 @@ import { cn } from '@/lib/utils';
 const MODEL_GLOW_CLASSES: Record<LlmModelId, string> = {
   'local/qwen3-fast': 'persona-model-glow-sky',
   'writer/palmyra-x5-voice': 'persona-model-glow-emerald',
+  'writer/palmyra-x6': 'persona-model-glow-amber',
+  'writer/palmyra-x5': 'persona-model-glow-teal',
+  'writer/claude-sonnet-4-5': 'persona-model-glow-indigo',
+  'writer/claude-opus-4': 'persona-model-glow-rose',
   'groq/llama4-scout': 'persona-model-glow-fuchsia',
 };
 

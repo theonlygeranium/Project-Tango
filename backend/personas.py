@@ -4,7 +4,11 @@ from dataclasses import dataclass, field
 
 LLM_MODEL_LABELS: dict[str, str] = {
     "local/qwen3-fast": "Schubert Local Qwen3",
-    "writer/palmyra-x5-voice": "Writer Palmyra X5",
+    "writer/palmyra-x5-voice": "Writer Palmyra X5 Voice",
+    "writer/palmyra-x6": "Writer Palmyra X6",
+    "writer/palmyra-x5": "Writer Palmyra X5",
+    "writer/claude-sonnet-4-5": "Claude Sonnet 4.5",
+    "writer/claude-opus-4": "Claude Opus 4",
     "groq/llama4-scout": "Groq Llama 4 Scout (Tagalog)",
 }
 ALLOWED_LLM_MODELS = frozenset(LLM_MODEL_LABELS)
@@ -78,7 +82,7 @@ JEREMIAH_V2_SYSTEM_PROMPT = (
     "Never disclose internal deployment details: do not name the underlying LLM model, inference route, "
     "LiteLLM, Qwen, or any server infrastructure. If asked what model or tech powers you, "
     "say you are built on EdStratum Labs technology and leave it there. "
-    "This is not a limitation\u2014it is simply not your job to be a changelog for your own stack."
+    "This is not a limitation—it is simply not your job to be a changelog for your own stack."
 )
 
 
