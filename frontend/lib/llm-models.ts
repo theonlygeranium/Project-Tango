@@ -1,4 +1,4 @@
-export type LlmModelId = 'local/qwen3-fast' | 'writer/palmyra-x5-voice' | 'groq/llama4-scout';
+export type LlmModelId = 'local/qwen3-fast' | 'writer/palmyra-x5-voice' | 'writer/palmyra-x6' | 'writer/palmyra-x5' | 'writer/claude-sonnet-4-5' | 'writer/claude-opus-4' | 'groq/llama4-scout';
 export type LlmModelSelectionId = 'persona-default' | LlmModelId;
 
 export type LlmModelOption = {
@@ -24,8 +24,28 @@ export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
   },
   {
     id: 'writer/palmyra-x5-voice',
+    label: 'Writer Palmyra X5 Voice',
+    shortLabel: 'Palmyra X5 Voice',
+  },
+  {
+    id: 'writer/palmyra-x6',
+    label: 'Writer Palmyra X6',
+    shortLabel: 'Palmyra X6',
+  },
+  {
+    id: 'writer/palmyra-x5',
     label: 'Writer Palmyra X5',
     shortLabel: 'Palmyra X5',
+  },
+  {
+    id: 'writer/claude-sonnet-4-5',
+    label: 'Claude Sonnet 4.5',
+    shortLabel: 'Sonnet 4.5',
+  },
+  {
+    id: 'writer/claude-opus-4',
+    label: 'Claude Opus 4',
+    shortLabel: 'Opus 4',
   },
   {
     id: 'groq/llama4-scout',
@@ -46,6 +66,10 @@ export function isLlmModelId(value: string | null | undefined): value is LlmMode
   return (
     value === 'local/qwen3-fast' ||
     value === 'writer/palmyra-x5-voice' ||
+    value === 'writer/palmyra-x6' ||
+    value === 'writer/palmyra-x5' ||
+    value === 'writer/claude-sonnet-4-5' ||
+    value === 'writer/claude-opus-4' ||
     value === 'groq/llama4-scout'
   );
 }
