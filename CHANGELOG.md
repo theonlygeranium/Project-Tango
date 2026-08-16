@@ -9,6 +9,30 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ## [Unreleased]
 
+### Fixed
+- Fixed Admiral Schubert voice bot DAVE encryption handling. Three root causes
+  were identified and resolved:
+  1. DAVE DecryptionFailed exception: At ~packet #23, DAVE transitions send
+     unencrypted packets causing DecryptionFailed(UnencryptedWhenPassthroughDisabled).
+     Now caught gracefully — returns raw data and continues processing instead of
+     killing the audio pipeline.
+  2. Opus decoder crash on invalid data: 3-byte DAVE transition markers and
+     corrupted packets from DecryptionFailed fallbacks were fed directly to the
+     Opus decoder, causing uncaught exceptions that killed the audio thread after
+     1 frame. Added _safe_decode() wrapper that catches decode errors and returns
+     silence PCM (3840 zero bytes) instead of crashing.
+  3. VAD threshold too high: User speech measured at rms=173.0 but threshold was
+     300, so speech was never detected. Lowered VAD_SPEECH_RMS_THRESHOLD from 300
+     to 100. Confirmed working: speech at rms=6383-10963, silence at rms=44-94.
+- Added diagnostic logging to VoiceAudioSink.write() — logs first 10 audio frames
+  then every 100th frame with user, pcm_len, and state for pipeline debugging.
+
+### Added
+- Added scripts/patches/patch_dave_opus.py: reproducible patch script that
+  applies the DAVE decryption fix to discord-ext-voice-recv's opus.py in the
+  venv. Re-apply after venv rebuild or discord-ext-voice-recv reinstall.
+  Patches _dave_decrypt(), _dave_log(), and _safe_decode() methods.
+
 ### Added
 - Added Discord voice channel support to Admiral Schubert bot. The bot can
   now join voice channels via !join, receive speech with discord-ext-voice-recv,

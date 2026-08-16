@@ -87,7 +87,7 @@ ELEVENLABS_TTS_URL = "https://api.us.elevenlabs.io/v1/text-to-speech"
 DEFAULT_VOICE_ID = "QF9HJC7XWnue5c9W3LkY"
 
 # VAD configuration — energy-based silence detection
-VAD_SPEECH_RMS_THRESHOLD = 300
+VAD_SPEECH_RMS_THRESHOLD = 100
 VAD_SILENCE_FRAMES_LIMIT = 15   # ~300ms of silence to end speech
 VAD_MIN_SPEECH_FRAMES = 10       # ~200ms minimum speech to process
 
@@ -1095,14 +1095,28 @@ class VoiceAudioSink(voice_recv.AudioSink):
     def wants_opus(self) -> bool:
         return False
 
+    _write_count = 0
+
     def write(self, user, data: voice_recv.VoiceData):
-        if user is None or data.pcm is None:
-            return
-        if user.id != self.session.admin_user_id:
-            return
-        if self.session.state != "listening":
-            return
-        self.session.process_audio_frame(data.pcm)
+        try:
+            VoiceAudioSink._write_count += 1
+            # Log first 10 frames, then every 100th
+            n = VoiceAudioSink._write_count
+            if n <= 10 or n % 100 == 0:
+                log(f"Audio frame #{n}: user={user}, pcm_len={len(data.pcm) if data.pcm else 0}, state={self.session.state}", "DEBUG")
+            if user is None or data.pcm is None:
+                return
+            if user.id != self.session.admin_user_id:
+                if n <= 5:
+                    log(f"Audio filtered: user.id={user.id} != admin_id={self.session.admin_user_id}", "DEBUG")
+                return
+            if self.session.state != "listening":
+                return
+            self.session.process_audio_frame(data.pcm)
+        except Exception as e:
+            log(f"EXCEPTION in write(): {e}", "ERROR")
+            import traceback
+            log(f"TRACEBACK: {traceback.format_exc()}", "ERROR")
 
     def cleanup(self):
         pass
@@ -1122,10 +1136,14 @@ class VoiceSession:
         self.silence_frames = 0
         self.speech_frames = 0
         self.is_speaking = False
+        self._frame_count = 0
 
     def process_audio_frame(self, pcm: bytes):
         """Process a single PCM frame through VAD. Called from audio thread."""
         rms = calculate_rms(pcm)
+        self._rms_count = getattr(self, '_rms_count', 0) + 1
+        if self._rms_count % 50 == 1:
+            log(f"VAD: rms={rms:.1f} threshold={VAD_SPEECH_RMS_THRESHOLD} speaking={self.is_speaking} speech_frames={self.speech_frames} silence_frames={self.silence_frames}", "DEBUG")
 
         if rms > VAD_SPEECH_RMS_THRESHOLD:
             self.is_speaking = True
