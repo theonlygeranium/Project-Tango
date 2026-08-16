@@ -172,6 +172,7 @@ def _turn_handling_for_session(
     *,
     preemptive_generation_enabled: bool = True,
 ) -> dict[str, Any]:
+    from livekit.agents import inference
     # Use LiveKit's audio TurnDetector for state-of-the-art end-of-turn detection.
     # The audio turn detector processes user audio directly (intonation, pitch, rhythm)
     # rather than relying on STT transcript timing, eliminating the VAD/STT race
@@ -1305,7 +1306,6 @@ async def entrypoint(ctx: Any) -> None:
         CloseEvent,
         ConversationItemAddedEvent,
         SessionUsageUpdatedEvent,
-        inference,
     )
     from livekit.agents.llm import ChatMessage
     from livekit.plugins import deepgram, elevenlabs, openai, silero
