@@ -9,6 +9,14 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ## [Unreleased]
 
+### Added
+- Deployed Tango Health Guardian: a six-layer self-healing health monitor that
+  runs as a systemd timer every 3 minutes. Checks service health, endpoint health,
+  ElevenLabs billing status, TTS synthesis, log anomalies, and LiveKit worker
+  registration. Auto-restarts inactive services (with 10-minute cooldown), alerts
+  on billing issues, and verifies Deepgram Aura fallback is active. Log at
+  /var/log/tango-healthcheck.log.
+
 ### Changed
 - Switched turn detection from STT-based (turn_detection="stt") to LiveKit's audio
   TurnDetector (inference.TurnDetector()). The audio turn detector processes user
