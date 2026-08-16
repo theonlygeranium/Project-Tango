@@ -19,6 +19,11 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 - Added Discord webhook notifications to the Health Guardian. Alerts for WARN
   and CRITICAL events are sent to the configured Discord channel via webhook.
   The webhook URL is stored in .env (DISCORD_WEBHOOK_URL), not committed to source.
+- Added Tango Discord Bot: a Level 1 command bot that runs as a systemd service
+  and responds to fixed commands (!status, !health, !logs, !restart, !billing,
+  !tts, !help) from the configured admin user in the configured channel.
+  Includes rate limiting, restart confirmation, and full audit logging.
+  Bot token and credentials stored in .env, not committed to source.
 
 ### Changed
 - Switched turn detection from STT-based (turn_detection="stt") to LiveKit's audio
