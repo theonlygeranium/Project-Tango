@@ -10,6 +10,14 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 ## [Unreleased]
 
 ### Added
+- Added Discord voice channel support to Admiral Schubert bot. The bot can
+  now join voice channels via !join, receive speech with discord-ext-voice-recv,
+  transcribe with Deepgram Nova-3, reason via writer/claude-sonnet-4-5, and
+  respond with ElevenLabs Flash v2.5 TTS. Includes energy-based VAD for turn
+  detection, PCM format conversion (48kHz stereo to 16kHz mono via ffmpeg),
+  echo cancellation (bot stops listening while speaking), auto-disconnect when
+  admin leaves, and !leave command. Installed PyNaCl 1.5.0 and
+  discord-ext-voice-recv 0.5.3a180 (with DAVE encryption support).
 - Added Admiral Schubert nautical personality to Schubert Bot. The system
   prompt now defines Admiral Schubert as a distinguished Maine Coon cat of
   high naval rank who commands the Schubert server as a ship. The bot

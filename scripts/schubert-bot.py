@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Schubert Bot — Level 3 autonomous agent for server-wide Schubert operations.
+Schubert Bot — Level 3 autonomous agent with voice channel support.
 
-An LLM-powered Discord bot that supervises the entire Schubert server. It can
-investigate issues, manage services, read logs, monitor system health, and
-work with any project on the server. Uses writer/claude-sonnet-4-5 via
-LiteLLM for reasoning. Asks for confirmation before git push and before
-restarting critical services (caddy, cloudflared, postgresql, tailscaled).
+An LLM-powered Discord bot that supervises the entire Schubert server. Supports
+both text channel commands and voice channel conversations. In voice mode, the
+bot joins a Discord voice channel, receives speech via discord-ext-voice-recv,
+transcribes with Deepgram Nova-3, reasons with writer/claude-sonnet-4-5 via
+LiteLLM, and responds with ElevenLabs Flash v2.5 TTS.
 
 Security:
 - Admin allowlist: only SCHUBERT_BOT_ADMIN_USER_ID can issue commands
-- Channel lock: bot only responds in SCHUBERT_BOT_CHANNEL_ID
+- Channel lock: bot only responds in SCHUBERT_BOT_CHANNEL_ID (text)
 - Hard blocks: rm -rf, mkfs, dd, shutdown/reboot, chmod 777, package installs
 - Confirmation required: git push, restarting critical services
 - Loop safety: max 20 iterations, 5-minute timeout
@@ -19,26 +19,29 @@ Security:
 Usage:
     python3 schubert-bot.py
 
-Interaction:
-    Natural language messages trigger the autonomous agent loop.
-    Quick commands (prefixed with !) run without LLM cost:
-        !status    — full server health (services, disk, RAM, CPU, uptime)
-        !services  — list all systemd services and their status
-        !logs <s>  — recent logs for a service (default: tango-backend)
-        !restart <s> — restart a service (critical services need confirmation)
-        !disk      — disk usage overview
-        !mem       — memory and swap usage
-        !procs     — top processes by CPU and memory
-        !net       — network connections and listening ports
-        !help      — show available commands
+Text commands (prefixed with !):
+    !status    — full server health
+    !services  — list all systemd services
+    !logs <s>  — recent logs for a service
+    !restart <s> — restart a service
+    !disk, !mem, !procs, !net — system info
+    !join      — join your voice channel
+    !leave     — leave the voice channel
+    !help      — show available commands
+
+Voice mode:
+    After !join, speak naturally. The bot transcribes your speech, processes it
+    through the agent loop, and responds with synthesized speech.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import re
+import struct
 import subprocess
 import sys
 import time
@@ -46,6 +49,10 @@ from datetime import datetime, timezone
 
 import aiohttp
 import discord
+from discord.ext import voice_recv
+
+# Load Opus for voice playback
+discord.opus._load_default()
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -72,6 +79,18 @@ SHELL_TIMEOUT = 120
 RATE_LIMIT_PER_MIN = 10
 RESTART_CONFIRM_TIMEOUT = 30
 
+# Voice configuration
+DEEPGRAM_STT_URL = "https://api.deepgram.com/v1/listen"
+DEEPGRAM_MODEL = "nova-3"
+ELEVENLABS_TTS_MODEL = "eleven_flash_v2_5"
+ELEVENLABS_TTS_URL = "https://api.us.elevenlabs.io/v1/text-to-speech"
+DEFAULT_VOICE_ID = "QF9HJC7XWnue5c9W3LkY"
+
+# VAD configuration — energy-based silence detection
+VAD_SPEECH_RMS_THRESHOLD = 300
+VAD_SILENCE_FRAMES_LIMIT = 15   # ~300ms of silence to end speech
+VAD_MIN_SPEECH_FRAMES = 10       # ~200ms minimum speech to process
+
 # Critical services — restart requires confirmation
 CRITICAL_SERVICES = {
     "caddy.service",
@@ -81,13 +100,9 @@ CRITICAL_SERVICES = {
 }
 
 # Services that should never be touched even by Schubert Bot
-# (these would destabilize the bot itself or the agent infrastructure)
 NEVER_TOUCH_SERVICES = {
     "schubert-bot.service",  # Don't restart yourself
 }
-
-# ElevenLabs (for billing check)
-ELEVENLABS_SUBSCRIPTION_URL = "https://api.us.elevenlabs.io/v1/user/subscription"
 
 # Log viewing
 LOG_LINES = 50
@@ -98,6 +113,7 @@ COLOR_SUCCESS = 0x57F287
 COLOR_WARN = 0xFEE75C
 COLOR_ERROR = 0xED4245
 COLOR_AGENT = 0xE67E22  # orange
+COLOR_VOICE = 0x9B59B6  # purple
 
 # ---------------------------------------------------------------------------
 # Guardrails — hard-blocked command patterns (never execute)
@@ -139,9 +155,13 @@ BOT_TOKEN = ""
 ADMIN_USER_ID = 0
 BOT_CHANNEL_ID = 0
 LITELLM_MASTER_KEY = ""
+DEEPGRAM_API_KEY = ""
+ELEVENLABS_API_KEY = ""
+SCHUBERT_VOICE_ID = ""
 
 _command_timestamps: dict[int, list[float]] = {}
 _pending_restarts: dict[int, tuple[str, float]] = {}
+active_voice_session: VoiceSession | None = None
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -182,12 +202,17 @@ def load_env() -> dict[str, str]:
 
 def load_config() -> bool:
     global BOT_TOKEN, ADMIN_USER_ID, BOT_CHANNEL_ID, LITELLM_MASTER_KEY
+    global DEEPGRAM_API_KEY, ELEVENLABS_API_KEY, SCHUBERT_VOICE_ID
 
     env = load_env()
     BOT_TOKEN = env.get("SCHUBERT_BOT_TOKEN", "")
     LITELLM_MASTER_KEY = env.get(
         "LITELLM_MASTER_KEY", os.environ.get("LITELLM_MASTER_KEY", "")
     )
+    DEEPGRAM_API_KEY = env.get("DEEPGRAM_API_KEY", "")
+    ELEVENLABS_API_KEY = env.get("ELEVENLABS_API_KEY", "")
+    SCHUBERT_VOICE_ID = env.get("SCHUBERT_VOICE_ID", DEFAULT_VOICE_ID)
+
     admin_id_str = env.get("SCHUBERT_BOT_ADMIN_USER_ID", "")
     channel_id_str = env.get("SCHUBERT_BOT_CHANNEL_ID", "")
 
@@ -213,7 +238,7 @@ def load_config() -> bool:
 
     log(
         f"Config loaded: admin={ADMIN_USER_ID}, channel={BOT_CHANNEL_ID}, "
-        f"model={LLM_MODEL}",
+        f"model={LLM_MODEL}, voice_id={SCHUBERT_VOICE_ID}",
         "INFO",
     )
     return True
@@ -268,7 +293,7 @@ def needs_confirmation(command: str) -> str | None:
 
 
 def is_critical_service_restart(command: str) -> str | None:
-    """Check if command restarts a critical service. Returns service name or None."""
+    """Check if command restarts a critical service."""
     for svc in CRITICAL_SERVICES:
         if re.search(rf"systemctl\s+(restart|stop)\s+{re.escape(svc)}", command, re.IGNORECASE):
             return svc
@@ -360,6 +385,12 @@ You can manage ALL services on the server. Critical services require confirmatio
 - Do not run shutdown, reboot, or halt
 - Do not run chmod 777
 - Do not restart schubert-bot.service (yourself)
+"""
+
+VOICE_PROMPT_ADDITION = """
+
+## Voice Mode
+You are currently in voice mode — the Captain is speaking to you through a Discord voice channel, and your response will be converted to speech. Keep your responses concise and conversational (2-4 sentences typically). Avoid long lists, code blocks, or detailed technical output that does not work well as spoken audio. If you need to run a command, do so, but summarize the results briefly when speaking. Maintain your Admiral Schubert persona at all times.
 """
 
 TOOLS = [
@@ -491,19 +522,16 @@ async def execute_tool(
 
         log(f"Tool run_shell: {command[:200]}", "INFO")
 
-        # Check hard blocks
         block_reason = check_hard_blocks(command)
         if block_reason:
             log(f"BLOCKED: {block_reason} — command: {command[:100]}", "WARN")
             return f"BLOCKED: {block_reason}. This command is not allowed."
 
-        # Check never-touch services
         never_touch = is_never_touch_service(command)
         if never_touch:
             log(f"BLOCKED: never-touch service {never_touch}", "WARN")
             return f"BLOCKED: Cannot manage {never_touch} (self-protection)."
 
-        # Check if this restarts a critical service
         critical_svc = is_critical_service_restart(command)
         if critical_svc:
             log(f"Critical service restart: {critical_svc}", "INFO")
@@ -516,7 +544,6 @@ async def execute_tool(
             if not confirmed:
                 return "User denied this command."
 
-        # Check general confirmation patterns (git push, other restarts)
         elif needs_confirmation(command):
             confirm_reason = needs_confirmation(command)
             log(f"Confirmation needed: {confirm_reason}", "INFO")
@@ -524,7 +551,6 @@ async def execute_tool(
             if not confirmed:
                 return "User denied this command."
 
-        # Execute
         code, output = run_command(command, timeout=SHELL_TIMEOUT)
         result = f"Exit code: {code}\n{output}"
 
@@ -567,6 +593,70 @@ async def execute_tool(
         return f"Unknown tool: {tool_name}"
 
 
+async def execute_tool_voice(
+    text_channel: discord.TextChannel, tool_name: str, tool_args: dict
+) -> str:
+    """Execute a tool in voice mode — confirmations go to the text channel."""
+
+    if tool_name == "run_shell":
+        command = tool_args.get("command", "")
+        if not command:
+            return "Error: no command provided"
+
+        log(f"Voice tool run_shell: {command[:200]}", "INFO")
+
+        block_reason = check_hard_blocks(command)
+        if block_reason:
+            return f"BLOCKED: {block_reason}. This command is not allowed."
+
+        never_touch = is_never_touch_service(command)
+        if never_touch:
+            return f"BLOCKED: Cannot manage {never_touch} (self-protection)."
+
+        critical_svc = is_critical_service_restart(command)
+        if critical_svc:
+            confirmed = await ask_confirmation_voice(
+                text_channel, command,
+                f"⚠️ This will restart **{critical_svc}** — a critical service.",
+            )
+            if not confirmed:
+                return "User denied this command."
+
+        elif needs_confirmation(command):
+            confirmed = await ask_confirmation_voice(text_channel, command)
+            if not confirmed:
+                return "User denied this command."
+
+        code, output = run_command(command, timeout=SHELL_TIMEOUT)
+        result = f"Exit code: {code}\n{output}"
+        if len(result) > TOOL_OUTPUT_LIMIT:
+            result = result[:TOOL_OUTPUT_LIMIT] + "\n... (truncated)"
+        return result
+
+    elif tool_name == "write_file":
+        path = tool_args.get("path", "")
+        content = tool_args.get("content", "")
+        if not path:
+            return "Error: no path provided"
+        if is_blocked_write_path(path):
+            return f"BLOCKED: Cannot write to {path}. This file is protected."
+        try:
+            parent = os.path.dirname(path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            with open(path, "w") as f:
+                f.write(content)
+            return f"Successfully wrote {len(content)} bytes to {path}"
+        except Exception as e:
+            return f"Error writing to {path}: {e}"
+
+    elif tool_name == "server_status":
+        return get_server_status_text()
+
+    else:
+        return f"Unknown tool: {tool_name}"
+
+
 async def ask_confirmation(
     message: discord.Message, command: str, custom_prompt: str | None = None
 ) -> bool:
@@ -600,6 +690,41 @@ async def ask_confirmation(
         return False
 
 
+async def ask_confirmation_voice(
+    text_channel: discord.TextChannel, command: str,
+    custom_prompt: str | None = None
+) -> bool:
+    """Ask for confirmation in the text channel during voice mode."""
+    display_cmd = command[:500]
+    if len(command) > 500:
+        display_cmd += "..."
+
+    prompt_text = custom_prompt or "⚠️ **Confirmation required**"
+    await text_channel.send(
+        f"{prompt_text}\n"
+        f"```\n{display_cmd}\n```\n"
+        f"Reply `yes` to confirm or `no` to cancel (60s timeout)."
+    )
+
+    def check(m):
+        return (
+            m.channel == text_channel
+            and m.author.id == ADMIN_USER_ID
+            and m.content.lower().strip()
+            in ("yes", "no", "y", "n", "confirm", "cancel")
+        )
+
+    try:
+        reply = await bot.wait_for("message", check=check, timeout=60)
+        confirmed = reply.content.lower().strip() in ("yes", "y", "confirm")
+        log(f"Voice confirmation: {'approved' if confirmed else 'denied'}", "INFO")
+        return confirmed
+    except asyncio.TimeoutError:
+        log("Voice confirmation timed out", "WARN")
+        await text_channel.send("⏱️ Confirmation timed out. Command cancelled.")
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Server status helpers
 # ---------------------------------------------------------------------------
@@ -609,41 +734,33 @@ def get_server_status_text() -> str:
     """Get comprehensive server status as text for the LLM."""
     parts = []
 
-    # Uptime and load
     code, output = run_command("uptime", timeout=10)
     parts.append(f"UPTIME:\n{output}")
 
-    # Disk usage
     code, output = run_command("df -h --total 2>/dev/null | grep -E '^/dev|^Filesystem|^total'", timeout=10)
     parts.append(f"DISK:\n{output}")
 
-    # Memory
     code, output = run_command("free -h", timeout=10)
     parts.append(f"MEMORY:\n{output}")
 
-    # Top processes by CPU
     code, output = run_command("ps aux --sort=-%cpu | head -15", timeout=10)
     parts.append(f"TOP CPU PROCESSES:\n{output}")
 
-    # Top processes by memory
     code, output = run_command("ps aux --sort=-%mem | head -10", timeout=10)
     parts.append(f"TOP MEM PROCESSES:\n{output}")
 
-    # All active systemd services (non-user)
     code, output = run_command(
         "systemctl list-units --type=service --state=active --no-pager --no-legend | awk '{print $1, $4}' | head -40",
         timeout=10,
     )
     parts.append(f"ACTIVE SERVICES:\n{output}")
 
-    # Failed services
     code, output = run_command(
         "systemctl list-units --type=service --state=failed --no-pager --no-legend 2>/dev/null | awk '{print $1}'",
         timeout=10,
     )
     parts.append(f"FAILED SERVICES:\n{output if output.strip() else 'None'}")
 
-    # Listening ports
     code, output = run_command("ss -tlnp | head -30", timeout=10)
     parts.append(f"LISTENING PORTS:\n{output}")
 
@@ -654,7 +771,7 @@ def get_server_status_text() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Agent loop
+# Agent loop (text mode)
 # ---------------------------------------------------------------------------
 
 
@@ -738,31 +855,375 @@ async def run_agent_loop(message: discord.Message, user_input: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Agent loop (voice mode)
+# ---------------------------------------------------------------------------
+
+
+async def run_agent_loop_voice(
+    text_channel: discord.TextChannel, user_input: str
+) -> str:
+    """Run the agent loop for voice mode. Returns text for TTS."""
+    start_time = time.time()
+
+    voice_prompt = SYSTEM_PROMPT + VOICE_PROMPT_ADDITION
+    messages: list = [
+        {"role": "system", "content": voice_prompt},
+        {"role": "user", "content": user_input},
+    ]
+
+    log(f"Voice agent loop started for: {user_input[:200]}", "INFO")
+
+    for iteration in range(MAX_ITERATIONS):
+        elapsed = time.time() - start_time
+        if elapsed > AGENT_TIMEOUT:
+            return "I ran out of time on that one, Captain."
+
+        log(f"Voice LLM call iteration {iteration + 1}/{MAX_ITERATIONS}", "INFO")
+        response = await llm_chat(messages, TOOLS)
+
+        if "error" in response and not response.get("choices"):
+            return "I'm having trouble thinking right now, Captain."
+
+        choices = response.get("choices", [])
+        if not choices:
+            return "I'm having trouble thinking right now, Captain."
+
+        choice = choices[0]
+        assistant_message = choice.get("message", {})
+        messages.append(assistant_message)
+
+        tool_calls = assistant_message.get("tool_calls", [])
+        content = assistant_message.get("content")
+
+        if content and not tool_calls:
+            log(f"Voice agent final response: {content[:200]}", "INFO")
+            return content
+
+        if content and tool_calls and len(content) > 10:
+            await text_channel.send(f"💭 {content[:1500]}")
+
+        if not tool_calls:
+            return "Done, Captain."
+
+        for tool_call in tool_calls:
+            tool_id = tool_call.get("id", "")
+            tool_function = tool_call.get("function", {})
+            tool_name = tool_function.get("name", "")
+
+            try:
+                tool_args = json.loads(tool_function.get("arguments", "{}"))
+            except json.JSONDecodeError:
+                tool_args = {}
+
+            if tool_name == "run_shell":
+                cmd_preview = tool_args.get("command", "")[:100]
+                await text_channel.send(f"🔧 `{cmd_preview}`")
+            elif tool_name == "write_file":
+                path = tool_args.get("path", "")
+                await text_channel.send(f"📝 Writing to `{path}`")
+            elif tool_name == "server_status":
+                await text_channel.send("📊 Gathering server status...")
+
+            result = await execute_tool_voice(text_channel, tool_name, tool_args)
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_id,
+                    "content": result,
+                }
+            )
+
+    return "I reached my limit on that task, Captain."
+
+
+# ---------------------------------------------------------------------------
+# Voice pipeline: STT, TTS, audio playback
+# ---------------------------------------------------------------------------
+
+
+def calculate_rms(pcm_data: bytes) -> float:
+    """Calculate RMS energy of 16-bit PCM audio data."""
+    if not pcm_data:
+        return 0.0
+    count = len(pcm_data) // 2
+    if count == 0:
+        return 0.0
+    samples = struct.unpack(f"<{count}h", pcm_data)
+    sum_sq = sum(s * s for s in samples)
+    return math.sqrt(sum_sq / count)
+
+
+def convert_pcm_48k_stereo_to_16k_mono(pcm_data: bytes) -> bytes:
+    """Convert 48kHz stereo PCM to 16kHz mono PCM using ffmpeg."""
+    try:
+        process = subprocess.Popen(
+            [
+                "ffmpeg",
+                "-f", "s16le", "-ar", "48000", "-ac", "2", "-i", "pipe:0",
+                "-f", "s16le", "-ar", "16000", "-ac", "1", "pipe:1",
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        output, _ = process.communicate(input=pcm_data, timeout=30)
+        return output
+    except Exception as e:
+        log(f"PCM conversion failed: {e}", "ERROR")
+        return b""
+
+
+async def transcribe_audio(pcm_data: bytes) -> str:
+    """Send 16kHz mono PCM to Deepgram for transcription."""
+    if not pcm_data or len(pcm_data) < 1000:
+        return ""
+    try:
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Authorization": f"Token {DEEPGRAM_API_KEY}",
+                "Content-Type": "audio/raw",
+            }
+            params = {
+                "encoding": "linear16",
+                "sample_rate": "16000",
+                "channels": "1",
+                "model": DEEPGRAM_MODEL,
+                "smart_format": "true",
+            }
+            async with session.post(
+                DEEPGRAM_STT_URL,
+                headers=headers,
+                params=params,
+                data=pcm_data,
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    channels = data.get("results", {}).get("channels", [])
+                    if channels:
+                        return channels[0]["alternatives"][0]["transcript"].strip()
+                    return ""
+                else:
+                    error = await resp.text()
+                    log(f"Deepgram STT error {resp.status}: {error[:200]}", "ERROR")
+                    return ""
+    except Exception as e:
+        log(f"Deepgram STT failed: {e}", "ERROR")
+        return ""
+
+
+async def synthesize_speech(text: str) -> bytes | None:
+    """Convert text to speech using ElevenLabs Flash v2.5."""
+    if not text:
+        return None
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"{ELEVENLABS_TTS_URL}/{SCHUBERT_VOICE_ID}"
+            headers = {
+                "xi-api-key": ELEVENLABS_API_KEY,
+                "Content-Type": "application/json",
+                "Accept": "audio/mpeg",
+            }
+            payload = {
+                "text": text[:500],
+                "model_id": ELEVENLABS_TTS_MODEL,
+                "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+            }
+            async with session.post(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.read()
+                else:
+                    error = await resp.text()
+                    log(f"ElevenLabs TTS error {resp.status}: {error[:200]}", "ERROR")
+                    return None
+    except Exception as e:
+        log(f"ElevenLabs TTS failed: {e}", "ERROR")
+        return None
+
+
+async def play_tts_audio(voice_client, mp3_data: bytes) -> bool:
+    """Play MP3 audio in the Discord voice channel."""
+    if not mp3_data:
+        return False
+    temp_path = f"/tmp/tts_{int(time.time() * 1000)}.mp3"
+    try:
+        with open(temp_path, "wb") as f:
+            f.write(mp3_data)
+
+        source = discord.FFmpegPCMAudio(temp_path)
+        finished = asyncio.Event()
+
+        def after_callback(error):
+            if error:
+                log(f"Playback error: {error}", "ERROR")
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+            finished.set()
+
+        voice_client.play(source, after=after_callback)
+        await finished.wait()
+        return True
+    except Exception as e:
+        log(f"Playback failed: {e}", "ERROR")
+        try:
+            os.remove(temp_path)
+        except Exception:
+            pass
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Voice session
+# ---------------------------------------------------------------------------
+
+
+class VoiceAudioSink(voice_recv.AudioSink):
+    """AudioSink that receives PCM from Discord voice and feeds it to VoiceSession."""
+
+    def __init__(self, session: VoiceSession):
+        super().__init__()
+        self.session = session
+
+    def wants_opus(self) -> bool:
+        return False
+
+    def write(self, user, data: voice_recv.VoiceData):
+        if user is None or data.pcm is None:
+            return
+        if user.id != self.session.admin_user_id:
+            return
+        if self.session.state != "listening":
+            return
+        self.session.process_audio_frame(data.pcm)
+
+    def cleanup(self):
+        pass
+
+
+class VoiceSession:
+    """Manages the voice pipeline: audio receive → VAD → STT → LLM → TTS → playback."""
+
+    def __init__(self, voice_client, bot_instance, text_channel, admin_user_id):
+        self.vc = voice_client
+        self.bot = bot_instance
+        self.text_channel = text_channel
+        self.admin_user_id = admin_user_id
+
+        self.state = "listening"  # listening, processing, speaking
+        self.audio_buffer = b""
+        self.silence_frames = 0
+        self.speech_frames = 0
+        self.is_speaking = False
+
+    def process_audio_frame(self, pcm: bytes):
+        """Process a single PCM frame through VAD. Called from audio thread."""
+        rms = calculate_rms(pcm)
+
+        if rms > VAD_SPEECH_RMS_THRESHOLD:
+            self.is_speaking = True
+            self.speech_frames += 1
+            self.silence_frames = 0
+            self.audio_buffer += pcm
+        else:
+            if self.is_speaking:
+                self.silence_frames += 1
+                self.audio_buffer += pcm
+
+                if self.silence_frames >= VAD_SILENCE_FRAMES_LIMIT:
+                    self.is_speaking = False
+
+                    if self.speech_frames >= VAD_MIN_SPEECH_FRAMES:
+                        self.state = "processing"
+                        audio_to_process = self.audio_buffer
+                        self.audio_buffer = b""
+                        self.speech_frames = 0
+                        self.silence_frames = 0
+
+                        asyncio.run_coroutine_threadsafe(
+                            self._process_speech(audio_to_process),
+                            self.bot.loop,
+                        )
+                    else:
+                        self.audio_buffer = b""
+                        self.speech_frames = 0
+                        self.silence_frames = 0
+
+    async def _process_speech(self, audio_data: bytes):
+        """Process speech: STT → LLM → TTS → playback."""
+        try:
+            log(f"Processing speech: {len(audio_data)} bytes PCM", "INFO")
+
+            # 1. Convert 48kHz stereo → 16kHz mono for Deepgram
+            pcm_16k = convert_pcm_48k_stereo_to_16k_mono(audio_data)
+            if not pcm_16k:
+                log("PCM conversion failed, resuming listening", "WARN")
+                self.state = "listening"
+                return
+
+            # 2. Transcribe
+            transcript = await transcribe_audio(pcm_16k)
+            if not transcript:
+                log("Empty transcript, resuming listening", "INFO")
+                self.state = "listening"
+                return
+
+            log(f"Transcript: {transcript[:200]}", "INFO")
+            await self.text_channel.send(f"🎤 Captain: {transcript}")
+
+            # 3. LLM agent loop (voice mode)
+            response = await run_agent_loop_voice(self.text_channel, transcript)
+            if not response:
+                response = "I didn't catch that, Captain."
+
+            log(f"Voice response: {response[:200]}", "INFO")
+            await self.text_channel.send(f"⚓ {response[:1900]}")
+
+            # 4. TTS
+            self.state = "speaking"
+            mp3_data = await synthesize_speech(response)
+
+            if mp3_data:
+                # 5. Play audio
+                await play_tts_audio(self.vc, mp3_data)
+
+            # 6. Resume listening
+            self.state = "listening"
+
+        except Exception as e:
+            log(f"Voice processing error: {e}", "ERROR")
+            self.state = "listening"
+
+    def stop(self):
+        """Stop the voice session."""
+        self.state = "idle"
+        self.audio_buffer = b""
+
+
+# ---------------------------------------------------------------------------
 # Level 1 quick commands (no LLM cost)
 # ---------------------------------------------------------------------------
 
 
 def cmd_status() -> discord.Embed:
     """Full server health snapshot."""
-    # Uptime
     code, uptime_out = run_command("uptime -p 2>/dev/null || uptime", timeout=10)
-
-    # Disk
     code, disk_out = run_command(
         "df -h / /home /opt /tmp 2>/dev/null | grep -E '^/dev|^Filesystem'",
         timeout=10,
     )
-
-    # Memory
     code, mem_out = run_command("free -h | grep -E 'Mem|Swap'", timeout=10)
-
-    # Failed services
     code, failed_out = run_command(
         "systemctl list-units --type=service --state=failed --no-pager --no-legend 2>/dev/null | awk '{print $1}'",
         timeout=10,
     )
-
-    # Active service count
     code, svc_count = run_command(
         "systemctl list-units --type=service --state=active --no-pager --no-legend | wc -l",
         timeout=10,
@@ -811,7 +1272,6 @@ def cmd_services() -> discord.Embed:
             timestamp=datetime.now(timezone.utc),
         )
 
-    # Also get failed services
     code, failed = run_command(
         "systemctl list-units --type=service --state=failed --no-pager --no-legend 2>/dev/null | "
         "awk '{print $1}'",
@@ -819,7 +1279,6 @@ def cmd_services() -> discord.Embed:
     )
 
     lines = output.strip().split("\n")
-    # Truncate for Discord
     if len(lines) > 30:
         display = "\n".join(lines[:30]) + f"\n... and {len(lines) - 30} more"
     else:
@@ -842,7 +1301,6 @@ def cmd_logs(service: str) -> discord.Embed:
     if not service:
         service = "tango-backend.service"
 
-    # Validate service name to prevent injection
     if not re.match(r'^[a-zA-Z0-9@._-]+\.service$', service):
         return discord.Embed(
             title="❌ Invalid service name",
@@ -879,17 +1337,14 @@ def cmd_logs(service: str) -> discord.Embed:
 def cmd_disk() -> discord.Embed:
     """Disk usage overview."""
     code, output = run_command("df -h --total 2>/dev/null", timeout=10)
-
     if code != 0:
         return discord.Embed(
             title="❌ Failed to get disk usage",
             color=COLOR_ERROR,
             timestamp=datetime.now(timezone.utc),
         )
-
     if len(output) > 1900:
         output = output[-1900:]
-
     embed = discord.Embed(
         title="💾 Disk Usage",
         description=f"```\n{output}\n```",
@@ -902,7 +1357,6 @@ def cmd_disk() -> discord.Embed:
 def cmd_mem() -> discord.Embed:
     """Memory and swap usage."""
     code, output = run_command("free -h", timeout=10)
-
     embed = discord.Embed(
         title="🧠 Memory & Swap",
         description=f"```\n{output}\n```",
@@ -916,32 +1370,21 @@ def cmd_procs() -> discord.Embed:
     """Top processes by CPU and memory."""
     code, cpu_out = run_command("ps aux --sort=-%cpu | head -11", timeout=10)
     code, mem_out = run_command("ps aux --sort=-%mem | head -11", timeout=10)
-
     embed = discord.Embed(
         title="⚡ Top Processes",
         color=COLOR_INFO,
         timestamp=datetime.now(timezone.utc),
     )
-    embed.add_field(
-        name="By CPU",
-        value=f"```\n{cpu_out[:1000]}\n```",
-        inline=False,
-    )
-    embed.add_field(
-        name="By Memory",
-        value=f"```\n{mem_out[:1000]}\n```",
-        inline=False,
-    )
+    embed.add_field(name="By CPU", value=f"```\n{cpu_out[:1000]}\n```", inline=False)
+    embed.add_field(name="By Memory", value=f"```\n{mem_out[:1000]}\n```", inline=False)
     return embed
 
 
 def cmd_net() -> discord.Embed:
     """Network connections and listening ports."""
     code, output = run_command("ss -tlnp | head -40", timeout=10)
-
     if len(output) > 1900:
         output = output[:1900] + "\n... (truncated)"
-
     embed = discord.Embed(
         title="🌐 Listening Ports & Connections",
         description=f"```\n{output}\n```",
@@ -952,7 +1395,7 @@ def cmd_net() -> discord.Embed:
 
 
 def cmd_restart(service: str) -> discord.Embed:
-    """Restart a service. Returns an embed."""
+    """Restart a service."""
     if not service:
         return discord.Embed(
             title="❌ No service specified",
@@ -961,7 +1404,6 @@ def cmd_restart(service: str) -> discord.Embed:
             timestamp=datetime.now(timezone.utc),
         )
 
-    # Validate service name
     if not re.match(r'^[a-zA-Z0-9@._-]+\.service$', service):
         return discord.Embed(
             title="❌ Invalid service name",
@@ -970,7 +1412,6 @@ def cmd_restart(service: str) -> discord.Embed:
             timestamp=datetime.now(timezone.utc),
         )
 
-    # Never touch self
     if service in NEVER_TOUCH_SERVICES:
         return discord.Embed(
             title="❌ Cannot restart self",
@@ -1007,8 +1448,7 @@ def cmd_help() -> discord.Embed:
         description=(
             "Aye, Captain. I'm Admiral Schubert, commander of the good ship Schubert. "
             "I keep all services shipshape, investigate troubled waters, and patch leaks "
-            "before they sink you. I'll ask for confirmation before git push and before "
-            "restarting critical services — I won't scuttle the fleet without your orders."
+            "before they sink you. I can work via text or voice — ask me anything."
         ),
         color=COLOR_AGENT,
         timestamp=datetime.now(timezone.utc),
@@ -1022,6 +1462,9 @@ def cmd_help() -> discord.Embed:
     embed.add_field(name="!mem", value="Memory and swap usage", inline=False)
     embed.add_field(name="!procs", value="Top processes by CPU and memory", inline=False)
     embed.add_field(name="!net", value="Listening ports and network connections", inline=False)
+    embed.add_field(name="Voice Commands", value="━━━━━━━━━━━━━━━━", inline=False)
+    embed.add_field(name="!join", value="Join your voice channel — speak and I shall respond", inline=False)
+    embed.add_field(name="!leave", value="Leave the voice channel", inline=False)
     embed.add_field(name="Agent Mode", value="━━━━━━━━━━━━━━━━", inline=False)
     embed.add_field(
         name="Any message",
@@ -1055,10 +1498,13 @@ async def on_ready():
     log(f"Admiral Schubert reporting for duty as {bot.user} (ID: {bot.user.id})", "INFO")
     log(f"Commanding channel {BOT_CHANNEL_ID}, serving Captain {ADMIN_USER_ID}", "INFO")
     log(f"LLM model: {LLM_MODEL} via {LITELLM_URL}", "INFO")
+    log(f"Voice TTS: ElevenLabs {SCHUBERT_VOICE_ID} | STT: Deepgram {DEEPGRAM_MODEL}", "INFO")
 
 
 @bot.event
 async def on_message(message: discord.Message):
+    global active_voice_session
+
     if message.author == bot.user:
         return
 
@@ -1112,7 +1558,6 @@ async def on_message(message: discord.Message):
             elif command == "restart":
                 service = args[0] if args else ""
 
-                # Check for pending confirmation
                 if message.author.id in _pending_restarts:
                     pending_svc, pending_time = _pending_restarts.pop(
                         message.author.id
@@ -1140,7 +1585,6 @@ async def on_message(message: discord.Message):
                     await message.reply(f"❌ Cannot restart {service} — self-protection.")
                     return
 
-                # Critical services need confirmation
                 if service in CRITICAL_SERVICES:
                     _pending_restarts[message.author.id] = (service, time.time())
                     await message.reply(
@@ -1151,7 +1595,6 @@ async def on_message(message: discord.Message):
                     )
                     return
 
-                # Normal service — restart directly
                 await message.reply(f"⏳ Restarting {service}...")
                 await message.reply(embed=cmd_restart(service))
 
@@ -1166,6 +1609,65 @@ async def on_message(message: discord.Message):
 
             elif command == "net":
                 await message.reply(embed=cmd_net())
+
+            elif command == "join":
+                # Join the voice channel the admin is in
+                voice_state = message.author.voice
+                if not voice_state or not voice_state.channel:
+                    await message.reply(
+                        "⚠️ You need to be in a voice channel first, Captain."
+                    )
+                    return
+
+                if bot.voice_clients:
+                    await message.reply(
+                        "⚠️ I'm already in a voice channel, Captain."
+                    )
+                    return
+
+                try:
+                    voice_client = await voice_state.channel.connect(
+                        cls=voice_recv.VoiceRecvClient
+                    )
+                    session = VoiceSession(
+                        voice_client, bot, message.channel, message.author.id
+                    )
+                    voice_client.listen(VoiceAudioSink(session))
+                    active_voice_session = session
+                    log(
+                        f"Joined voice channel {voice_state.channel.name} "
+                        f"(ID: {voice_state.channel.id})",
+                        "INFO",
+                    )
+                    await message.reply(
+                        "⚓ Aye, Captain! I've joined the voice channel. "
+                        "Speak and I shall respond."
+                    )
+                except Exception as e:
+                    log(f"Failed to join voice channel: {e}", "ERROR")
+                    await message.reply(f"❌ Failed to join voice channel: {e}")
+
+            elif command == "leave":
+                if not bot.voice_clients:
+                    await message.reply("I'm not in a voice channel, Captain.")
+                    return
+
+                for vc in bot.voice_clients:
+                    try:
+                        if hasattr(vc, "stop_listening"):
+                            vc.stop_listening()
+                    except Exception:
+                        pass
+                    await vc.disconnect()
+
+                if active_voice_session:
+                    active_voice_session.stop()
+                    active_voice_session = None
+
+                log("Left voice channel", "INFO")
+                await message.reply(
+                    "⚓ Aye, Captain. I've left the voice channel."
+                )
 
             elif command == "agent":
                 agent_input = " ".join(args)
@@ -1191,6 +1693,29 @@ async def on_message(message: discord.Message):
         await run_agent_with_update(message, content)
 
 
+@bot.event
+async def on_voice_state_update(member, before, after):
+    """Handle voice state changes — auto-leave if the channel empties."""
+    global active_voice_session
+
+    if not active_voice_session:
+        return
+
+    # If the admin left the voice channel, the bot should leave too
+    if member.id == ADMIN_USER_ID and after.channel is None:
+        if bot.voice_clients:
+            for vc in bot.voice_clients:
+                try:
+                    if hasattr(vc, "stop_listening"):
+                        vc.stop_listening()
+                except Exception:
+                    pass
+                await vc.disconnect()
+            active_voice_session.stop()
+            active_voice_session = None
+            log("Admin left voice channel, auto-disconnecting", "INFO")
+
+
 async def run_agent_with_update(message: discord.Message, user_input: str):
     try:
         await message.reply(f"🤖 Working on: {user_input[:200]}")
@@ -1213,8 +1738,9 @@ async def run_agent_with_update(message: discord.Message, user_input: str):
 
 def main() -> int:
     log("=" * 60, "INFO")
-    log("Schubert Bot (Level 3 server-wide agent) starting", "INFO")
+    log("Schubert Bot (Level 3 agent with voice) starting", "INFO")
     log(f"Model: {LLM_MODEL} via {LITELLM_URL}", "INFO")
+    log(f"Voice: discord-ext-voice-recv + Deepgram + ElevenLabs", "INFO")
 
     if not load_config():
         log("Configuration error — exiting", "CRITICAL")
