@@ -9,6 +9,16 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ## [Unreleased]
 
+### Added
+- Added web search capability to both Discord bots (Admiral Schubert and
+  Tango Bot). Bots can now search the web for current information using the
+  Serper.dev Google Search API (2,500 free searches/month). The web_search
+  tool is available in both text and voice modes. When the LLM determines it
+  needs up-to-date information beyond its training data, it autonomously calls
+  web_search and reasons about the results. Returns titles, URLs, snippets,
+  knowledge graph data, and answer boxes. API key stored as SERPER_API_KEY
+  in .env.
+
 ### Fixed
 - Fixed Admiral Schubert voice bot DAVE encryption handling. Three root causes
   were identified and resolved:

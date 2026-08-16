@@ -456,8 +456,87 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": (
+                "Search the web for current information using Google Search. "
+                "Use this tool when you need up-to-date information, news, "
+                "documentation, or facts that may be beyond your training data. "
+                "Returns titles, URLs, and snippets for each result."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query",
+                    },
+                    "num_results": {
+                        "type": "integer",
+                        "description": "Number of results to return (default 5, max 10)",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
 
+
+
+
+# ---------------------------------------------------------------------------
+# Web Search (Serper.dev API)
+# ---------------------------------------------------------------------------
+
+SERPER_API_KEY = os.environ.get("SERPER_API_KEY", "")
+
+
+async def web_search(query: str, num_results: int = 5) -> str:
+    """Search the web via Serper.dev Google Search API.
+    Returns formatted search results with titles, URLs, and snippets."""
+    if not SERPER_API_KEY:
+        return "Error: SERPER_API_KEY not configured in environment."
+    try:
+        async with aiohttp.ClientSession() as session:
+            payload = {
+                "q": query,
+                "num": min(num_results, 10),
+            }
+            headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
+            async with session.post(
+                "https://google.serper.dev/search",
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status != 200:
+                    return "Search error: HTTP {}".format(resp.status)
+                data = await resp.json()
+        results = []
+        organic = data.get("organic", [])
+        for i, item in enumerate(organic[:num_results], 1):
+            title = item.get("title", "")
+            link = item.get("link", "")
+            snippet = item.get("snippet", "")
+            results.append("{}. {}\n   URL: {}\n   {}".format(i, title, link, snippet))
+        kg = data.get("knowledgeGraph", {})
+        if kg:
+            kg_title = kg.get("title", "")
+            kg_desc = kg.get("description", "")
+            results.insert(0, "Knowledge Graph: {}\n   {}".format(kg_title, kg_desc))
+        ab = data.get("answerBox", {})
+        if ab:
+            ab_title = ab.get("title", "")
+            ab_answer = ab.get("answer", ab.get("snippet", ""))
+            results.insert(0, "Answer Box: {}\n   {}".format(ab_title, ab_answer))
+        if not results:
+            return "No results found."
+        return "\n\n".join(results)
+    except Exception as e:
+        return "Search error: {}".format(e)
 
 # ---------------------------------------------------------------------------
 # LLM API
@@ -589,6 +668,18 @@ async def execute_tool(
         log("Tool server_status", "INFO")
         return get_server_status_text()
 
+    elif tool_name == "web_search":
+        query = tool_args.get("query", "")
+        num_results = tool_args.get("num_results", 5)
+        if not query:
+            return "Error: no search query provided"
+        log(f"Tool web_search: {query[:200]}", "INFO")
+        result = await web_search(query, num_results)
+        if len(result) > TOOL_OUTPUT_LIMIT:
+            result = result[:TOOL_OUTPUT_LIMIT] + "\n... (truncated)"
+        log(f"Web search result: {result[:200]}", "INFO")
+        return result
+
     else:
         return f"Unknown tool: {tool_name}"
 
@@ -652,6 +743,18 @@ async def execute_tool_voice(
 
     elif tool_name == "server_status":
         return get_server_status_text()
+
+    elif tool_name == "web_search":
+        query = tool_args.get("query", "")
+        num_results = tool_args.get("num_results", 5)
+        if not query:
+            return "Error: no search query provided"
+        log(f"Tool web_search: {query[:200]}", "INFO")
+        result = await web_search(query, num_results)
+        if len(result) > TOOL_OUTPUT_LIMIT:
+            result = result[:TOOL_OUTPUT_LIMIT] + "\n... (truncated)"
+        log(f"Web search result: {result[:200]}", "INFO")
+        return result
 
     else:
         return f"Unknown tool: {tool_name}"
