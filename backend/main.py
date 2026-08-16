@@ -456,6 +456,7 @@ def _build_fallback_tts(primary: Any, fallback: Any, persona: Persona) -> Any:
     """
     from livekit.agents import APIError, tts as lk_tts
     from livekit.agents.types import APIConnectOptions, DEFAULT_API_CONNECT_OPTIONS
+    from livekit.agents.utils import shortuuid as gen_shortuuid
 
     primary_model = getattr(primary, "model", "primary")
     primary_provider = getattr(primary, "provider", "unknown")
@@ -465,7 +466,7 @@ def _build_fallback_tts(primary: Any, fallback: Any, persona: Persona) -> Any:
         def __init__(self) -> None:
             primary_caps = getattr(primary, "_capabilities", None)
             super().__init__(
-                capabilities=primary_caps or lk_tts.TTSCapabilities(streaming=False),
+                capabilities=primary_caps or lk_tts.TTSCapabilities(streaming=True),
                 sample_rate=getattr(primary, "_sample_rate", 24000),
                 num_channels=getattr(primary, "_num_channels", 1),
             )
@@ -491,6 +492,17 @@ def _build_fallback_tts(primary: Any, fallback: Any, persona: Persona) -> Any:
                 tts=self, input_text=text, conn_options=conn_options,
             )
 
+        def stream(
+            self,
+            *,
+            conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS,
+        ) -> lk_tts.SynthesizeStream:
+            # Delegate streaming directly to the primary TTS engine.
+            # The primary (ElevenLabs) supports streaming natively and has its
+            # own retry logic in SynthesizeStream._main_task. The Deepgram Aura
+            # fallback applies to the non-streaming synthesize() path.
+            return self._primary.stream(conn_options=conn_options)
+
         async def aclose(self) -> None:
             for engine in (self._primary, self._fallback):
                 close_fn = getattr(engine, "aclose", None)
@@ -508,25 +520,39 @@ def _build_fallback_tts(primary: Any, fallback: Any, persona: Persona) -> Any:
                 self._input_text, conn_options=self._conn_options
             )
             try:
+                output_emitter.initialize(
+                    request_id=gen_shortuuid(),
+                    sample_rate=self._fb_tts._primary.sample_rate,
+                    num_channels=self._fb_tts._primary.num_channels,
+                    mime_type="audio/pcm",
+                )
                 async for ev in primary_stream:
-                    output_emitter.push(ev.frame)
+                    output_emitter.push(ev.frame.data.tobytes())
                 output_emitter.flush()
                 return
             except APIError as exc:
                 logger.warning(
-                    "Primary TTS failed persona=%%s primary=%%s error=%%s; falling back to %%s",
+                    "Primary TTS failed persona=pctpcts primary=pctpcts error=pctpcts; falling back to pctpcts",
                     self._fb_tts._persona_id, primary_provider, exc, fallback_provider,
                 )
             except Exception as exc:
                 logger.warning(
-                    "Primary TTS failed persona=%%s primary=%%s error=%%s; falling back to %%s",
+                    "Primary TTS failed persona=pctpcts primary=pctpcts error=pctpcts; falling back to pctpcts",
                     self._fb_tts._persona_id, primary_provider, exc, fallback_provider,
                 )
+            with suppress(Exception):
+                await primary_stream.aclose()
             fallback_stream = self._fb_tts._fallback.synthesize(
                 self._input_text, conn_options=self._conn_options
             )
+            output_emitter.initialize(
+                request_id=gen_shortuuid(),
+                sample_rate=self._fb_tts._fallback.sample_rate,
+                num_channels=self._fb_tts._fallback.num_channels,
+                mime_type="audio/pcm",
+            )
             async for ev in fallback_stream:
-                output_emitter.push(ev.frame)
+                output_emitter.push(ev.frame.data.tobytes())
             output_emitter.flush()
 
     return FallbackTTS()
