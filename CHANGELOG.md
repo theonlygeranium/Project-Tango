@@ -24,6 +24,13 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
   !tts, !help) from the configured admin user in the configured channel.
   Includes rate limiting, restart confirmation, and full audit logging.
   Bot token and credentials stored in .env, not committed to source.
+- Added Schubert Bot: a Level 3 server-wide autonomous Discord agent with
+  full access to all Schubert services and projects. Powered by
+  writer/claude-sonnet-4-5 via LiteLLM. Includes server monitoring tools
+  (!status, !services, !disk, !mem, !procs, !net), broader guardrails
+  (critical service restarts require confirmation), and a new Discord bot
+  application (Admiral Schubert#5041). Credentials stored in .env as
+  SCHUBERT_BOT_*. Running as schubert-bot.service.
 - Upgraded Tango Discord Bot to Level 3 autonomous agent. The bot now uses
   writer/claude-sonnet-4-5 via LiteLLM for reasoning, with a full agentic
   tool-use loop (run_shell, write_file, health_check). Natural language
