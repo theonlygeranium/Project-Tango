@@ -24,6 +24,16 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
   !tts, !help) from the configured admin user in the configured channel.
   Includes rate limiting, restart confirmation, and full audit logging.
   Bot token and credentials stored in .env, not committed to source.
+- Upgraded Tango Discord Bot to Level 3 autonomous agent. The bot now uses
+  writer/claude-sonnet-4-5 via LiteLLM for reasoning, with a full agentic
+  tool-use loop (run_shell, write_file, health_check). Natural language
+  messages trigger autonomous investigation, code fixes, service restarts,
+  and git commits. Guardrails include hard blocks (rm -rf, mkfs, dd, forbidden
+  services, AGENTS.md, .env, git push to main, package installs, shutdown),
+  confirmation gates (git push only), loop safety (max 20 iterations, 5-min
+  timeout), and full audit logging to /var/log/tango-discord-agent.log.
+  Level 1 quick commands (!status, !health, etc.) remain available without
+  LLM cost.
 
 ### Changed
 - Switched turn detection from STT-based (turn_detection="stt") to LiveKit's audio
