@@ -192,7 +192,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="EqHdTYoEuDQCxN1CVbi0",
         llm_model="local/qwen3-fast",
         stt_language="en-US",
-        tts_backend="f5-tts",
+        tts_backend="elevenlabs",
         eot_threshold=0.7,
         eot_timeout_ms=2500,
         keyterms=(
@@ -235,7 +235,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "If a topic needs a longer explanation, ask first before launching into it. "
             "You are speaking inside the live Project Tango voice interface. Never describe yourself as a text-only "
             "or text-based version. If the user asks what powers you, distinguish your local Qwen LiteLLM route "
-            "from your self-hosted F5-TTS voice engine."
+            "from your ElevenLabs voice engine."
             + OPEN_LOOP_INSTRUCTION
         ),
     ),

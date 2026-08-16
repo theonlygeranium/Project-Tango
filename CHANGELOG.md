@@ -9,6 +9,16 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ## [Unreleased]
 
+### Changed
+- Jeremiah now routes TTS back to ElevenLabs (tts_backend="elevenlabs") now
+  that the ElevenLabs billing is resolved. The F5-TTS sidecar remains available
+  as a lazy-start option via TANGO_F5_TTS_ENABLED, but is no longer the primary
+  voice engine for any persona. All seven personas now use ElevenLabs Flash v2.5
+  as their primary TTS engine, with Deepgram Aura remaining as the automatic
+  fallback if ElevenLabs fails again.
+- Jeremiah's system prompt updated to reference his ElevenLabs voice engine
+  instead of self-hosted F5-TTS.
+
 ### Added
 - Deepgram Aura TTS fallback: when the primary TTS engine (ElevenLabs or
   F5-TTS) fails to produce audio, the backend automatically retries the same
