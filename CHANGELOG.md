@@ -10,6 +10,13 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 ## [Unreleased]
 
 ### Changed
+- Switched turn detection from STT-based (turn_detection="stt") to LiveKit's audio
+  TurnDetector (inference.TurnDetector()). The audio turn detector processes user
+  audio directly - intonation, pitch, rhythm - for state-of-the-art end-of-turn
+  accuracy without relying on STT transcript timing. This eliminates the recurring
+  "stt end of speech received while vad is still in a speech segment" VAD/STT race
+  condition that appeared on every user utterance. Tagalog personas (Mama Lulu,
+  Tita Baby) remain on Nova-3 endpointing via the existing turn_detection pop.
 - Disabled vision context for audio-only sessions (TANGO_VISION_ENABLED=false).
   The vision pipeline was initializing on every turn and requesting video frames
   that never arrive in audio-only sessions, wasting per-turn overhead on

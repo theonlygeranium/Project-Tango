@@ -172,11 +172,17 @@ def _turn_handling_for_session(
     *,
     preemptive_generation_enabled: bool = True,
 ) -> dict[str, Any]:
-    # Deepgram Flux owns end-of-turn detection natively via turn_detection="stt".
-    # The per-persona eot_threshold and eot_timeout_ms are passed directly to STTv2.
-    # Only preemptive_generation remains here.
+    # Use LiveKit's audio TurnDetector for state-of-the-art end-of-turn detection.
+    # The audio turn detector processes user audio directly (intonation, pitch, rhythm)
+    # rather than relying on STT transcript timing, eliminating the VAD/STT race
+    # condition that produced "stt end of speech received while vad is still in a
+    # speech segment" warnings on every utterance.
+    #
+    # Deepgram Flux's eot_threshold and eot_timeout_ms are still passed to STTv2
+    # for STT-internal endpointing, but turn boundary decisions are now owned by
+    # the audio TurnDetector.
     turn_handling: dict[str, Any] = {}
-    turn_handling["turn_detection"] = "stt"
+    turn_handling["turn_detection"] = inference.TurnDetector()
     turn_handling["preemptive_generation"] = {"enabled": preemptive_generation_enabled}
     return turn_handling
 
@@ -1299,6 +1305,7 @@ async def entrypoint(ctx: Any) -> None:
         CloseEvent,
         ConversationItemAddedEvent,
         SessionUsageUpdatedEvent,
+        inference,
     )
     from livekit.agents.llm import ChatMessage
     from livekit.plugins import deepgram, elevenlabs, openai, silero
