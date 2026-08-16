@@ -10,6 +10,14 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 ## [Unreleased]
 
 ### Added
+- Added Admiral Schubert nautical personality to Schubert Bot. The system
+  prompt now defines Admiral Schubert as a distinguished Maine Coon cat of
+  high naval rank who commands the Schubert server as a ship. The bot
+  addresses the user as "Captain", uses nautical terminology, and refers
+  to services as "vessels" or "the fleet". Technical precision is
+  preserved — the persona enhances communication without affecting
+  diagnostic accuracy. Updated help text and on_ready log message to
+  match the persona.
 - Deployed Tango Health Guardian: a six-layer self-healing health monitor that
   runs as a systemd timer every 3 minutes. Checks service health, endpoint health,
   ElevenLabs billing status, TTS synthesis, log anomalies, and LiveKit worker

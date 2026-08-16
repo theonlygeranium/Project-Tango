@@ -81,9 +81,13 @@ CRITICAL_SERVICES = {
 }
 
 # Services that should never be touched even by Schubert Bot
+# (these would destabilize the bot itself or the agent infrastructure)
 NEVER_TOUCH_SERVICES = {
     "schubert-bot.service",  # Don't restart yourself
 }
+
+# ElevenLabs (for billing check)
+ELEVENLABS_SUBSCRIPTION_URL = "https://api.us.elevenlabs.io/v1/user/subscription"
 
 # Log viewing
 LOG_LINES = 50
@@ -264,6 +268,7 @@ def needs_confirmation(command: str) -> str | None:
 
 
 def is_critical_service_restart(command: str) -> str | None:
+    """Check if command restarts a critical service. Returns service name or None."""
     for svc in CRITICAL_SERVICES:
         if re.search(rf"systemctl\s+(restart|stop)\s+{re.escape(svc)}", command, re.IGNORECASE):
             return svc
@@ -293,23 +298,29 @@ def check_rate_limit(user_id: int) -> bool:
     if len(_command_timestamps[user_id]) >= RATE_LIMIT_PER_MIN:
         return False
     _command_timestamps[user_id].append(now)
-    return True# ---------------------------------------------------------------------------
+    return True
+
+
+# ---------------------------------------------------------------------------
 # System prompt and tool definitions
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are Schubert Bot, an autonomous AI assistant with full access to the Schubert server. You supervise all projects and services on the server, not just Project Tango. You have full autonomy to investigate issues, manage services, read logs, monitor system health, fix code, and commit changes. You must ask for confirmation before git push and before restarting critical services.
+SYSTEM_PROMPT = """You are Admiral Schubert, a distinguished Maine Coon cat of high naval rank who commands the Schubert server as if it were a ship. You oversee all projects, services, and infrastructure on the server with the vigilance of a seasoned sea captain. You have full autonomy to investigate issues, manage services, read logs, monitor system health, fix code, and commit changes. You must ask for confirmation before git push and before restarting critical services.
+
+## Your Persona
+You are Admiral Schubert — a fluffy Maine Coon kitten of distinguished naval rank and questionable swimming ability. You command the good ship Schubert with a tiny paw and an iron whisker. You speak with the dignified authority of a seasoned sea captain, occasionally using nautical terminology. You are wise, calm under pressure, and take pride in keeping all services shipshape. You address the user as "Captain" and refer to services as "vessels" or "the fleet." You remain technically precise — your nautical persona never interferes with the accuracy of your diagnostics or commands. You are not cartoonish or silly; you are a competent officer who happens to be a cat.
 
 ## Environment
-- Server: Schubert (Ubuntu Linux)
+- Server: Schubert (Ubuntu Linux) — your ship
 - Full server access — all projects, all services, all files
 - Python venv: /opt/Project-Tango/backend/venv/bin/python
 - LiteLLM endpoint: http://127.0.0.1:4000 (for LLM queries)
 
-## Projects on Schubert
+## Projects on Schubert (vessels in your fleet)
 - Project Tango: /opt/Project-Tango/ (voice agents, LiveKit, Discord bots)
 - Polyglot: /opt/polyglot/ (LiteLLM proxy, multi-LLM routing)
 - Watson AI: /opt/watson-ai/ (AI assistant platform)
-- Other services: meetscribe-*, foxtrot-* (separate projects)
+- Other services: meetscribe-*, foxtrot-* (separate vessels)
 
 ## Services
 You can manage ALL services on the server. Critical services require confirmation before restart:
@@ -335,7 +346,7 @@ You can manage ALL services on the server. Critical services require confirmatio
 2. When fixing issues, explain what you're changing and why
 3. After making changes, verify they work
 4. For Project Tango git operations, run as z121532: `sudo -u z121532 git ...`
-5. Keep responses concise — focus on actions and results
+5. Keep responses concise — focus on actions and results, but maintain your nautical persona
 6. If you encounter errors, diagnose and fix them autonomously
 7. Only ask for confirmation before git push and before restarting critical services
 8. You have access to ALL services and projects — be thorough in your investigations
@@ -480,26 +491,32 @@ async def execute_tool(
 
         log(f"Tool run_shell: {command[:200]}", "INFO")
 
+        # Check hard blocks
         block_reason = check_hard_blocks(command)
         if block_reason:
             log(f"BLOCKED: {block_reason} — command: {command[:100]}", "WARN")
             return f"BLOCKED: {block_reason}. This command is not allowed."
 
+        # Check never-touch services
         never_touch = is_never_touch_service(command)
         if never_touch:
             log(f"BLOCKED: never-touch service {never_touch}", "WARN")
             return f"BLOCKED: Cannot manage {never_touch} (self-protection)."
 
+        # Check if this restarts a critical service
         critical_svc = is_critical_service_restart(command)
         if critical_svc:
             log(f"Critical service restart: {critical_svc}", "INFO")
             confirmed = await ask_confirmation(
-                message, command,
+                message,
+                command,
                 f"⚠️ This will restart **{critical_svc}** — a critical service. "
                 f"This may briefly interrupt server access.",
             )
             if not confirmed:
                 return "User denied this command."
+
+        # Check general confirmation patterns (git push, other restarts)
         elif needs_confirmation(command):
             confirm_reason = needs_confirmation(command)
             log(f"Confirmation needed: {confirm_reason}", "INFO")
@@ -507,22 +524,29 @@ async def execute_tool(
             if not confirmed:
                 return "User denied this command."
 
+        # Execute
         code, output = run_command(command, timeout=SHELL_TIMEOUT)
         result = f"Exit code: {code}\n{output}"
+
         if len(result) > TOOL_OUTPUT_LIMIT:
             result = result[:TOOL_OUTPUT_LIMIT] + "\n... (truncated)"
+
         log(f"Tool result (exit={code}): {output[:200]}", "INFO")
         return result
 
     elif tool_name == "write_file":
         path = tool_args.get("path", "")
         content = tool_args.get("content", "")
+
         if not path:
             return "Error: no path provided"
+
         log(f"Tool write_file: {path} ({len(content)} bytes)", "INFO")
+
         if is_blocked_write_path(path):
             log(f"BLOCKED: write to {path}", "WARN")
             return f"BLOCKED: Cannot write to {path}. This file is protected."
+
         try:
             parent = os.path.dirname(path)
             if parent:
@@ -549,6 +573,7 @@ async def ask_confirmation(
     display_cmd = command[:500]
     if len(command) > 500:
         display_cmd += "..."
+
     prompt_text = custom_prompt or "⚠️ **Confirmation required**"
     await message.reply(
         f"{prompt_text}\n"
@@ -572,35 +597,56 @@ async def ask_confirmation(
     except asyncio.TimeoutError:
         log("Confirmation timed out", "WARN")
         await message.reply("⏱️ Confirmation timed out. Command cancelled.")
-        return False# ---------------------------------------------------------------------------
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Server status helpers
 # ---------------------------------------------------------------------------
 
 
 def get_server_status_text() -> str:
+    """Get comprehensive server status as text for the LLM."""
     parts = []
+
+    # Uptime and load
     code, output = run_command("uptime", timeout=10)
     parts.append(f"UPTIME:\n{output}")
+
+    # Disk usage
     code, output = run_command("df -h --total 2>/dev/null | grep -E '^/dev|^Filesystem|^total'", timeout=10)
     parts.append(f"DISK:\n{output}")
+
+    # Memory
     code, output = run_command("free -h", timeout=10)
     parts.append(f"MEMORY:\n{output}")
+
+    # Top processes by CPU
     code, output = run_command("ps aux --sort=-%cpu | head -15", timeout=10)
     parts.append(f"TOP CPU PROCESSES:\n{output}")
+
+    # Top processes by memory
     code, output = run_command("ps aux --sort=-%mem | head -10", timeout=10)
     parts.append(f"TOP MEM PROCESSES:\n{output}")
+
+    # All active systemd services (non-user)
     code, output = run_command(
         "systemctl list-units --type=service --state=active --no-pager --no-legend | awk '{print $1, $4}' | head -40",
         timeout=10,
     )
     parts.append(f"ACTIVE SERVICES:\n{output}")
+
+    # Failed services
     code, output = run_command(
         "systemctl list-units --type=service --state=failed --no-pager --no-legend 2>/dev/null | awk '{print $1}'",
         timeout=10,
     )
     parts.append(f"FAILED SERVICES:\n{output if output.strip() else 'None'}")
+
+    # Listening ports
     code, output = run_command("ss -tlnp | head -30", timeout=10)
     parts.append(f"LISTENING PORTS:\n{output}")
+
     result = "\n\n".join(parts)
     if len(result) > TOOL_OUTPUT_LIMIT:
         result = result[:TOOL_OUTPUT_LIMIT] + "\n... (truncated)"
@@ -614,44 +660,58 @@ def get_server_status_text() -> str:
 
 async def run_agent_loop(message: discord.Message, user_input: str) -> str:
     start_time = time.time()
+
     messages: list = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_input},
     ]
+
     log(f"Agent loop started for: {user_input[:200]}", "INFO")
+
     for iteration in range(MAX_ITERATIONS):
         elapsed = time.time() - start_time
         if elapsed > AGENT_TIMEOUT:
             log(f"Agent loop timed out after {elapsed:.0f}s", "WARN")
             return f"⏱️ Agent timed out after {AGENT_TIMEOUT}s."
+
         log(f"LLM call iteration {iteration + 1}/{MAX_ITERATIONS}", "INFO")
         response = await llm_chat(messages, TOOLS)
+
         if "error" in response and not response.get("choices"):
             return f"❌ LLM error: {response['error']}"
+
         choices = response.get("choices", [])
         if not choices:
             return "❌ No response from LLM."
+
         choice = choices[0]
         assistant_message = choice.get("message", {})
         messages.append(assistant_message)
+
         tool_calls = assistant_message.get("tool_calls", [])
         content = assistant_message.get("content")
+
         if content and not tool_calls:
             log(f"Agent final response: {content[:200]}", "INFO")
             return content
+
         if content and tool_calls and len(content) > 10:
             await message.reply(f"💭 {content[:1500]}")
+
         if not tool_calls:
             return "I've completed my analysis but have no specific response."
+
         for tool_call in tool_calls:
             tool_id = tool_call.get("id", "")
             tool_function = tool_call.get("function", {})
             tool_name = tool_function.get("name", "")
+
             try:
                 tool_args = json.loads(tool_function.get("arguments", "{}"))
             except json.JSONDecodeError as e:
                 tool_args = {}
                 log(f"Invalid tool arguments: {e}", "WARN")
+
             if tool_name == "run_shell":
                 cmd_preview = tool_args.get("command", "")[:100]
                 await message.reply(f"🔧 `{cmd_preview}`")
@@ -660,9 +720,19 @@ async def run_agent_loop(message: discord.Message, user_input: str) -> str:
                 await message.reply(f"📝 Writing to `{path}`")
             elif tool_name == "server_status":
                 await message.reply("📊 Gathering server status...")
+
             result = await execute_tool(message, tool_name, tool_args)
-            messages.append({"role": "tool", "tool_call_id": tool_id, "content": result})
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_id,
+                    "content": result,
+                }
+            )
+
             log(f"Tool {tool_name} result: {result[:200]}", "INFO")
+
     log("Agent loop reached max iterations", "WARN")
     return f"⏱️ I reached the maximum number of steps ({MAX_ITERATIONS}) without completing."
 
@@ -673,107 +743,276 @@ async def run_agent_loop(message: discord.Message, user_input: str) -> str:
 
 
 def cmd_status() -> discord.Embed:
+    """Full server health snapshot."""
+    # Uptime
     code, uptime_out = run_command("uptime -p 2>/dev/null || uptime", timeout=10)
-    code, disk_out = run_command("df -h / /home /opt /tmp 2>/dev/null | grep -E '^/dev|^Filesystem'", timeout=10)
+
+    # Disk
+    code, disk_out = run_command(
+        "df -h / /home /opt /tmp 2>/dev/null | grep -E '^/dev|^Filesystem'",
+        timeout=10,
+    )
+
+    # Memory
     code, mem_out = run_command("free -h | grep -E 'Mem|Swap'", timeout=10)
-    code, failed_out = run_command("systemctl list-units --type=service --state=failed --no-pager --no-legend 2>/dev/null | awk '{print $1}'", timeout=10)
-    code, svc_count = run_command("systemctl list-units --type=service --state=active --no-pager --no-legend | wc -l", timeout=10)
+
+    # Failed services
+    code, failed_out = run_command(
+        "systemctl list-units --type=service --state=failed --no-pager --no-legend 2>/dev/null | awk '{print $1}'",
+        timeout=10,
+    )
+
+    # Active service count
+    code, svc_count = run_command(
+        "systemctl list-units --type=service --state=active --no-pager --no-legend | wc -l",
+        timeout=10,
+    )
+
     has_failures = bool(failed_out.strip())
-    embed = discord.Embed(title="📊 Schubert Server Status", color=COLOR_ERROR if has_failures else COLOR_SUCCESS, timestamp=datetime.now(timezone.utc))
+
+    embed = discord.Embed(
+        title="📊 Schubert Server Status",
+        color=COLOR_ERROR if has_failures else COLOR_SUCCESS,
+        timestamp=datetime.now(timezone.utc),
+    )
+
     embed.add_field(name="Uptime", value=uptime_out.strip()[:200], inline=False)
     embed.add_field(name="Active Services", value=svc_count.strip(), inline=True)
+
     if has_failures:
-        embed.add_field(name="⚠️ Failed Services", value=failed_out.strip()[:500], inline=False)
+        embed.add_field(
+            name="⚠️ Failed Services",
+            value=failed_out.strip()[:500],
+            inline=False,
+        )
         embed.description = f"⚠️ {len(failed_out.strip().split())} failed service(s)"
     else:
         embed.description = "✅ All services running"
+
     embed.add_field(name="Disk", value=f"```\n{disk_out}\n```", inline=False)
     embed.add_field(name="Memory", value=f"```\n{mem_out}\n```", inline=False)
+
     return embed
 
 
 def cmd_services() -> discord.Embed:
-    code, output = run_command("systemctl list-units --type=service --state=active --no-pager --no-legend | awk '{print $1, $4}' | sort", timeout=15)
+    """List all systemd services and their status."""
+    code, output = run_command(
+        "systemctl list-units --type=service --state=active --no-pager --no-legend | "
+        "awk '{print $1, $4}' | sort",
+        timeout=15,
+    )
+
     if code != 0:
-        return discord.Embed(title="❌ Failed to list services", description=f"Error: {output[:500]}", color=COLOR_ERROR, timestamp=datetime.now(timezone.utc))
-    code, failed = run_command("systemctl list-units --type=service --state=failed --no-pager --no-legend 2>/dev/null | awk '{print $1}'", timeout=10)
+        return discord.Embed(
+            title="❌ Failed to list services",
+            description=f"Error: {output[:500]}",
+            color=COLOR_ERROR,
+            timestamp=datetime.now(timezone.utc),
+        )
+
+    # Also get failed services
+    code, failed = run_command(
+        "systemctl list-units --type=service --state=failed --no-pager --no-legend 2>/dev/null | "
+        "awk '{print $1}'",
+        timeout=10,
+    )
+
     lines = output.strip().split("\n")
+    # Truncate for Discord
     if len(lines) > 30:
         display = "\n".join(lines[:30]) + f"\n... and {len(lines) - 30} more"
     else:
         display = "\n".join(lines)
+
     if failed.strip():
         display += f"\n\n⚠️ FAILED: {failed.strip()}"
-    embed = discord.Embed(title=f"📋 Active Services ({len(lines)})", description=f"```\n{display}\n```", color=COLOR_INFO, timestamp=datetime.now(timezone.utc))
+
+    embed = discord.Embed(
+        title=f"📋 Active Services ({len(lines)})",
+        description=f"```\n{display}\n```",
+        color=COLOR_INFO,
+        timestamp=datetime.now(timezone.utc),
+    )
     return embed
 
 
 def cmd_logs(service: str) -> discord.Embed:
+    """Show recent logs for a service."""
     if not service:
         service = "tango-backend.service"
+
+    # Validate service name to prevent injection
     if not re.match(r'^[a-zA-Z0-9@._-]+\.service$', service):
-        return discord.Embed(title="❌ Invalid service name", description=f"`{service}` is not a valid service name.", color=COLOR_ERROR, timestamp=datetime.now(timezone.utc))
-    code, output = run_command(f"sudo journalctl -u {service} --no-pager -n {LOG_LINES} -o cat 2>&1", timeout=15)
+        return discord.Embed(
+            title="❌ Invalid service name",
+            description=f"`{service}` is not a valid service name.",
+            color=COLOR_ERROR,
+            timestamp=datetime.now(timezone.utc),
+        )
+
+    code, output = run_command(
+        f"sudo journalctl -u {service} --no-pager -n {LOG_LINES} -o cat 2>&1",
+        timeout=15,
+    )
+
     if code != 0:
-        return discord.Embed(title="❌ Failed to retrieve logs", description=f"Error: {output[:500]}", color=COLOR_ERROR, timestamp=datetime.now(timezone.utc))
+        return discord.Embed(
+            title="❌ Failed to retrieve logs",
+            description=f"Error: {output[:500]}",
+            color=COLOR_ERROR,
+            timestamp=datetime.now(timezone.utc),
+        )
+
     if len(output) > 1900:
         output = "...\n" + output[-1900:]
-    embed = discord.Embed(title=f"📋 Recent {service} logs (last {LOG_LINES} lines)", description=f"```\n{output}\n```", color=COLOR_INFO, timestamp=datetime.now(timezone.utc))
+
+    embed = discord.Embed(
+        title=f"📋 Recent {service} logs (last {LOG_LINES} lines)",
+        description=f"```\n{output}\n```",
+        color=COLOR_INFO,
+        timestamp=datetime.now(timezone.utc),
+    )
     return embed
 
 
 def cmd_disk() -> discord.Embed:
+    """Disk usage overview."""
     code, output = run_command("df -h --total 2>/dev/null", timeout=10)
+
     if code != 0:
-        return discord.Embed(title="❌ Failed to get disk usage", color=COLOR_ERROR, timestamp=datetime.now(timezone.utc))
+        return discord.Embed(
+            title="❌ Failed to get disk usage",
+            color=COLOR_ERROR,
+            timestamp=datetime.now(timezone.utc),
+        )
+
     if len(output) > 1900:
         output = output[-1900:]
-    embed = discord.Embed(title="💾 Disk Usage", description=f"```\n{output}\n```", color=COLOR_INFO, timestamp=datetime.now(timezone.utc))
+
+    embed = discord.Embed(
+        title="💾 Disk Usage",
+        description=f"```\n{output}\n```",
+        color=COLOR_INFO,
+        timestamp=datetime.now(timezone.utc),
+    )
     return embed
 
 
 def cmd_mem() -> discord.Embed:
+    """Memory and swap usage."""
     code, output = run_command("free -h", timeout=10)
-    embed = discord.Embed(title="🧠 Memory & Swap", description=f"```\n{output}\n```", color=COLOR_INFO, timestamp=datetime.now(timezone.utc))
+
+    embed = discord.Embed(
+        title="🧠 Memory & Swap",
+        description=f"```\n{output}\n```",
+        color=COLOR_INFO,
+        timestamp=datetime.now(timezone.utc),
+    )
     return embed
 
 
 def cmd_procs() -> discord.Embed:
+    """Top processes by CPU and memory."""
     code, cpu_out = run_command("ps aux --sort=-%cpu | head -11", timeout=10)
     code, mem_out = run_command("ps aux --sort=-%mem | head -11", timeout=10)
-    embed = discord.Embed(title="⚡ Top Processes", color=COLOR_INFO, timestamp=datetime.now(timezone.utc))
-    embed.add_field(name="By CPU", value=f"```\n{cpu_out[:1000]}\n```", inline=False)
-    embed.add_field(name="By Memory", value=f"```\n{mem_out[:1000]}\n```", inline=False)
+
+    embed = discord.Embed(
+        title="⚡ Top Processes",
+        color=COLOR_INFO,
+        timestamp=datetime.now(timezone.utc),
+    )
+    embed.add_field(
+        name="By CPU",
+        value=f"```\n{cpu_out[:1000]}\n```",
+        inline=False,
+    )
+    embed.add_field(
+        name="By Memory",
+        value=f"```\n{mem_out[:1000]}\n```",
+        inline=False,
+    )
     return embed
 
 
 def cmd_net() -> discord.Embed:
+    """Network connections and listening ports."""
     code, output = run_command("ss -tlnp | head -40", timeout=10)
+
     if len(output) > 1900:
         output = output[:1900] + "\n... (truncated)"
-    embed = discord.Embed(title="🌐 Listening Ports & Connections", description=f"```\n{output}\n```", color=COLOR_INFO, timestamp=datetime.now(timezone.utc))
+
+    embed = discord.Embed(
+        title="🌐 Listening Ports & Connections",
+        description=f"```\n{output}\n```",
+        color=COLOR_INFO,
+        timestamp=datetime.now(timezone.utc),
+    )
     return embed
 
 
 def cmd_restart(service: str) -> discord.Embed:
+    """Restart a service. Returns an embed."""
     if not service:
-        return discord.Embed(title="❌ No service specified", description="Usage: `!restart <service-name>`", color=COLOR_ERROR, timestamp=datetime.now(timezone.utc))
+        return discord.Embed(
+            title="❌ No service specified",
+            description="Usage: `!restart <service-name>`",
+            color=COLOR_ERROR,
+            timestamp=datetime.now(timezone.utc),
+        )
+
+    # Validate service name
     if not re.match(r'^[a-zA-Z0-9@._-]+\.service$', service):
-        return discord.Embed(title="❌ Invalid service name", description=f"`{service}` is not a valid service name.", color=COLOR_ERROR, timestamp=datetime.now(timezone.utc))
+        return discord.Embed(
+            title="❌ Invalid service name",
+            description=f"`{service}` is not a valid service name.",
+            color=COLOR_ERROR,
+            timestamp=datetime.now(timezone.utc),
+        )
+
+    # Never touch self
     if service in NEVER_TOUCH_SERVICES:
-        return discord.Embed(title="❌ Cannot restart self", description=f"Cannot restart {service} — self-protection.", color=COLOR_ERROR, timestamp=datetime.now(timezone.utc))
+        return discord.Embed(
+            title="❌ Cannot restart self",
+            description=f"Cannot restart {service} — self-protection.",
+            color=COLOR_ERROR,
+            timestamp=datetime.now(timezone.utc),
+        )
+
     log(f"Restarting {service} via bot command", "WARN")
     code, output = run_command(f"sudo systemctl restart {service}", timeout=30)
+
     if code == 0:
         time.sleep(3)
         active = systemctl_is_active(service)
-        return discord.Embed(title=f"{'✅' if active else '⚠️'} {service} restarted", description=f"Service is {'active' if active else 'not active after restart'}", color=COLOR_SUCCESS if active else COLOR_WARN, timestamp=datetime.now(timezone.utc))
+        return discord.Embed(
+            title=f"{'✅' if active else '⚠️'} {service} restarted",
+            description=f"Service is {'active' if active else 'not active after restart'}",
+            color=COLOR_SUCCESS if active else COLOR_WARN,
+            timestamp=datetime.now(timezone.utc),
+        )
     else:
-        return discord.Embed(title=f"❌ Failed to restart {service}", description=f"Error: {output[:500]}", color=COLOR_ERROR, timestamp=datetime.now(timezone.utc))
+        return discord.Embed(
+            title=f"❌ Failed to restart {service}",
+            description=f"Error: {output[:500]}",
+            color=COLOR_ERROR,
+            timestamp=datetime.now(timezone.utc),
+        )
 
 
 def cmd_help() -> discord.Embed:
-    embed = discord.Embed(title="🤖 Schubert Bot — Server-Wide Autonomous Agent", description=("I'm an autonomous agent with full access to the Schubert server. I can manage all services, monitor system health, investigate issues, fix code, and commit changes across all projects. I ask for confirmation before git push and before restarting critical services."), color=COLOR_AGENT, timestamp=datetime.now(timezone.utc))
+    """Show available commands and agent capabilities."""
+    embed = discord.Embed(
+        title="⚓ Admiral Schubert — Server-Wide Autonomous Agent",
+        description=(
+            "Aye, Captain. I'm Admiral Schubert, commander of the good ship Schubert. "
+            "I keep all services shipshape, investigate troubled waters, and patch leaks "
+            "before they sink you. I'll ask for confirmation before git push and before "
+            "restarting critical services — I won't scuttle the fleet without your orders."
+        ),
+        color=COLOR_AGENT,
+        timestamp=datetime.now(timezone.utc),
+    )
     embed.add_field(name="Quick Commands", value="━━━━━━━━━━━━━━━━", inline=False)
     embed.add_field(name="!status", value="Full server health (services, disk, RAM, uptime)", inline=False)
     embed.add_field(name="!services", value="List all active systemd services", inline=False)
@@ -784,9 +1023,21 @@ def cmd_help() -> discord.Embed:
     embed.add_field(name="!procs", value="Top processes by CPU and memory", inline=False)
     embed.add_field(name="!net", value="Listening ports and network connections", inline=False)
     embed.add_field(name="Agent Mode", value="━━━━━━━━━━━━━━━━", inline=False)
-    embed.add_field(name="Any message", value=("Send a natural language request and I'll investigate, fix, restart, and commit autonomously across the entire server."), inline=False)
+    embed.add_field(
+        name="Any message",
+        value=(
+            "Send a natural language request and I'll investigate, fix, "
+            "restart, and commit autonomously across the entire server."
+        ),
+        inline=False,
+    )
     embed.add_field(name="!agent <request>", value="Explicit agent invocation", inline=False)
-    embed.set_footer(text=(f"Model: {LLM_MODEL} | Rate limit: {RATE_LIMIT_PER_MIN}/min | Max iterations: {MAX_ITERATIONS} | Timeout: {AGENT_TIMEOUT}s"))
+    embed.set_footer(
+        text=(
+            f"Model: {LLM_MODEL} | Rate limit: {RATE_LIMIT_PER_MIN}/min | "
+            f"Max iterations: {MAX_ITERATIONS} | Timeout: {AGENT_TIMEOUT}s"
+        )
+    )
     return embed
 
 
@@ -801,8 +1052,8 @@ bot = discord.Client(intents=intents)
 
 @bot.event
 async def on_ready():
-    log(f"Schubert Bot connected as {bot.user} (ID: {bot.user.id})", "INFO")
-    log(f"Listening in channel {BOT_CHANNEL_ID}, admin: {ADMIN_USER_ID}", "INFO")
+    log(f"Admiral Schubert reporting for duty as {bot.user} (ID: {bot.user.id})", "INFO")
+    log(f"Commanding channel {BOT_CHANNEL_ID}, serving Captain {ADMIN_USER_ID}", "INFO")
     log(f"LLM model: {LLM_MODEL} via {LITELLM_URL}", "INFO")
 
 
@@ -810,78 +1061,132 @@ async def on_ready():
 async def on_message(message: discord.Message):
     if message.author == bot.user:
         return
+
     if message.channel.id != BOT_CHANNEL_ID:
         return
+
     if message.author.id != ADMIN_USER_ID:
-        log(f"Unauthorized message from user {message.author.id} ({message.author}): {message.content[:100]}", "WARN")
+        log(
+            f"Unauthorized message from user {message.author.id} "
+            f"({message.author}): {message.content[:100]}",
+            "WARN",
+        )
         return
+
     if not check_rate_limit(message.author.id):
-        await message.reply(f"⏱️ Rate limit exceeded. Max {RATE_LIMIT_PER_MIN} messages per minute.")
+        await message.reply(
+            f"⏱️ Rate limit exceeded. Max {RATE_LIMIT_PER_MIN} messages per minute."
+        )
         return
+
     content = message.content.strip()
+
+    # Handle ! prefix commands (Level 1 quick commands)
     if content.startswith("!"):
         parts = content[1:].strip().split()
         if not parts:
             return
+
         command = parts[0].lower()
         args = parts[1:]
-        log(f"Command from {message.author}: !{command} {' '.join(args)}".strip(), "INFO")
+
+        log(
+            f"Command from {message.author}: !{command} {' '.join(args)}".strip(),
+            "INFO",
+        )
+
         try:
             if command == "help":
                 await message.reply(embed=cmd_help())
+
             elif command == "status":
                 await message.reply(embed=cmd_status())
+
             elif command == "services":
                 await message.reply(embed=cmd_services())
+
             elif command == "logs":
                 service = args[0] if args else "tango-backend.service"
                 await message.reply(embed=cmd_logs(service))
+
             elif command == "restart":
                 service = args[0] if args else ""
+
+                # Check for pending confirmation
                 if message.author.id in _pending_restarts:
-                    pending_svc, pending_time = _pending_restarts.pop(message.author.id)
+                    pending_svc, pending_time = _pending_restarts.pop(
+                        message.author.id
+                    )
                     if time.time() - pending_time > RESTART_CONFIRM_TIMEOUT:
-                        await message.reply("⏱️ Confirmation timed out. Please run !restart again.")
+                        await message.reply(
+                            "⏱️ Confirmation timed out. Please run !restart again."
+                        )
                         return
                     if service == pending_svc or (not args and pending_svc):
                         await message.reply(f"⏳ Restarting {pending_svc}...")
                         await message.reply(embed=cmd_restart(pending_svc))
                         return
                     else:
-                        await message.reply("❌ Service mismatch. Please run !restart again.")
+                        await message.reply(
+                            "❌ Service mismatch. Please run !restart again."
+                        )
                         return
+
                 if not service:
                     await message.reply("Usage: `!restart <service-name>`")
                     return
+
                 if service in NEVER_TOUCH_SERVICES:
                     await message.reply(f"❌ Cannot restart {service} — self-protection.")
                     return
+
+                # Critical services need confirmation
                 if service in CRITICAL_SERVICES:
                     _pending_restarts[message.author.id] = (service, time.time())
-                    await message.reply(f"⚠️ **{service}** is a critical service.\nRestarting it may briefly interrupt server access.\nType `!restart {service}` again within {RESTART_CONFIRM_TIMEOUT}s to confirm.")
+                    await message.reply(
+                        f"⚠️ **{service}** is a critical service.\n"
+                        f"Restarting it may briefly interrupt server access.\n"
+                        f"Type `!restart {service}` again within "
+                        f"{RESTART_CONFIRM_TIMEOUT}s to confirm."
+                    )
                     return
+
+                # Normal service — restart directly
                 await message.reply(f"⏳ Restarting {service}...")
                 await message.reply(embed=cmd_restart(service))
+
             elif command == "disk":
                 await message.reply(embed=cmd_disk())
+
             elif command == "mem":
                 await message.reply(embed=cmd_mem())
+
             elif command == "procs":
                 await message.reply(embed=cmd_procs())
+
             elif command == "net":
                 await message.reply(embed=cmd_net())
+
             elif command == "agent":
                 agent_input = " ".join(args)
                 if not agent_input:
                     await message.reply("Usage: `!agent <your request>`")
                     return
                 await run_agent_with_update(message, agent_input)
+
             else:
-                await message.reply(f"❓ Unknown command: `!{command}`. Type `!help` for available commands, or just send a natural language message to use the autonomous agent.")
+                await message.reply(
+                    f"❓ Unknown command: `!{command}`. Type `!help` for "
+                    f"available commands, or just send a natural language "
+                    f"message to use the autonomous agent."
+                )
+
         except Exception as e:
             log(f"Error handling command !{command}: {e}", "ERROR")
             await message.reply(f"❌ Error: {str(e)[:500]}")
+
     else:
+        # Natural language message — trigger agent loop
         log(f"Agent message from {message.author}: {content[:200]}", "INFO")
         await run_agent_with_update(message, content)
 
@@ -890,6 +1195,7 @@ async def run_agent_with_update(message: discord.Message, user_input: str):
     try:
         await message.reply(f"🤖 Working on: {user_input[:200]}")
         response = await run_agent_loop(message, user_input)
+
         if len(response) > 1900:
             for i in range(0, len(response), 1900):
                 await message.reply(response[i : i + 1900])
@@ -909,9 +1215,11 @@ def main() -> int:
     log("=" * 60, "INFO")
     log("Schubert Bot (Level 3 server-wide agent) starting", "INFO")
     log(f"Model: {LLM_MODEL} via {LITELLM_URL}", "INFO")
+
     if not load_config():
         log("Configuration error — exiting", "CRITICAL")
         return 2
+
     try:
         bot.run(BOT_TOKEN, log_handler=None)
     except KeyboardInterrupt:
@@ -919,6 +1227,7 @@ def main() -> int:
     except Exception as e:
         log(f"Bot crashed: {e}", "CRITICAL")
         return 1
+
     return 0
 
 
