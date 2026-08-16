@@ -3,13 +3,68 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.com/).
 
 ---
 
 ## [Unreleased]
 
 ### Added
+- Deployed Tango Health Guardian: a six-layer self-healing health monitor that
+  runs as a systemd timer every 3 minutes. Checks service health, endpoint health,
+  ElevenLabs billing status, TTS synthesis, log anomalies, and LiveKit worker
+  registration. Auto-restarts inactive services (with 10-minute cooldown), alerts
+  on billing issues, and verifies Deepgram Aura fallback is active. Log at
+  /var/log/tango-healthcheck.log.
+- Added Discord webhook notifications to the Health Guardian. Alerts for WARN
+  and CRITICAL events are sent to the configured Discord channel via webhook.
+  The webhook URL is stored in .env (DISCORD_WEBHOOK_URL), not committed to source.
+
+### Changed
+- Switched turn detection from STT-based (turn_detection="stt") to LiveKit's audio
+  TurnDetector (inference.TurnDetector()). The audio turn detector processes user
+  audio directly - intonation, pitch, rhythm - for state-of-the-art end-of-turn
+  accuracy without relying on STT transcript timing. This eliminates the recurring
+  "stt end of speech received while vad is still in a speech segment" VAD/STT race
+  condition that appeared on every user utterance. Tagalog personas (Mama Lulu,
+  Tita Baby) remain on Nova-3 endpointing via the existing turn_detection pop.
+- Disabled vision context for audio-only sessions (TANGO_VISION_ENABLED=false).
+  The vision pipeline was initializing on every turn and requesting video frames
+  that never arrive in audio-only sessions, wasting per-turn overhead on
+  gpt-4o-mini calls that immediately fail with no video frame available.
+- Tuned Silero VAD parameters to eliminate STT/VAD race condition:
+  min_silence_duration reduced from 550ms to 300ms and prefix_padding_duration
+  from 500ms to 300ms. Deepgram Flux fires end-of-speech before the VAD finishes
+  its speech segment at the default 550ms silence threshold, causing the recurring
+  stt end of speech received while vad is still in a speech segment warning.
+- Stopped idle F5-TTS sidecar (tango-tts.service). All personas now route to
+  ElevenLabs, so the F5-TTS sidecar was consuming 2GB RAM for no active work.
+  The lazy-start mechanism will revive it if a persona is routed back to F5-TTS.
+- Jeremiah now routes TTS back to ElevenLabs (tts_backend="elevenlabs") now
+  that the ElevenLabs billing is resolved. The F5-TTS sidecar remains available
+  as a lazy-start option via TANGO_F5_TTS_ENABLED, but is no longer the primary
+  voice engine for any persona. All seven personas now use ElevenLabs Flash v2.5
+  as their primary TTS engine, with Deepgram Aura remaining as the automatic
+  fallback if ElevenLabs fails again.
+- Jeremiah's system prompt updated to reference his ElevenLabs voice engine
+  instead of self-hosted F5-TTS.
+
+### Added
+- Deepgram Aura TTS fallback: when the primary TTS engine (ElevenLabs or
+  F5-TTS) fails to produce audio, the backend automatically retries the same
+  text on Deepgram Aura using the existing DEEPGRAM_API_KEY. Each persona maps
+  to a gender-appropriate Aura v2 voice so the fallback still sounds distinct.
+  Controlled by `TANGO_TTS_FALLBACK` (default: enabled).
+- F5-TTS lazy-start: the backend now auto-starts `tango-tts.service` on demand
+  when a Jeremiah synthesis request arrives and the sidecar is stopped, instead
+  of requiring it to run continuously. Controlled by `TANGO_F5_TTS_AUTO_START`
+  (default: enabled) with `TANGO_F5_TTS_START_TIMEOUT_SECONDS` (default: 600).
+- `scripts/tango-tts-idle-stop.sh`: a cron-friendly script that stops the
+  F5-TTS sidecar after a configurable idle period (default 45 minutes) to
+  conserve GPU memory. Tracks last-synthesis time via an activity stamp file.
+- F5-TTS activity stamp: `tts_server/main.py` now touches an activity stamp
+  file (`/tmp/tango-tts-last-synthesize`) at the start and end of each
+  synthesis request so the idle-stop script can track real usage.
 - The account administration dashboard now includes a responsive persona model
   map sourced from the live admin catalog, with allowlisted-model summaries,
   current default LLM/provider assignments, TTS/STT pipelines, and soft pulsing
@@ -39,6 +94,9 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   and transcribes that sample with Deepgram before F5-TTS synthesis.
 
 ### Changed
+- `scripts/deploy.sh` now disables `tango-tts.service` by default and leaves it
+  stopped after deploy, relying on the backend's lazy-start mechanism. Set
+  `TANGO_F5_TTS_START_ON_DEPLOY=true` to start it eagerly during deploy instead.
 - Admin per-persona model choices are remembered in local browser storage and
   sent as session-specific overrides; regular users retain the simpler
   persona-only interface and server-resolved account policy.
@@ -73,6 +131,11 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
   instead of a long excerpt whose transcript can drift from F5-TTS preprocessing.
 
 ### Fixed
+- Voice agents producing no audio when ElevenLabs billing is past_due or the
+  F5-TTS sidecar is stopped: the new Deepgram Aura TTS fallback ensures every
+  persona can still speak when its primary TTS engine fails, preventing the
+  `APIError: no audio frames were pushed` error that previously silenced all
+  voice agents.
 - Long backend model names wrap inside the admin model summary rail instead of
   hiding their qualifier at desktop widths.
 - Compact admin persona controls use readable short model names in the card

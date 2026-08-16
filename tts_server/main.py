@@ -22,7 +22,19 @@ DEFAULT_JEREMIAH_REFERENCE_TEXT_PATH = DEFAULT_VOICE_DIR / "jeremiah_reference.t
 
 F5_TTS_DEVICE = os.getenv("F5_TTS_DEVICE", "cuda")
 F5_TTS_MODEL = os.getenv("F5_TTS_MODEL", "").strip()
+F5_TTS_ACTIVITY_STAMP = Path(
+    os.getenv("TANGO_F5_TTS_ACTIVITY_STAMP", "/tmp/tango-tts-last-synthesize")
+)
 MAX_PYTHON_HASH_SEED = 4_294_967_295
+
+
+def _touch_activity_stamp() -> None:
+    """Update the activity stamp file so the idle-stop script can track usage."""
+    try:
+        F5_TTS_ACTIVITY_STAMP.parent.mkdir(parents=True, exist_ok=True)
+        F5_TTS_ACTIVITY_STAMP.touch()
+    except OSError:
+        logger.exception("Could not update F5-TTS activity stamp")
 
 
 def _jeremiah_reference_text() -> str:
@@ -142,6 +154,7 @@ async def healthz() -> dict[str, object]:
 
 @app.post("/synthesize")
 async def synthesize(req: SynthesizeRequest) -> Response:
+    _touch_activity_stamp()
     voice = VOICE_REGISTRY.get(req.persona_id)
     if voice is None and not req.ref_audio_override:
         raise HTTPException(status_code=404, detail=f"No F5-TTS voice registered for {req.persona_id!r}")
@@ -202,4 +215,5 @@ async def synthesize(req: SynthesizeRequest) -> Response:
         len(audio_bytes),
         elapsed_ms,
     )
+    _touch_activity_stamp()
     return Response(content=audio_bytes, media_type="audio/wav")

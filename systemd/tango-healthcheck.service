@@ -1,0 +1,14 @@
+[Unit]
+Description=Tango Health Guardian — six-layer self-healing health monitor
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/Project-Tango/scripts/tango-healthcheck.py
+User=root
+Group=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

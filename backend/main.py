@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import subprocess
 import uuid
 from contextlib import asynccontextmanager, suppress
 from dataclasses import replace
@@ -69,6 +70,21 @@ DEFAULT_LIVEKIT_NUM_IDLE_PROCESSES = 1
 DEFAULT_F5_TTS_BASE_URL = "http://127.0.0.1:8020"
 DEFAULT_F5_TTS_SAMPLE_RATE = 24000
 DEFAULT_F5_TTS_TIMEOUT_SECONDS = 60.0
+DEFAULT_F5_TTS_START_TIMEOUT_SECONDS = 600.0
+
+
+# Deepgram Aura TTS voice mapping for fallback when primary TTS fails.
+PERSONA_AURA_VOICE = {
+    "therapy": "aura-2-orion-en",
+    "general-info": "aura-2-arcas-en",
+    "jeremiah": "aura-2-osiris-en",
+    "jeremiah-v2": "aura-2-dioon-en",
+    "jacob": "aura-2-orion-en",
+    "mama-lulu": "aura-2-asteria-en",
+    "meditation": "aura-2-arcas-en",
+    "pinoy-pride": "aura-2-luna-en",
+}
+DEFAULT_AURA_VOICE = "aura-2-andromeda-en"
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -156,11 +172,18 @@ def _turn_handling_for_session(
     *,
     preemptive_generation_enabled: bool = True,
 ) -> dict[str, Any]:
-    # Deepgram Flux owns end-of-turn detection natively via turn_detection="stt".
-    # The per-persona eot_threshold and eot_timeout_ms are passed directly to STTv2.
-    # Only preemptive_generation remains here.
+    from livekit.agents import inference
+    # Use LiveKit's audio TurnDetector for state-of-the-art end-of-turn detection.
+    # The audio turn detector processes user audio directly (intonation, pitch, rhythm)
+    # rather than relying on STT transcript timing, eliminating the VAD/STT race
+    # condition that produced "stt end of speech received while vad is still in a
+    # speech segment" warnings on every utterance.
+    #
+    # Deepgram Flux's eot_threshold and eot_timeout_ms are still passed to STTv2
+    # for STT-internal endpointing, but turn boundary decisions are now owned by
+    # the audio TurnDetector.
     turn_handling: dict[str, Any] = {}
-    turn_handling["turn_detection"] = "stt"
+    turn_handling["turn_detection"] = inference.TurnDetector()
     turn_handling["preemptive_generation"] = {"enabled": preemptive_generation_enabled}
     return turn_handling
 
@@ -243,6 +266,40 @@ def _f5_tts_timeout_seconds() -> float:
     return _env_float("TANGO_F5_TTS_TIMEOUT_SECONDS", DEFAULT_F5_TTS_TIMEOUT_SECONDS)
 
 
+def _f5_tts_auto_start_enabled() -> bool:
+    return _env_bool("TANGO_F5_TTS_AUTO_START", default=True)
+
+
+def _f5_tts_start_timeout_seconds() -> float:
+    return _env_float(
+        "TANGO_F5_TTS_START_TIMEOUT_SECONDS",
+        DEFAULT_F5_TTS_START_TIMEOUT_SECONDS,
+    )
+
+
+def _ensure_f5_tts_service_started_sync() -> None:
+    if not _f5_tts_auto_start_enabled():
+        return
+
+    status = subprocess.run(
+        ["/usr/bin/systemctl", "is-active", "--quiet", "tango-tts.service"],
+        check=False,
+    )
+    if status.returncode == 0:
+        return
+
+    logger.info("Starting tango-tts.service on demand for F5-TTS synthesis")
+    subprocess.run(
+        ["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "start", "tango-tts.service"],
+        check=True,
+        timeout=_f5_tts_start_timeout_seconds(),
+    )
+
+
+async def _ensure_f5_tts_service_started() -> None:
+    await asyncio.to_thread(_ensure_f5_tts_service_started_sync)
+
+
 def _build_f5_tts_adapter(persona: Persona) -> Any:
     from livekit.agents import (
         APIConnectionError,
@@ -299,6 +356,7 @@ def _build_f5_tts_adapter(persona: Persona) -> Any:
         async def _run(self, output_emitter: lk_tts.AudioEmitter) -> None:
             timeout_seconds = _f5_tts_timeout_seconds()
             try:
+                await _ensure_f5_tts_service_started()
                 async with httpx.AsyncClient(
                     timeout=httpx.Timeout(
                         timeout_seconds, connect=self._conn_options.timeout
@@ -315,6 +373,8 @@ def _build_f5_tts_adapter(persona: Persona) -> Any:
                 raise APITimeoutError("F5-TTS request timed out") from exc
             except httpx.HTTPError as exc:
                 raise APIConnectionError("F5-TTS request failed") from exc
+            except subprocess.SubprocessError as exc:
+                raise APIConnectionError("Could not start F5-TTS service") from exc
 
             if response.status_code >= 400:
                 raise APIStatusError(
@@ -374,8 +434,140 @@ def _build_elevenlabs_tts(persona: Persona, elevenlabs: Any) -> Any:
     )
 
 
+
+def _build_deepgram_tts(persona: Persona) -> Any:
+    """Build a Deepgram Aura TTS instance for use as a fallback voice engine.
+
+    Uses the same DEEPGRAM_API_KEY already configured for STT. Each persona
+    maps to a gender-appropriate Aura v2 voice so the fallback still sounds
+    distinct across personas.
+    """
+    from livekit.plugins import deepgram
+
+    aura_voice = PERSONA_AURA_VOICE.get(persona.id, DEFAULT_AURA_VOICE)
+    return deepgram.TTS(
+        model=aura_voice,
+        api_key=os.getenv("DEEPGRAM_API_KEY"),
+        sample_rate=24000,
+    )
+
+
+def _build_fallback_tts(primary: Any, fallback: Any, persona: Persona) -> Any:
+    """Wrap a primary TTS engine with a fallback that activates on failure.
+
+    When the primary TTS (ElevenLabs or F5-TTS) fails -- for example due to
+    billing issues, rate limits, or a stopped sidecar -- the FallbackTTS
+    wrapper transparently retries the same text on the secondary engine
+    (Deepgram Aura). This prevents the "no audio frames were pushed" error
+    that silences all voice agents when a single TTS provider has an outage.
+    """
+    from livekit.agents import APIError, tts as lk_tts
+    from livekit.agents.types import APIConnectOptions, DEFAULT_API_CONNECT_OPTIONS
+    from livekit.agents.utils import shortuuid as gen_shortuuid
+
+    primary_model = getattr(primary, "model", "primary")
+    primary_provider = getattr(primary, "provider", "unknown")
+    fallback_provider = getattr(fallback, "provider", "unknown")
+
+    class FallbackTTS(lk_tts.TTS):
+        def __init__(self) -> None:
+            primary_caps = getattr(primary, "_capabilities", None)
+            super().__init__(
+                capabilities=primary_caps or lk_tts.TTSCapabilities(streaming=True),
+                sample_rate=getattr(primary, "_sample_rate", 24000),
+                num_channels=getattr(primary, "_num_channels", 1),
+            )
+            self._primary = primary
+            self._fallback = fallback
+            self._persona_id = persona.id
+
+        @property
+        def model(self) -> str:
+            return primary_model
+
+        @property
+        def provider(self) -> str:
+            return f"{primary_provider}+{fallback_provider}"
+
+        def synthesize(
+            self,
+            text: str,
+            *,
+            conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS,
+        ) -> lk_tts.ChunkedStream:
+            return FallbackChunkedStream(
+                tts=self, input_text=text, conn_options=conn_options,
+            )
+
+        def stream(
+            self,
+            *,
+            conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS,
+        ) -> lk_tts.SynthesizeStream:
+            # Delegate streaming directly to the primary TTS engine.
+            # The primary (ElevenLabs) supports streaming natively and has its
+            # own retry logic in SynthesizeStream._main_task. The Deepgram Aura
+            # fallback applies to the non-streaming synthesize() path.
+            return self._primary.stream(conn_options=conn_options)
+
+        async def aclose(self) -> None:
+            for engine in (self._primary, self._fallback):
+                close_fn = getattr(engine, "aclose", None)
+                if close_fn is not None:
+                    with suppress(Exception):
+                        await close_fn()
+
+    class FallbackChunkedStream(lk_tts.ChunkedStream):
+        def __init__(self, *, tts, input_text, conn_options):
+            super().__init__(tts=tts, input_text=input_text, conn_options=conn_options)
+            self._fb_tts = tts
+
+        async def _run(self, output_emitter: lk_tts.AudioEmitter) -> None:
+            primary_stream = self._fb_tts._primary.synthesize(
+                self._input_text, conn_options=self._conn_options
+            )
+            try:
+                output_emitter.initialize(
+                    request_id=gen_shortuuid(),
+                    sample_rate=self._fb_tts._primary.sample_rate,
+                    num_channels=self._fb_tts._primary.num_channels,
+                    mime_type="audio/pcm",
+                )
+                async for ev in primary_stream:
+                    output_emitter.push(ev.frame.data.tobytes())
+                output_emitter.flush()
+                return
+            except APIError as exc:
+                logger.warning(
+                    "Primary TTS failed persona=pctpcts primary=pctpcts error=pctpcts; falling back to pctpcts",
+                    self._fb_tts._persona_id, primary_provider, exc, fallback_provider,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Primary TTS failed persona=pctpcts primary=pctpcts error=pctpcts; falling back to pctpcts",
+                    self._fb_tts._persona_id, primary_provider, exc, fallback_provider,
+                )
+            with suppress(Exception):
+                await primary_stream.aclose()
+            fallback_stream = self._fb_tts._fallback.synthesize(
+                self._input_text, conn_options=self._conn_options
+            )
+            output_emitter.initialize(
+                request_id=gen_shortuuid(),
+                sample_rate=self._fb_tts._fallback.sample_rate,
+                num_channels=self._fb_tts._fallback.num_channels,
+                mime_type="audio/pcm",
+            )
+            async for ev in fallback_stream:
+                output_emitter.push(ev.frame.data.tobytes())
+            output_emitter.flush()
+
+    return FallbackTTS()
+
 def _build_tts(persona: Persona, elevenlabs: Any) -> Any:
     tts_backend = getattr(persona, "tts_backend", "elevenlabs")
+    primary_tts: Any
+
     if tts_backend == "f5-tts":
         if _env_bool("TANGO_F5_TTS_ENABLED", default=True):
             logger.info(
@@ -384,14 +576,29 @@ def _build_tts(persona: Persona, elevenlabs: Any) -> Any:
                 _f5_tts_base_url(),
                 _f5_tts_sample_rate(),
             )
-            return _build_f5_tts_adapter(persona)
+            primary_tts = _build_f5_tts_adapter(persona)
+        else:
+            logger.warning(
+                "F5-TTS disabled by env; using ElevenLabs fallback for persona=%s",
+                persona.id,
+            )
+            primary_tts = _build_elevenlabs_tts(persona, elevenlabs)
+    else:
+        primary_tts = _build_elevenlabs_tts(persona, elevenlabs)
 
-        logger.warning(
-            "F5-TTS disabled by env; using ElevenLabs fallback for persona=%s",
+    # Wrap the primary TTS in a fallback that uses Deepgram Aura when the
+    # primary engine fails (billing outage, rate limit, stopped sidecar, etc.).
+    if _env_bool("TANGO_TTS_FALLBACK", default=True):
+        fallback_tts = _build_deepgram_tts(persona)
+        logger.info(
+            "TTS fallback enabled persona=%s primary=%s fallback=deepgram-aura voice=%s",
             persona.id,
+            getattr(primary_tts, "provider", "unknown"),
+            PERSONA_AURA_VOICE.get(persona.id, DEFAULT_AURA_VOICE),
         )
+        return _build_fallback_tts(primary_tts, fallback_tts, persona)
 
-    return _build_elevenlabs_tts(persona, elevenlabs)
+    return primary_tts
 
 
 def _json_object(value: str | None) -> dict[str, Any]:
@@ -1256,7 +1463,7 @@ async def entrypoint(ctx: Any) -> None:
         _stt = deepgram.STTv2(**stt_kwargs)
 
     session = AgentSession(
-        vad=silero.VAD.load(),
+        vad=silero.VAD.load(min_silence_duration=0.3, prefix_padding_duration=0.3),
         stt=_stt,
         llm=openai.LLM(
             base_url=LITELLM_BASE_URL,

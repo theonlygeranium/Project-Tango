@@ -1,0 +1,12 @@
+[Unit]
+Description=Tango Health Guardian timer — runs every 3 minutes
+Requires=tango-healthcheck.service
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=180
+AccuracySec=10
+Persistent=true
+
+[Install]
+WantedBy=timers.target
