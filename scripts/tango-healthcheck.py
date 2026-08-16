@@ -82,13 +82,100 @@ RESTART_SETTLE_SECONDS = 5
 RESTART_COOLDOWN_SECONDS = 600
 RESTART_COOLDOWN_FILE = "/tmp/tango-healthcheck-restart-cooldowns.json"
 
+# Discord notification settings
+# Severity levels: DEBUG < INFO < WARN < CRITICAL
+# Only send Discord notifications for WARN and CRITICAL by default
+DISCORD_MIN_SEVERITY = "WARN"
+_SEVERITY_ORDER = {"DEBUG": 0, "INFO": 1, "WARN": 2, "CRITICAL": 3}
+
+# Discord webhook configuration is loaded from .env (DISCORD_WEBHOOK_URL)
+# This keeps the secret out of source control
+
+# ---------------------------------------------------------------------------
+# Discord notifications
+# ---------------------------------------------------------------------------
+
+# Color mapping for Discord embeds
+_DISCORD_COLORS = {
+    "CRITICAL": 0xED4245,  # red
+    "WARN": 0xFEE75C,     # yellow
+    "INFO": 0x57F287,     # green
+    "DEBUG": 0x5865F2,    # blue
+}
+
+_DISCORD_EMOJI = {
+    "CRITICAL": "🔴",
+    "WARN": "🟡",
+    "INFO": "🟢",
+    "DEBUG": "🔵",
+}
+
+
+def _discord_webhook_url() -> str:
+    """Load the Discord webhook URL from the .env file."""
+    env = load_env()
+    return env.get("DISCORD_WEBHOOK_URL", "")
+
+
+def send_discord_notification(message: str, level: str = "WARN") -> None:
+    """Send an alert to the Discord webhook channel.
+
+    Uses Discord's webhook API with an embed for richer formatting.
+    Failures are silently ignored — notifications are best-effort and must
+    never prevent the health check from completing.
+    """
+    url = _discord_webhook_url()
+    if not url:
+        return  # no webhook configured, skip silently
+
+    # Check severity threshold
+    if _SEVERITY_ORDER.get(level, 0) < _SEVERITY_ORDER.get(DISCORD_MIN_SEVERITY, 0):
+        return  # below threshold, don't send
+
+    emoji = _DISCORD_EMOJI.get(level, "⚠️")
+    color = _DISCORD_COLORS.get(level, 0xFEE75C)
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    payload = {
+        "username": "Tango Health Guardian",
+        "embeds": [{
+            "title": f"{emoji} Tango Health Alert",
+            "description": message,
+            "color": color,
+            "footer": {"text": f"Severity: {level}"},
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "fields": [
+                {"name": "Time", "value": ts, "inline": True},
+                {"name": "Severity", "value": level, "inline": True},
+            ],
+        }],
+    }
+
+    try:
+        import urllib.request
+        import urllib.error
+
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=10)
+    except Exception:
+        pass  # never let notification failures break the health check
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
 
 
 def log(message: str, level: str = "INFO") -> None:
-    """Write a timestamped log line to the log file and stdout."""
+    """Write a timestamped log line to the log file and stdout.
+
+    Also sends a Discord notification for WARN and CRITICAL events.
+    """
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     line = f"{ts} [{level}] {message}"
     print(line, flush=True)
@@ -97,6 +184,10 @@ def log(message: str, level: str = "INFO") -> None:
             f.write(line + "\n")
     except Exception:
         pass  # don't fail if log file isn't writable
+
+    # Send Discord notification for significant events
+    if _SEVERITY_ORDER.get(level, 0) >= _SEVERITY_ORDER.get(DISCORD_MIN_SEVERITY, 0):
+        send_discord_notification(message, level)
 
 
 # ---------------------------------------------------------------------------
