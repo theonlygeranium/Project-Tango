@@ -89,10 +89,19 @@ sudo -u postgres env \
 echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Database migrations completed successfully." >> "$DEPLOY_LOG"
 
 # Restart systemd services
+# F5-TTS is configured for lazy-start by the backend: tango-tts.service is
+# disabled and left stopped by default. The backend auto-starts it on the first
+# Jeremiah synthesis request via _ensure_f5_tts_service_started(). Set
+# TANGO_F5_TTS_START_ON_DEPLOY=true to start it eagerly during deploy instead.
 TTS_READY=0
 if [ -x /opt/tts-lab/f5-venv/bin/uvicorn ] && [ -f /opt/Project-Tango/tts-voices/jeremiah_reference.wav ]; then
-  systemctl enable tango-tts >> "$DEPLOY_LOG" 2>&1 || true
-  systemctl restart tango-tts
+  systemctl disable tango-tts >> "$DEPLOY_LOG" 2>&1 || true
+  if [ "${TANGO_F5_TTS_START_ON_DEPLOY:-false}" = "true" ]; then
+    systemctl start tango-tts
+  else
+    systemctl stop tango-tts >> "$DEPLOY_LOG" 2>&1 || true
+    echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] F5-TTS configured for backend lazy-start; tango-tts left disabled/stopped" >> "$DEPLOY_LOG"
+  fi
   TTS_READY=1
 else
   echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] WARNING: F5-TTS venv or Jeremiah reference missing; tango-tts not restarted" >> "$DEPLOY_LOG"
@@ -102,7 +111,7 @@ systemctl restart tango-web
 
 # Verify services came back up
 sleep 3
-if [ "$TTS_READY" -eq 1 ]; then
+if [ "$TTS_READY" -eq 1 ] && [ "${TANGO_F5_TTS_START_ON_DEPLOY:-false}" = "true" ]; then
   systemctl is-active --quiet tango-tts || { echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] ERROR: tango-tts failed to start" >> "$DEPLOY_LOG"; exit 1; }
 fi
 systemctl is-active --quiet tango-backend || { echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] ERROR: tango-backend failed to start" >> "$DEPLOY_LOG"; exit 1; }
