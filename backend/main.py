@@ -1456,7 +1456,7 @@ async def entrypoint(ctx: Any) -> None:
         _stt = deepgram.STTv2(**stt_kwargs)
 
     session = AgentSession(
-        vad=silero.VAD.load(),
+        vad=silero.VAD.load(min_silence_duration=0.3, prefix_padding_duration=0.3),
         stt=_stt,
         llm=openai.LLM(
             base_url=LITELLM_BASE_URL,

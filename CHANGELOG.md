@@ -10,6 +10,18 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 ## [Unreleased]
 
 ### Changed
+- Disabled vision context for audio-only sessions (TANGO_VISION_ENABLED=false).
+  The vision pipeline was initializing on every turn and requesting video frames
+  that never arrive in audio-only sessions, wasting per-turn overhead on
+  gpt-4o-mini calls that immediately fail with no video frame available.
+- Tuned Silero VAD parameters to eliminate STT/VAD race condition:
+  min_silence_duration reduced from 550ms to 300ms and prefix_padding_duration
+  from 500ms to 300ms. Deepgram Flux fires end-of-speech before the VAD finishes
+  its speech segment at the default 550ms silence threshold, causing the recurring
+  stt end of speech received while vad is still in a speech segment warning.
+- Stopped idle F5-TTS sidecar (tango-tts.service). All personas now route to
+  ElevenLabs, so the F5-TTS sidecar was consuming 2GB RAM for no active work.
+  The lazy-start mechanism will revive it if a persona is routed back to F5-TTS.
 - Jeremiah now routes TTS back to ElevenLabs (tts_backend="elevenlabs") now
   that the ElevenLabs billing is resolved. The F5-TTS sidecar remains available
   as a lazy-start option via TANGO_F5_TTS_ENABLED, but is no longer the primary
