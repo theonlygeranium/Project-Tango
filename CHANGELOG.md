@@ -10,6 +10,17 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 ## [Unreleased]
 
 ### Added
+- Added Dr. Cortex bot (`cortex-bot.py`, `schubert-cortex.service`) — Chief Science Officer for the
+  USS Schubert fleet. A PhD-trained crystalline alien scientist who monitors the latest AI research
+  trends and translates frontier theory into concrete optimizations for the Discord bot fleet and
+  server infrastructure. Bot ID: 1539172849569243217. Channel ID: 1539173946698498088.
+  Capabilities: web search (Serper API), AI trend scanning (multi-query sweeps), bot code analysis,
+  LLM benchmarking, fleet service management, three-layer persistent memory (Redis + Postgres +
+  Ollama), MCP tool access, FLEET delegation protocol support, auto-model routing
+  (Palmyra x6 for research → Claude Sonnet 4.5 for coding tasks), streaming responses with
+  amber-gold progress embeds, auto-thread creation for long responses, and Regenerate button.
+  Registered in multi_agent_config.py as `cortex` with SCIENCE role.
+  Credentials added to .env: CORTEX_BOT_TOKEN, CORTEX_CHANNEL_ID, CORTEX_BOT_ID.
 - Added web search capability to both Discord bots (Admiral Schubert and
   Tango Bot). Bots can now search the web for current information using the
   Serper.dev Google Search API (2,500 free searches/month). The web_search
