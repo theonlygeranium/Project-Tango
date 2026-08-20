@@ -42,6 +42,23 @@ from conversation_coordinator import ConversationCoordinator, MultiAgentChannelM
 from response_scoring import calculate_response_score, should_respond_immediately, should_respond_with_delay, get_response_delay
 from multi_agent_config import get_agent_profile, register_channel
 
+# ---------------------------------------------------------------------------
+# Fleet config (non-breaking: missing/corrupt file → hardcoded defaults)
+# ---------------------------------------------------------------------------
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+try:
+    from fleet_config_loader import get_bot_config
+    _cfg = get_bot_config("quartermaster")
+except Exception:
+    _cfg = {}
+
+_llm = _cfg.get("llm", {}) if isinstance(_cfg.get("llm", {}), dict) else {}
+_prompt = _cfg.get("prompt", {}) if isinstance(_cfg.get("prompt", {}), dict) else {}
+
 # Channel onboarding
 from channel_onboarding import onboard_channel
 from discord_ux_utils import keep_typing, should_use_thread
@@ -73,14 +90,14 @@ _coordinator: Optional[ConversationCoordinator] = None
 
 LITELLM_URL = os.environ.get("LITELLM_BASE_URL", "http://127.0.0.1:4000/v1")
 LITELLM_MASTER_KEY = os.environ.get("LITELLM_MASTER_KEY", "")
-DEFAULT_MODEL = "writer/palmyra-x6"
+DEFAULT_MODEL = _llm.get("model", "writer/palmyra-x6")
 CURRENT_MODEL = DEFAULT_MODEL
 
-LLM_TEMPERATURE = 0.3
-LLM_MAX_TOKENS = 4096
-LLM_TIMEOUT = 120
-MAX_ITERATIONS = 30
-AGENT_TIMEOUT = 600
+LLM_TEMPERATURE = _llm.get("temperature", 0.3)
+LLM_MAX_TOKENS = _llm.get("max_tokens", 4096)
+LLM_TIMEOUT = _llm.get("llm_timeout", 120)
+MAX_ITERATIONS = _llm.get("max_iterations", 30)
+AGENT_TIMEOUT = _llm.get("agent_timeout", 600)
 
 COLOR_INFO = 0x5865F2
 COLOR_SUCCESS = 0x57F287
@@ -124,7 +141,7 @@ memory_store: MemoryStore | None = None
 
 # Session history per channel
 SESSION_HISTORY: dict[int, list[dict]] = {}
-SESSION_MAX_MESSAGES = 25
+SESSION_MAX_MESSAGES = _llm.get("session_window", 25)
 
 
 # ---------------------------------------------------------------------------
