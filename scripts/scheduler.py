@@ -23,6 +23,7 @@ import logging
 import os
 import re
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
@@ -34,19 +35,35 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("schubert-bot.scheduler")
 
+# ---------------------------------------------------------------------------
+# Fleet config (non-breaking: missing/corrupt file → hardcoded defaults)
+# ---------------------------------------------------------------------------
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+try:
+    from fleet_config_loader import get_fleet_config
+    _fleet = get_fleet_config()
+except Exception:
+    _fleet = {}
+
+_scheduler = _fleet.get("scheduler", {}) if isinstance(_fleet.get("scheduler", {}), dict) else {}
+
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-HEALTH_CHECK_INTERVAL = 300       # 5 minutes — server health sweep
-SERVICE_CHECK_INTERVAL = 120      # 2 minutes — service crash detection
-DISK_ALERT_INTERVAL = 600          # 10 minutes — disk space check
-MEMORY_DECAY_INTERVAL = 3600      # 1 hour — memory relevance decay
-DISK_WARNING_THRESHOLD = 80       # % disk usage to trigger warning
-DISK_CRITICAL_THRESHOLD = 90     # % disk usage to trigger critical alert
-MEM_WARNING_THRESHOLD = 85       # % memory usage to trigger warning
-CPU_WARNING_THRESHOLD = 90       # % CPU load (1-min avg) to trigger warning
+HEALTH_CHECK_INTERVAL = _scheduler.get("health_check_interval", 300)
+SERVICE_CHECK_INTERVAL = _scheduler.get("service_check_interval", 120)
+DISK_ALERT_INTERVAL = _scheduler.get("disk_alert_interval", 600)
+MEMORY_DECAY_INTERVAL = _scheduler.get("memory_decay_interval", 3600)
+DISK_WARNING_THRESHOLD = _scheduler.get("disk_warning_threshold", 80)
+DISK_CRITICAL_THRESHOLD = _scheduler.get("disk_critical_threshold", 90)
+MEM_WARNING_THRESHOLD = _scheduler.get("mem_warning_threshold", 85)
+CPU_WARNING_THRESHOLD = _scheduler.get("cpu_warning_threshold", 90)
 
 # Services to monitor (critical services that should always be running)
 MONITORED_SERVICES = [
