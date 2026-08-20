@@ -64,7 +64,7 @@ export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
 const LLM_MODEL_SELECTION_IDS = new Set<string>(LLM_MODEL_OPTIONS.map((option) => option.id));
 
 export function isLlmModelSelectionId(
-  value: string | null | undefined,
+  value: string | null | undefined
 ): value is LlmModelSelectionId {
   return Boolean(value && LLM_MODEL_SELECTION_IDS.has(value));
 }
