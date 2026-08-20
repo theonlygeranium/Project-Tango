@@ -105,6 +105,12 @@ class Persona:
     eot_threshold: float = 0.7
     # eot_timeout_ms: max silence before EndOfTurn is forced. Default 3000ms.
     eot_timeout_ms: int = 3000
+    # Flux eager end-of-turn threshold.
+    # None (default) = eager EOT disabled for this persona.
+    # 0.3-0.9 = confidence threshold for EagerEndOfTurn events.
+    # Lower values trigger earlier but with more false starts.
+    # Increases LLM calls by ~50-70% due to speculative draft cancellation.
+    eager_eot_threshold: float | None = None
     # keyterms: domain-specific words for Deepgram Plugin keyterm boosting.
     # Especially useful for Taglish personas.
     keyterms: tuple[str, ...] = field(default_factory=tuple)
@@ -166,6 +172,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         stt_language="en-US",
         eot_threshold=0.7,
         eot_timeout_ms=2500,
+        eager_eot_threshold=0.6,
         voice_settings={
             "stability": 0.60,
             "similarity_boost": 0.80,
@@ -199,6 +206,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         tts_backend="elevenlabs",
         eot_threshold=0.7,
         eot_timeout_ms=2500,
+        eager_eot_threshold=0.6,
         keyterms=(
             "Jeremiah",
             "Jeff Geronimo",
@@ -254,6 +262,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         tts_backend="elevenlabs",
         eot_threshold=0.75,
         eot_timeout_ms=3500,
+        eager_eot_threshold=0.55,
         keyterms=(
             "Jeremiah",
             "EdStratum Labs",
@@ -283,6 +292,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         stt_language="en-US",
         eot_threshold=0.7,
         eot_timeout_ms=2500,
+        eager_eot_threshold=0.65,
         voice_settings={
             "stability": 0.60,
             "similarity_boost": 0.80,

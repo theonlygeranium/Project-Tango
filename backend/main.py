@@ -258,6 +258,24 @@ def _f5_tts_base_url() -> str:
     return os.getenv("TANGO_F5_TTS_BASE_URL", DEFAULT_F5_TTS_BASE_URL).rstrip("/")
 
 
+def _global_eager_eot_threshold() -> float | None:
+    raw_value = os.getenv("TANGO_EAGER_EOT_THRESHOLD")
+    if raw_value is None or raw_value.strip() == "":
+        return None
+    try:
+        value = float(raw_value)
+    except ValueError:
+        logger.warning("Invalid float for TANGO_EAGER_EOT_THRESHOLD=%r", raw_value)
+        return None
+    if not (0.3 <= value <= 0.9):
+        logger.warning(
+            "TANGO_EAGER_EOT_THRESHOLD=%r out of range [0.3, 0.9]; ignoring",
+            raw_value,
+        )
+        return None
+    return value
+
+
 def _f5_tts_sample_rate() -> int:
     return _env_int("TANGO_F5_TTS_SAMPLE_RATE", DEFAULT_F5_TTS_SAMPLE_RATE)
 
@@ -1407,7 +1425,7 @@ async def entrypoint(ctx: Any) -> None:
     _flux_model = "flux-general-en" if not _use_nova3 else "nova-3-multi"
 
     logger.info(
-        "Starting Tango agent room=%s persona_id=%s model=%s tts_backend=%s is_sip=%s flux_stt=%s eot_threshold=%s eot_timeout_ms=%s preemptive_generation=%s llm_base_url=%s",
+        "Starting Tango agent room=%s persona_id=%s model=%s tts_backend=%s is_sip=%s flux_stt=%s eot_threshold=%s eot_timeout_ms=%s eager_eot_threshold=%s preemptive_generation=%s llm_base_url=%s",
         room_name,
         persona.id,
         llm_model,
@@ -1416,6 +1434,7 @@ async def entrypoint(ctx: Any) -> None:
         _flux_model,
         persona.eot_threshold,
         persona.eot_timeout_ms,
+        persona.eager_eot_threshold,
         preemptive_generation_enabled,
         LITELLM_BASE_URL,
     )
@@ -1458,6 +1477,11 @@ async def entrypoint(ctx: Any) -> None:
             "eot_threshold": persona.eot_threshold,
             "eot_timeout_ms": persona.eot_timeout_ms,
         }
+        _effective_eager_eot = _global_eager_eot_threshold()
+        if _effective_eager_eot is None:
+            _effective_eager_eot = persona.eager_eot_threshold
+        if _effective_eager_eot is not None:
+            stt_kwargs["eager_eot_threshold"] = _effective_eager_eot
         if persona.keyterms:
             stt_kwargs["keyterm"] = list(persona.keyterms)
         _stt = deepgram.STTv2(**stt_kwargs)
