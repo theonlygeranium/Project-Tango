@@ -7,7 +7,37 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ---
 
+## [Unreleased] v2 — Voice Pipeline Optimization
+
+### Added
+- DeepGram Flux Eager End-of-Turn (`eager_eot_threshold`) for English personas.
+  Per-persona tunable: Chris (0.6), Jeremiah (0.6), Jeremiah V2 (0.55),
+  Jacob (0.65); disabled for Damian, Nathaniel, and Tagalog personas.
+  See ADR-011.
+- Optional global override `TANGO_EAGER_EOT_THRESHOLD` env var.
+- ElevenLabs voice clone audit script (`scripts/audit_elevenlabs_voices.py`).
+- ElevenLabs TTFB verification script (`scripts/verify_elevenlabs_ttfb.py`).
+- Per-agent-turn latency logging in `tango-backend` logs.
+- Conditional `use_pvc_as_ivc` support via `TANGO_ELEVENLABS_USE_PVC_AS_IVC` env var
+  with graceful fallback when the installed plugin version doesn't support it.
+
+### Changed
+- Startup log line now includes `eager_eot_threshold`.
+- `docs/architecture.md` voice pipeline diagram updated to reflect eager EOT.
+
+---
+
 ## [Unreleased]
+
+### Added
+- **Fleet Bot Testing skill and runbook** (2026-08-19)
+  - Created `.cursor/skills/fleet-bot-testing/SKILL.md` — Cursor skill that
+    provides ready-to-run commands for all bot test types: conversation tests,
+    static analysis, health monitor, and log analysis. Includes bot channel/ID
+    reference, persona keywords, and troubleshooting guide.
+  - Created `docs/runbooks/fleet-bot-testing.md` — operational runbook covering
+    all test components, how to run them from Cursor/Schubert/Discord, and
+    troubleshooting common issues.
 
 ### Changed
 - Externalized Discord bot hardcoded constants to `fleet-config.json` via new
