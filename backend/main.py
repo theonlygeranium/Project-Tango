@@ -442,14 +442,18 @@ def _build_f5_tts_adapter(persona: Persona) -> Any:
 
 
 def _build_elevenlabs_tts(persona: Persona, elevenlabs: Any) -> Any:
-    voice_settings_kwargs = dict(persona.voice_settings)
+    voice_settings = elevenlabs.VoiceSettings(**persona.voice_settings)
     if _env_bool("TANGO_ELEVENLABS_USE_PVC_AS_IVC", default=False):
-        voice_settings_kwargs["use_pvc_as_ivc"] = True
-
-    try:
-        voice_settings = elevenlabs.VoiceSettings(**voice_settings_kwargs)
-    except TypeError:
-        voice_settings = elevenlabs.VoiceSettings(**persona.voice_settings)
+        try:
+            voice_settings = elevenlabs.VoiceSettings(
+                **persona.voice_settings, use_pvc_as_ivc=True
+            )
+        except TypeError:
+            logger.warning(
+                "TANGO_ELEVENLABS_USE_PVC_AS_IVC set but plugin version does not "
+                "support use_pvc_as_ivc; ignoring for persona=%s",
+                persona.id,
+            )
 
     return elevenlabs.TTS(
         model="eleven_flash_v2_5",
@@ -1526,24 +1530,23 @@ async def entrypoint(ctx: Any) -> None:
         if speaker not in {"user", "agent"}:
             return
 
+        latency_ms = _message_latency_ms(ev.item)
         record_turn(
             session_turns,
             len(session_turns),
             speaker,
             _chat_message_text(ev.item),
             tokens_used=_message_token_count(ev.item),
-            latency_ms=_message_latency_ms(ev.item),
+            latency_ms=latency_ms,
         )
 
-        if speaker == "agent":
-            latency_ms = _message_latency_ms(ev.item)
-            if latency_ms is not None:
-                logger.info(
-                    "Agent turn latency_ms=%d persona=%s room=%s",
-                    latency_ms,
-                    persona.id,
-                    room_name,
-                )
+        if speaker == "agent" and latency_ms is not None:
+            logger.info(
+                "Agent turn latency_ms=%d persona=%s room=%s",
+                latency_ms,
+                persona.id,
+                room_name,
+            )
 
     @session.on("session_usage_updated")
     def on_session_usage_updated(ev: SessionUsageUpdatedEvent) -> None:
