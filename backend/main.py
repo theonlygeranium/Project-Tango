@@ -442,12 +442,21 @@ def _build_f5_tts_adapter(persona: Persona) -> Any:
 
 
 def _build_elevenlabs_tts(persona: Persona, elevenlabs: Any) -> Any:
+    voice_settings_kwargs = dict(persona.voice_settings)
+    if _env_bool("TANGO_ELEVENLABS_USE_PVC_AS_IVC", default=False):
+        voice_settings_kwargs["use_pvc_as_ivc"] = True
+
+    try:
+        voice_settings = elevenlabs.VoiceSettings(**voice_settings_kwargs)
+    except TypeError:
+        voice_settings = elevenlabs.VoiceSettings(**persona.voice_settings)
+
     return elevenlabs.TTS(
         model="eleven_flash_v2_5",
         voice_id=persona.voice_id,
         api_key=os.getenv("ELEVENLABS_API_KEY"),
         base_url=ELEVENLABS_BASE_URL,
-        voice_settings=elevenlabs.VoiceSettings(**persona.voice_settings),
+        voice_settings=voice_settings,
         auto_mode=True,
     )
 
