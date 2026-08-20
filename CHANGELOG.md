@@ -9,6 +9,17 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ## [Unreleased]
 
+### Changed
+- Phase 2 fleet-config externalization: remaining Discord bot scripts and shared
+  modules now read tunables from `fleet-config.json` via `fleet_config_loader`
+  with non-breaking hardcoded fallbacks. Modified bots: `architect-bot.py`
+  (`architect`), `dr-voss-bot.py` (`dr_voss`), `cartographer-bot.py`
+  (`cartographer`), `quartermaster-bot.py` (`quartermaster`), `proctor-bot.py`
+  (`proctor`), `schubert-bot-v2.py` (`admiral`), `dr-cortex-bot.py` (`cortex`).
+  Modified shared modules: `fleet_protocol.py`, `context_builder.py`,
+  `scheduler.py`, `conversation_coordinator.py`. See ADR
+  `docs/decisions/2026-08-20-fleet-config-externalization-phase-2.md`.
+
 ### Added
 - Added Dr. Cortex bot (`cortex-bot.py`, `schubert-cortex.service`) — Chief Science Officer for the
   USS Schubert fleet. A PhD-trained crystalline alien scientist who monitors the latest AI research

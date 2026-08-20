@@ -1,7 +1,7 @@
 # Project Tango — System Architecture
 
 > Keep this document in sync with the actual state of Schubert. Do not add aspirational content.
-> Last updated: 2026-07-22 — account authentication, persona authorization, and Groq Tagalog routing
+> Last updated: 2026-08-20 — Discord fleet-config.json externalization (phase 2)
 
 ---
 
@@ -246,6 +246,20 @@ restart; the next queued run fast-forwards to the newest `main`.
 
 ---
 
+## Discord Fleet Bots (configuration)
+
+Discord fleet bots under `scripts/` load tunables from
+`/opt/Project-Tango/config/fleet-config.json` (override with `FLEET_CONFIG_PATH`)
+via `scripts/fleet_config_loader.py`. Missing or corrupt config falls back to
+each script's previous hardcoded defaults — bots must not crash.
+
+Per-bot sections live under `bots.<bot_id>` (e.g. `architect`, `admiral`,
+`cortex`). Shared sections: `fleet_protocol`, `conversation`, `context_builder`,
+`scheduler`. The JSON file is owned by the Fleet Command API; this repository
+does not modify it.
+
+---
+
 ## Key Architectural Decisions
 
 See `docs/decisions/` for full ADRs.
@@ -262,3 +276,4 @@ See `docs/decisions/` for full ADRs.
 | F5-TTS sidecar for Jeremiah pilot | Self-hosted TTS without disrupting other personas | ADR-008 |
 | Groq Tagalog defaults + universal voice layer | Reproduce current live persona behavior | ADR-009 |
 | Password accounts + server persona authorization | Protect every browser/API path and isolate account data | ADR-010 |
+| Discord fleet constants via `fleet-config.json` | Tunable without editing bot sources; missing file → defaults | 2026-08-20 fleet-config ADRs |
