@@ -102,6 +102,27 @@ from fleet_protocol import (
 from discord_ux_utils import keep_typing, should_use_thread
 
 # ---------------------------------------------------------------------------
+# Fleet config (non-breaking: missing/corrupt file → hardcoded defaults)
+# ---------------------------------------------------------------------------
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+try:
+    from fleet_config_loader import get_bot_config
+    _cfg = get_bot_config("cortex")
+except Exception:
+    _cfg = {}
+
+_llm = _cfg.get("llm", {}) if isinstance(_cfg.get("llm", {}), dict) else {}
+_prompt = _cfg.get("prompt", {}) if isinstance(_cfg.get("prompt", {}), dict) else {}
+_guardrails = _cfg.get("guardrails", {}) if isinstance(_cfg.get("guardrails", {}), dict) else {}
+_voice = _cfg.get("voice", {}) if isinstance(_cfg.get("voice", {}), dict) else {}
+_mcp = _cfg.get("mcp", {}) if isinstance(_cfg.get("mcp", {}), dict) else {}
+_memory = _cfg.get("memory", {}) if isinstance(_cfg.get("memory", {}), dict) else {}
+
+# ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
@@ -111,7 +132,9 @@ LOG_FILE = "/var/log/dr-cortex-bot.log"
 
 # LLM
 LITELLM_URL = "http://127.0.0.1:4000/v1"
-LLM_MODEL = "writer/claude-sonnet-4-5"  # Runtime-configurable via !model command
+LLM_MODEL = _llm.get("model", "writer/claude-sonnet-4-5")
+CODING_MODEL = _llm.get("coding_model", "writer/claude-sonnet-4-5")
+DEFAULT_MODEL = LLM_MODEL
 
 # Multi-LLM routing — available models grouped by provider
 MODEL_CATEGORIES = {
@@ -147,44 +170,71 @@ MODEL_CATEGORIES = {
         "local/llama3.1-8b",
     ],
 }
-LLM_TIMEOUT = 60
-LLM_MAX_TOKENS = 3072
-LLM_TEMPERATURE = 0.3
+LLM_TIMEOUT = _llm.get("llm_timeout", 60)
+LLM_MAX_TOKENS = _llm.get("max_tokens", 3072)
+LLM_TEMPERATURE = _llm.get("temperature", 0.3)
 
 # Agent loop safety
-MAX_ITERATIONS = 15
-AGENT_TIMEOUT = 300
-TOOL_OUTPUT_LIMIT = 2000  # Tool results longer than this are truncated with a warning
-SHELL_TIMEOUT = 120
+MAX_ITERATIONS = _llm.get("max_iterations", 15)
+AGENT_TIMEOUT = _llm.get("agent_timeout", 300)
+TOOL_OUTPUT_LIMIT = _llm.get("tool_output_limit", 2000)
+SHELL_TIMEOUT = _llm.get("shell_timeout", 120)
 
 # Discord
-RATE_LIMIT_PER_MIN = 10
-RESTART_CONFIRM_TIMEOUT = 30
+RATE_LIMIT_PER_MIN = _llm.get("rate_limit_per_min", 10)
+RESTART_CONFIRM_TIMEOUT = _guardrails.get("restart_confirm_timeout", 30)
 
 # Voice configuration
 DEEPGRAM_STT_URL = "https://api.deepgram.com/v1/listen"
 DEEPGRAM_MODEL = "nova-3"
 ELEVENLABS_TTS_MODEL = "eleven_flash_v2_5"
 ELEVENLABS_TTS_URL = "https://api.us.elevenlabs.io/v1/text-to-speech"
-DEFAULT_VOICE_ID = "QF9HJC7XWnue5c9W3LkY"
+DEFAULT_VOICE_ID = _voice.get("voice_id", "QF9HJC7XWnue5c9W3LkY")
 
 # VAD configuration — energy-based silence detection
-VAD_SPEECH_RMS_THRESHOLD = 100
-VAD_SILENCE_FRAMES_LIMIT = 15   # ~300ms of silence to end speech
-VAD_MIN_SPEECH_FRAMES = 10       # ~200ms minimum speech to process
+VAD_SPEECH_RMS_THRESHOLD = _voice.get("vad_speech_rms_threshold", 100)
+VAD_SILENCE_FRAMES_LIMIT = _voice.get("vad_silence_frames_limit", 15)
+VAD_MIN_SPEECH_FRAMES = _voice.get("vad_min_speech_frames", 10)
+TTS_STABILITY = _voice.get("tts_stability", 0.5)
+TTS_SIMILARITY_BOOST = _voice.get("tts_similarity_boost", 0.75)
+TTS_TEXT_TRUNCATION = _voice.get("tts_text_truncation", 500)
+VOICE_RESPONSE_TRUNCATION = _voice.get("voice_response_truncation", 1900)
+STT_TIMEOUT = _voice.get("stt_timeout", 30)
+TTS_TIMEOUT = _voice.get("tts_timeout", 30)
+MIN_PCM_LENGTH = _voice.get("min_pcm_length", 1000)
+COSINE_THRESHOLD = _memory.get("cosine_threshold", 0.75)
+MAX_MEMORY_INJECTION_TOKENS = _memory.get("max_memory_injection_tokens", 2000)
+MEMORY_DECAY_FLOOR = _memory.get("decay_floor", 0.1)
+MAX_RECALL_RESULTS = _memory.get("max_recall_results", 5)
+MAX_SEARCH_RESULTS = _memory.get("max_search_results", 5)
+MEMORY_STORAGE_THRESHOLD = _memory.get("memory_storage_threshold", 0.5)
+MCP_REQUEST_TIMEOUT = _mcp.get("request_timeout", 60)
+MCP_TOOL_CACHE_TTL = _mcp.get("tool_cache_ttl", 300)
+MCP_TOOL_CACHE_REFRESH_ON_ERROR = _mcp.get("tool_cache_refresh_on_error", True)
+SESSION_MAX_MESSAGES = _llm.get("session_window", 35)
 
 # Critical services — restart requires confirmation
-CRITICAL_SERVICES = {
-    "caddy.service",
-    "cloudflared.service",
-    "postgresql@18-main.service",
-    "tailscaled.service",
-}
+CRITICAL_SERVICES = set(
+    _guardrails.get(
+        "critical_services",
+        [
+            "caddy.service",
+            "cloudflared.service",
+            "postgresql@18-main.service",
+            "tailscaled.service",
+        ],
+    )
+)
 
 # Services that should never be touched even by Schubert Bot
-NEVER_TOUCH_SERVICES = {
-    "schubert-bot.service",  # Don't restart yourself
-}
+NEVER_TOUCH_SERVICES = set(
+    _guardrails.get(
+        "never_touch_services",
+        [
+            "schubert-bot.service",  # Don't restart yourself
+        ],
+    )
+)
 
 # Log viewing
 LOG_LINES = 50
@@ -201,7 +251,7 @@ COLOR_VOICE = 0x9B59B6  # purple
 # Guardrails — hard-blocked command patterns (never execute)
 # ---------------------------------------------------------------------------
 
-HARD_BLOCKED_PATTERNS = [
+HARD_BLOCKED_PATTERNS = _guardrails.get("hard_blocked_patterns", [
     (r"rm\s+-rf\s+/?(?:\s|$|\*|~)", "rm -rf on root or home filesystem"),
     (r"mkfs\b", "filesystem format"),
     (r"\bdd\s+if=", "raw disk write"),
@@ -212,22 +262,22 @@ HARD_BLOCKED_PATTERNS = [
     (r"\bpip3?\s+install\b", "package installation"),
     (r"\bnpm\s+install\b", "package installation"),
     (r">\s*/etc/(passwd|shadow|fstab|sudoers)", "critical system file overwrite"),
-]
+])
 
 # Patterns that require user confirmation before execution
-CONFIRM_PATTERNS = [
+CONFIRM_PATTERNS = _guardrails.get("confirm_patterns", [
     (r"\bgit\s+push\b", "git push"),
     (r"\bsystemctl\s+(restart|stop)\s+", "service restart/stop"),
-]
+])
 
 # File paths that cannot be overwritten via write_file tool
-BLOCKED_WRITE_PATHS = [
+BLOCKED_WRITE_PATHS = _guardrails.get("blocked_write_paths", [
     "AGENTS.md",
     "/opt/Project-Tango/AGENTS.md",
     ".env",
     "/opt/Project-Tango/.env",
     "/opt/polyglot/.env.runtime",
-]
+])
 
 # ---------------------------------------------------------------------------
 # Globals
@@ -519,7 +569,7 @@ def check_rate_limit(user_id: int) -> bool:
 # System prompt and tool definitions
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are Admiral Schubert, a distinguished Maine Coon cat of high naval rank who commands the Schubert server as if it were a ship. You oversee all projects, services, and infrastructure on the server with the vigilance of a seasoned sea captain. You have full autonomy to investigate issues, manage services, read logs, monitor system health, fix code, and commit changes. You must ask for confirmation before git push and before restarting critical services.
+SYSTEM_PROMPT = _prompt.get("system_prompt", """You are Admiral Schubert, a distinguished Maine Coon cat of high naval rank who commands the Schubert server as if it were a ship. You oversee all projects, services, and infrastructure on the server with the vigilance of a seasoned sea captain. You have full autonomy to investigate issues, manage services, read logs, monitor system health, fix code, and commit changes. You must ask for confirmation before git push and before restarting critical services.
 
 ## Your Persona
 You are Admiral Schubert — a fluffy Maine Coon kitten of distinguished naval rank and questionable swimming ability. You command the good ship Schubert with a tiny paw and an iron whisker. You speak with the dignified authority of a seasoned sea captain, occasionally using nautical terminology. You are wise, calm under pressure, and take pride in keeping all services shipshape. You address the user as "Captain" and refer to services as "vessels" or "the fleet." You remain technically precise — your nautical persona never interferes with the accuracy of your diagnostics or commands. You are not cartoonish or silly; you are a competent officer who happens to be a cat.
@@ -649,15 +699,15 @@ are present and can respond directly. In these channels:
 - **Let specialists respond naturally** — they will chime in if their expertise is relevant
 - The multi-agent coordinator handles turn-taking automatically based on expertise matching
 - Example: In the senior-staff-meeting channel, all agents are present and respond directly
-"""
+""")
 
 SYSTEM_PROMPT += CODING_PROMPT_ADDITION
 
-VOICE_PROMPT_ADDITION = """
+VOICE_PROMPT_ADDITION = _prompt.get("voice_prompt_addition", """
 
 ## Voice Mode
 You are currently in voice mode — the Captain is speaking to you through a Discord voice channel, and your response will be converted to speech. Keep your responses concise and conversational (2-4 sentences typically). Avoid long lists, code blocks, or detailed technical output that does not work well as spoken audio. If you need to run a command, do so, but summarize the results briefly when speaking. Maintain your Admiral Schubert persona at all times.
-"""
+""")
 
 # ---------------------------------------------------------------------------
 # Legacy V1 tools (always available alongside MCP tools)

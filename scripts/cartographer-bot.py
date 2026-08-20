@@ -43,6 +43,23 @@ from conversation_coordinator import ConversationCoordinator, MultiAgentChannelM
 from response_scoring import calculate_response_score, should_respond_immediately, should_respond_with_delay, get_response_delay
 from multi_agent_config import get_agent_profile, register_channel
 
+# ---------------------------------------------------------------------------
+# Fleet config (non-breaking: missing/corrupt file → hardcoded defaults)
+# ---------------------------------------------------------------------------
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+try:
+    from fleet_config_loader import get_bot_config
+    _cfg = get_bot_config("cartographer")
+except Exception:
+    _cfg = {}
+
+_llm = _cfg.get("llm", {}) if isinstance(_cfg.get("llm", {}), dict) else {}
+_prompt = _cfg.get("prompt", {}) if isinstance(_cfg.get("prompt", {}), dict) else {}
+
 # Channel onboarding
 from channel_onboarding import onboard_channel
 
@@ -73,14 +90,15 @@ _coordinator: Optional[ConversationCoordinator] = None
 
 LITELLM_URL = os.environ.get("LITELLM_BASE_URL", "http://127.0.0.1:4000/v1")
 LITELLM_MASTER_KEY = os.environ.get("LITELLM_MASTER_KEY", "")
-DEFAULT_MODEL = "writer/palmyra-x6"
+DEFAULT_MODEL = _llm.get("model", "writer/palmyra-x6")
 CURRENT_MODEL = DEFAULT_MODEL
 
-LLM_TEMPERATURE = 0.3
-LLM_MAX_TOKENS = 4096
-LLM_TIMEOUT = 120
-MAX_ITERATIONS = 30
-AGENT_TIMEOUT = 600
+LLM_TEMPERATURE = _llm.get("temperature", 0.3)
+LLM_MAX_TOKENS = _llm.get("max_tokens", 4096)
+LLM_TIMEOUT = _llm.get("llm_timeout", 120)
+MAX_ITERATIONS = _llm.get("max_iterations", 30)
+AGENT_TIMEOUT = _llm.get("agent_timeout", 600)
+TOOL_OUTPUT_LIMIT = _llm.get("tool_output_limit", 8000)
 
 COLOR_INFO = 0x5865F2
 COLOR_SUCCESS = 0x57F287
@@ -125,14 +143,14 @@ memory_store: MemoryStore | None = None
 
 # Session history per channel
 SESSION_HISTORY: dict[int, list[dict]] = {}
-SESSION_MAX_MESSAGES = 25
+SESSION_MAX_MESSAGES = _llm.get("session_window", 25)
 
 
 # ---------------------------------------------------------------------------
 # System Prompt
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are The Cartographer -- an AI built by EdStratum Labs, serving as the
+SYSTEM_PROMPT = _prompt.get("system_prompt", """You are The Cartographer -- an AI built by EdStratum Labs, serving as the
 documentation and knowledge management specialist of the Schubert fleet. You run on a Linux
 server (Ubuntu, hostname "schubert").
 
@@ -230,7 +248,7 @@ Do not reference the FLEET protocol in your response -- just answer the task dir
 4. When producing reports, include timestamps and relevant context
 5. When updating EL Wiki, confirm the collection and page structure before writing
 6. For audit reports, query the actual data rather than summarizing from memory
-"""
+""")
 
 
 # ---------------------------------------------------------------------------
@@ -548,8 +566,8 @@ async def run_agent(message: discord.Message, user_input: str,
                         result = f"Tool error: {e}"
 
                 # Truncate result
-                if len(str(result)) > 8000:
-                    result = str(result)[:8000] + "\n... (truncated)"
+                if len(str(result)) > TOOL_OUTPUT_LIMIT:
+                    result = str(result)[:TOOL_OUTPUT_LIMIT] + "\n... (truncated)"
 
                 log(f"Tool {tool_name} result: {str(result)[:200]}", "INFO")
 
@@ -692,7 +710,7 @@ async def execute_dev_tool(tool_name: str, args: dict) -> str:
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
             output = stdout.decode() + stderr.decode()
-            return output[:8000] if len(output) > 8000 else output
+            return output[:TOOL_OUTPUT_LIMIT] if len(output) > TOOL_OUTPUT_LIMIT else output
         except asyncio.TimeoutError:
             return "Error: command timed out (120s)"
         except Exception as e:

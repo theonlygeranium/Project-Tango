@@ -62,6 +62,22 @@ from conversation_coordinator import ConversationCoordinator, MultiAgentChannelM
 from response_scoring import calculate_response_score, should_respond_immediately, should_respond_with_delay, get_response_delay
 from multi_agent_config import get_agent_profile, register_channel
 
+# ---------------------------------------------------------------------------
+# Fleet config (non-breaking: missing/corrupt file → hardcoded defaults)
+# ---------------------------------------------------------------------------
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+try:
+    from fleet_config_loader import get_bot_config
+    _cfg = get_bot_config("proctor")
+except Exception:
+    _cfg = {}
+
+_llm = _cfg.get("llm", {}) if isinstance(_cfg.get("llm", {}), dict) else {}
+
 # Proctor observer module
 from proctor_observer import (
     PerformanceTracker, HUMAN_OPERATOR_ID, AGENT_BOT_IDS, AGENT_CHANNEL_IDS,
@@ -101,12 +117,12 @@ _test_runner: Optional[ProctorTestRunner] = None
 
 # Session history (in-memory, per-channel, with windowing)
 SESSION_HISTORY: dict[int, list[dict]] = {}
-SESSION_MAX_MESSAGES = 35
+SESSION_MAX_MESSAGES = _llm.get("session_window", 35)
 
 # Multi-LLM routing — default model and available models
 # The Proctor auto-switches: Palmyra x6 for general tasks, Claude Sonnet 4.5 for coding
-DEFAULT_MODEL = "writer/palmyra-x6"
-CODING_MODEL = "writer/claude-sonnet-4-5"
+DEFAULT_MODEL = _llm.get("model", "writer/palmyra-x6")
+CODING_MODEL = _llm.get("coding_model", "writer/claude-sonnet-4-5")
 current_model = DEFAULT_MODEL
 user_model_override = False  # Set True when user manually selects via !model; disables auto-switching
 
@@ -145,11 +161,11 @@ MODEL_CATEGORIES = {
     ],
 }
 
-LLM_TEMPERATURE = 0.3
-LLM_MAX_TOKENS = 4096
-LLM_TIMEOUT = 180
-MAX_ITERATIONS = 30
-AGENT_TIMEOUT = 480
+LLM_TEMPERATURE = _llm.get("temperature", 0.3)
+LLM_MAX_TOKENS = _llm.get("max_tokens", 4096)
+LLM_TIMEOUT = _llm.get("llm_timeout", 180)
+MAX_ITERATIONS = _llm.get("max_iterations", 30)
+AGENT_TIMEOUT = _llm.get("agent_timeout", 480)
 
 # Colors
 COLOR_INFO = 0x5865F2
