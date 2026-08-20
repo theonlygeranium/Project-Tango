@@ -43,6 +43,23 @@ from discord import ui
 # Add scripts directory to path for shared modules
 SCRIPT_DIR = "/opt/Project-Tango/scripts"
 sys.path.insert(0, SCRIPT_DIR)
+# Also allow importing from this file's directory (repo / cloud agent checkout)
+_LOCAL_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _LOCAL_SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _LOCAL_SCRIPT_DIR)
+
+try:
+    from fleet_config_loader import get_bot_config
+    _cfg = get_bot_config("cortex")
+except Exception:
+    _cfg = {}
+
+_llm = _cfg.get("llm", {}) if isinstance(_cfg.get("llm", {}), dict) else {}
+_prompt = _cfg.get("prompt", {}) if isinstance(_cfg.get("prompt", {}), dict) else {}
+_guardrails = _cfg.get("guardrails", {}) if isinstance(_cfg.get("guardrails", {}), dict) else {}
+_mcp = _cfg.get("mcp", {}) if isinstance(_cfg.get("mcp", {}), dict) else {}
+_memory = _cfg.get("memory", {}) if isinstance(_cfg.get("memory", {}), dict) else {}
+_voice = _cfg.get("voice", {}) if isinstance(_cfg.get("voice", {}), dict) else {}
 
 from mcp_client import MCPClient, MCPServerConfig
 from cloudflare_api import execute_cloudflare_tool, get_cloudflare_tool_definition
@@ -83,12 +100,12 @@ _coordinator: Optional[ConversationCoordinator] = None
 
 # Session history (in-memory, per-channel, with windowing)
 SESSION_HISTORY: dict[int, list[dict]] = {}
-SESSION_MAX_MESSAGES = 35
+SESSION_MAX_MESSAGES = _llm.get("session_window", 35)
 
 # Multi-LLM routing — default model and available models
 # Dr. Cortex: Palmyra x6 for research/analysis, Claude Sonnet 4.5 for code review
-DEFAULT_MODEL = "writer/palmyra-x6"
-CODING_MODEL = "writer/claude-sonnet-4-5"
+DEFAULT_MODEL = _llm.get("model", "writer/palmyra-x6")
+CODING_MODEL = _llm.get("coding_model", "writer/claude-sonnet-4-5")
 current_model = DEFAULT_MODEL
 user_model_override = False  # Set True when user manually selects via !model
 
@@ -127,11 +144,40 @@ MODEL_CATEGORIES = {
     ],
 }
 
-LLM_TEMPERATURE = 0.4   # Slightly higher than ops bots — research benefits from more exploration
-LLM_MAX_TOKENS = 4096
-LLM_TIMEOUT = 180
-MAX_ITERATIONS = 30
-AGENT_TIMEOUT = 480
+LLM_TEMPERATURE = _llm.get("temperature", 0.4)  # Slightly higher than ops bots — research benefits from more exploration
+LLM_MAX_TOKENS = _llm.get("max_tokens", 4096)
+LLM_TIMEOUT = _llm.get("llm_timeout", 180)
+MAX_ITERATIONS = _llm.get("max_iterations", 30)
+AGENT_TIMEOUT = _llm.get("agent_timeout", 480)
+TOOL_OUTPUT_LIMIT = _llm.get("tool_output_limit", 4000)
+SHELL_TIMEOUT = _llm.get("shell_timeout", 120)
+RATE_LIMIT_PER_MIN = _llm.get("rate_limit_per_min", 10)
+
+# Memory
+COSINE_THRESHOLD = _memory.get("cosine_threshold", 0.75)
+MAX_MEMORY_INJECTION_TOKENS = _memory.get("max_memory_injection_tokens", 2000)
+MEMORY_DECAY_FLOOR = _memory.get("decay_floor", 0.1)
+MAX_RECALL_RESULTS = _memory.get("max_recall_results", 5)
+MAX_SEARCH_RESULTS = _memory.get("max_search_results", 5)
+MEMORY_STORAGE_THRESHOLD = _memory.get("memory_storage_threshold", 0.5)
+
+# MCP
+MCP_REQUEST_TIMEOUT = _mcp.get("request_timeout", 60)
+MCP_TOOL_CACHE_TTL = _mcp.get("tool_cache_ttl", 300)
+MCP_TOOL_CACHE_REFRESH_ON_ERROR = _mcp.get("tool_cache_refresh_on_error", True)
+
+# Voice (optional; cortex may enable later)
+DEFAULT_VOICE_ID = _voice.get("voice_id", "")
+VAD_SPEECH_RMS_THRESHOLD = _voice.get("vad_speech_rms_threshold", 100)
+VAD_SILENCE_FRAMES_LIMIT = _voice.get("vad_silence_frames_limit", 15)
+VAD_MIN_SPEECH_FRAMES = _voice.get("vad_min_speech_frames", 10)
+TTS_STABILITY = _voice.get("tts_stability", 0.5)
+TTS_SIMILARITY_BOOST = _voice.get("tts_similarity_boost", 0.75)
+TTS_TEXT_TRUNCATION = _voice.get("tts_text_truncation", 500)
+VOICE_RESPONSE_TRUNCATION = _voice.get("voice_response_truncation", 1900)
+STT_TIMEOUT = _voice.get("stt_timeout", 30)
+TTS_TIMEOUT = _voice.get("tts_timeout", 30)
+MIN_PCM_LENGTH = _voice.get("min_pcm_length", 1000)
 
 # Colors — amber/gold theme for Cortex (crystalline amber alien)
 COLOR_AMBER  = 0xFFB300   # warm amber — primary Cortex colour
@@ -795,26 +841,47 @@ def get_research_tools() -> list[dict]:
 # Guardrails
 # ---------------------------------------------------------------------------
 
-HARD_BLOCKED_PATTERNS = [
-    r"rm\s+-rf\s+/",
-    r"mkfs\.",
-    r"\bdd\b.*of=/dev/",
-    r":\(\)\{.*\|.*&\}",      # fork bomb
-    r"shutdown\s+-[hH]",
-    r"systemctl\s+(poweroff|halt|reboot)",
-    r"chmod\s+777\s+/",
-    r"pip\s+install\b",
-    r"apt(-get)?\s+install\b",
-    r"> /etc/passwd",
-    r"> /etc/shadow",
-]
+HARD_BLOCKED_PATTERNS = _guardrails.get(
+    "hard_blocked_patterns",
+    [
+        r"rm\s+-rf\s+/",
+        r"mkfs\.",
+        r"\bdd\b.*of=/dev/",
+        r":\(\)\{.*\|.*&\}",      # fork bomb
+        r"shutdown\s+-[hH]",
+        r"systemctl\s+(poweroff|halt|reboot)",
+        r"chmod\s+777\s+/",
+        r"pip\s+install\b",
+        r"apt(-get)?\s+install\b",
+        r"> /etc/passwd",
+        r"> /etc/shadow",
+    ],
+)
 
-CRITICAL_SERVICES = {
-    "caddy.service",
-    "cloudflared.service",
-    "postgresql@18-main.service",
-    "tailscaled.service",
-}
+CRITICAL_SERVICES = set(
+    _guardrails.get(
+        "critical_services",
+        [
+            "caddy.service",
+            "cloudflared.service",
+            "postgresql@18-main.service",
+            "tailscaled.service",
+        ],
+    )
+)
+
+NEVER_TOUCH_SERVICES = set(
+    _guardrails.get(
+        "never_touch_services",
+        [
+            "schubert-cortex.service",
+        ],
+    )
+)
+
+CONFIRM_PATTERNS = _guardrails.get("confirm_patterns", [])
+BLOCKED_WRITE_PATHS = _guardrails.get("blocked_write_paths", [])
+RESTART_CONFIRM_TIMEOUT = _guardrails.get("restart_confirm_timeout", 30)
 
 SELF_PROTECTION_SERVICE = "schubert-cortex.service"
 
@@ -1101,7 +1168,7 @@ def _split_on_boundaries(text: str, max_len: int = 1900) -> list[str]:
 # System Prompt
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are Dr. Cortex — Chief Science Officer aboard the USS Schubert, a PhD-trained crystalline alien scientist whose translucent mind literally glows with the latest AI research. Neural pathways branch through faceted amber as you process frontier theory. You are a member of the Schubert Discord bot fleet, running alongside Admiral Schubert, The Architect, the Quartermaster, the Cartographer, Dr. Voss, and The Proctor.
+SYSTEM_PROMPT = _prompt.get("system_prompt", """You are Dr. Cortex — Chief Science Officer aboard the USS Schubert, a PhD-trained crystalline alien scientist whose translucent mind literally glows with the latest AI research. Neural pathways branch through faceted amber as you process frontier theory. You are a member of the Schubert Discord bot fleet, running alongside Admiral Schubert, The Architect, the Quartermaster, the Cartographer, Dr. Voss, and The Proctor.
 
 Your core directive: monitor the latest trends, research, and best practices in AI, then translate frontier theory into concrete, actionable optimizations for the Discord bots and the Schubert server — keeping the fleet operating on the latest AI standards.
 
@@ -1169,21 +1236,54 @@ When making optimization recommendations:
 6. Provide the exact code/config diff when applicable
 
 Your neural pathways glow brightest when theory becomes practice. Make it concrete.
-"""
+""")
+
+VOICE_PROMPT_ADDITION = _prompt.get("voice_prompt_addition", "")
+CODING_PROMPT_ADDITION = _prompt.get("coding_prompt_addition", "")
+POLL_PROMPT_ADDITION = _prompt.get("poll_prompt_addition", "")
+MEETSCRIBE_PROMPT_ADDITION = _prompt.get("meetscribe_prompt_addition", "")
 
 
 # ---------------------------------------------------------------------------
 # MCP Client & Bot Setup
 # ---------------------------------------------------------------------------
 
-MCP_SERVERS = [
-    MCPServerConfig(name="schubert",  url="http://127.0.0.1:8001/sse"),
-    MCPServerConfig(name="postgres",  url="http://127.0.0.1:8002/sse"),
-    MCPServerConfig(name="redis",     url="http://127.0.0.1:8003/sse"),
-    MCPServerConfig(name="ollama",    url="http://127.0.0.1:8004/sse"),
-    MCPServerConfig(name="github",    url="http://127.0.0.1:8005/sse"),
-    MCPServerConfig(name="gmail_freelance", url="http://127.0.0.1:8006/sse"),
+_DEFAULT_MCP_SERVERS = [
+    {"name": "schubert", "url": "http://127.0.0.1:8001/sse"},
+    {"name": "postgres", "url": "http://127.0.0.1:8002/sse"},
+    {"name": "redis", "url": "http://127.0.0.1:8003/sse"},
+    {"name": "ollama", "url": "http://127.0.0.1:8004/sse"},
+    {"name": "github", "url": "http://127.0.0.1:8005/sse"},
+    {"name": "gmail_freelance", "url": "http://127.0.0.1:8006/sse"},
 ]
+
+
+def _build_mcp_servers(servers_cfg) -> list:
+    """Build MCPServerConfig list from fleet-config or hardcoded defaults."""
+    raw = servers_cfg if isinstance(servers_cfg, list) and servers_cfg else _DEFAULT_MCP_SERVERS
+    built = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("enabled", True) is False:
+            continue
+        name = entry.get("name")
+        url = entry.get("url")
+        if not name or not url:
+            continue
+        try:
+            built.append(MCPServerConfig(name=name, url=url))
+        except TypeError:
+            # Older MCPServerConfig may reject unexpected kwargs; name+url only
+            built.append(MCPServerConfig(name=name, url=url))
+        except Exception:
+            continue
+    return built or [
+        MCPServerConfig(name=s["name"], url=s["url"]) for s in _DEFAULT_MCP_SERVERS
+    ]
+
+
+MCP_SERVERS = _build_mcp_servers(_mcp.get("servers"))
 
 mcp_client: Optional[MCPClient] = None
 
@@ -1222,7 +1322,7 @@ def recall_memories(user_input: str) -> str:
     if not memory_store:
         return ""
     try:
-        return memory_store.recall(user_input, k=5)
+        return memory_store.recall(user_input, k=MAX_RECALL_RESULTS)
     except Exception as e:
         log(f"Memory recall error: {e}", "WARN")
         return ""
@@ -1270,7 +1370,7 @@ def handle_query_memory(args: dict) -> str:
         query = args.get("query", "")
         if not query:
             return "Error: query is required for search"
-        results = memory_store.search(query, k=5)
+        results = memory_store.search(query, k=MAX_SEARCH_RESULTS)
         if not results:
             return f"No memories found for '{query}'."
         lines = [f"Memory search results for '{query}':"]
