@@ -2,11 +2,37 @@
 Multi-Agent Configuration
 =========================
 Defines agent profiles, expertise domains, and coordination settings.
+
+Thresholds are read from fleet-config.json (bots.<bot_id>.multi_agent) when
+available, with fallback to the original hardcoded defaults.
 """
 
+from __future__ import annotations
+
+import logging
+import os
+import sys
 from dataclasses import dataclass
 from typing import List, Dict
 from enum import Enum
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+logger = logging.getLogger("multi_agent_config")
+
+
+def _bot_multi_agent(bot_id: str) -> dict:
+    """Return bots.<bot_id>.multi_agent or {} on any error."""
+    try:
+        from fleet_config_loader import get_bot_config
+        cfg = get_bot_config(bot_id)
+        ma = cfg.get("multi_agent", {})
+        return ma if isinstance(ma, dict) else {}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not load multi_agent config for %s: %s", bot_id, exc)
+        return {}
 
 
 class AgentRole(Enum):
@@ -28,8 +54,16 @@ class AgentProfile:
     response_threshold: float = 0.5  # Minimum score to respond
     urgent_threshold: float = 0.8    # Score for immediate response
     cooldown_seconds: int = 10       # Minimum time between responses
-    
-    
+
+
+_architect_ma = _bot_multi_agent("architect")
+_admiral_ma = _bot_multi_agent("admiral")
+_quartermaster_ma = _bot_multi_agent("quartermaster")
+_cartographer_ma = _bot_multi_agent("cartographer")
+_dr_voss_ma = _bot_multi_agent("dr_voss")
+_proctor_ma = _bot_multi_agent("proctor")
+_cortex_ma = _bot_multi_agent("cortex")
+
 # Agent profiles for the Schubert fleet
 AGENT_PROFILES: Dict[str, AgentProfile] = {
     "architect": AgentProfile(
@@ -43,9 +77,9 @@ AGENT_PROFILES: Dict[str, AgentProfile] = {
             "api", "endpoint", "database", "query", "schema", "migration",
             "lint", "format", "syntax", "compile", "runtime", "exception"
         ],
-        response_threshold=0.5,
-        urgent_threshold=0.8,
-        cooldown_seconds=10,
+        response_threshold=_architect_ma.get("response_threshold", 0.5),
+        urgent_threshold=_architect_ma.get("urgent_threshold", 0.8),
+        cooldown_seconds=_architect_ma.get("cooldown_seconds", 10),
     ),
     "admiral": AgentProfile(
         name="admiral",
@@ -55,9 +89,9 @@ AGENT_PROFILES: Dict[str, AgentProfile] = {
             "mcp", "tools", "fleet", "coordinate", "delegate", "overview",
             "summary", "context", "history", "what", "who", "when", "where"
         ],
-        response_threshold=0.4,  # Lower threshold for coordinator
-        urgent_threshold=0.7,
-        cooldown_seconds=5,
+        response_threshold=_admiral_ma.get("response_threshold", 0.4),  # Lower threshold for coordinator
+        urgent_threshold=_admiral_ma.get("urgent_threshold", 0.7),
+        cooldown_seconds=_admiral_ma.get("cooldown_seconds", 5),
     ),
     "quartermaster": AgentProfile(
         name="quartermaster",
@@ -68,9 +102,9 @@ AGENT_PROFILES: Dict[str, AgentProfile] = {
             "dns", "network", "port", "process", "resource", "disk", "cpu",
             "memory", "load", "performance", "monitoring", "logs", "health"
         ],
-        response_threshold=0.5,
-        urgent_threshold=0.8,
-        cooldown_seconds=10,
+        response_threshold=_quartermaster_ma.get("response_threshold", 0.5),
+        urgent_threshold=_quartermaster_ma.get("urgent_threshold", 0.8),
+        cooldown_seconds=_quartermaster_ma.get("cooldown_seconds", 10),
     ),
     "cartographer": AgentProfile(
         name="cartographer",
@@ -80,50 +114,50 @@ AGENT_PROFILES: Dict[str, AgentProfile] = {
             "report", "audit", "knowledge", "update log", "changelog",
             "describe", "explain", "summary", "overview", "notes", "record"
         ],
-        response_threshold=0.5,
-        urgent_threshold=0.8,
-        cooldown_seconds=10,
+        response_threshold=_cartographer_ma.get("response_threshold", 0.5),
+        urgent_threshold=_cartographer_ma.get("urgent_threshold", 0.8),
+        cooldown_seconds=_cartographer_ma.get("cooldown_seconds", 10),
     ),
-        "dr_voss": AgentProfile(
-            name="dr_voss",
-            role=AgentRole.MEDICAL,
-            expertise_keywords=[
-                "health", "diagnostic", "check", "monitor", "issue", "problem",
-                "warning", "alert", "failure", "down", "unhealthy", "error",
-                "exception", "crash", "hang", "slow", "latency", "timeout",
-                "medical", "doctor", "voss", "diagnosis", "symptom", "triage"
-            ],
-            response_threshold=0.5,
-            urgent_threshold=0.8,
-            cooldown_seconds=10,
-        ),
-        "proctor": AgentProfile(
-            name="proctor",
-            role=AgentRole.DOCUMENTATION,  # Observer role - doesn't actively respond
-            expertise_keywords=[
-                "performance", "optimization", "metrics", "analysis", "statistics",
-                "response time", "latency", "error rate", "monitoring", "observer",
-                "proctor", "delegate", "architect delegation", "bottleneck"
-            ],
-            response_threshold=0.9,  # Very high threshold - rarely responds in multi-agent
-            urgent_threshold=0.95,
-            cooldown_seconds=60,  # Longer cooldown - observer role
-        ),
-        "cortex": AgentProfile(
-            name="cortex",
-            role=AgentRole.SCIENCE,
-            expertise_keywords=[
-                "ai", "research", "optimization", "model", "benchmark", "prompt",
-                "llm", "transformer", "rag", "embedding", "fine-tune", "training",
-                "paper", "arxiv", "best practice", "latest", "trend", "improve",
-                "performance", "efficiency", "cortex", "science", "recommend",
-                "upgrade", "enhance", "analysis", "review", "evaluate", "compare"
-            ],
-            response_threshold=0.5,
-            urgent_threshold=0.8,
-            cooldown_seconds=10,
-        ),
-    }
+    "dr_voss": AgentProfile(
+        name="dr_voss",
+        role=AgentRole.MEDICAL,
+        expertise_keywords=[
+            "health", "diagnostic", "check", "monitor", "issue", "problem",
+            "warning", "alert", "failure", "down", "unhealthy", "error",
+            "exception", "crash", "hang", "slow", "latency", "timeout",
+            "medical", "doctor", "voss", "diagnosis", "symptom", "triage"
+        ],
+        response_threshold=_dr_voss_ma.get("response_threshold", 0.5),
+        urgent_threshold=_dr_voss_ma.get("urgent_threshold", 0.8),
+        cooldown_seconds=_dr_voss_ma.get("cooldown_seconds", 10),
+    ),
+    "proctor": AgentProfile(
+        name="proctor",
+        role=AgentRole.DOCUMENTATION,  # Observer role - doesn't actively respond
+        expertise_keywords=[
+            "performance", "optimization", "metrics", "analysis", "statistics",
+            "response time", "latency", "error rate", "monitoring", "observer",
+            "proctor", "delegate", "architect delegation", "bottleneck"
+        ],
+        response_threshold=_proctor_ma.get("response_threshold", 0.9),  # Very high threshold - rarely responds in multi-agent
+        urgent_threshold=_proctor_ma.get("urgent_threshold", 0.95),
+        cooldown_seconds=_proctor_ma.get("cooldown_seconds", 60),  # Longer cooldown - observer role
+    ),
+    "cortex": AgentProfile(
+        name="cortex",
+        role=AgentRole.SCIENCE,
+        expertise_keywords=[
+            "ai", "research", "optimization", "model", "benchmark", "prompt",
+            "llm", "transformer", "rag", "embedding", "fine-tune", "training",
+            "paper", "arxiv", "best practice", "latest", "trend", "improve",
+            "performance", "efficiency", "cortex", "science", "recommend",
+            "upgrade", "enhance", "analysis", "review", "evaluate", "compare"
+        ],
+        response_threshold=_cortex_ma.get("response_threshold", 0.5),
+        urgent_threshold=_cortex_ma.get("urgent_threshold", 0.8),
+        cooldown_seconds=_cortex_ma.get("cooldown_seconds", 10),
+    ),
+}
 
 
 def get_agent_profile(agent_name: str) -> AgentProfile:
@@ -140,7 +174,7 @@ class ChannelConfig:
     coordinator_agent: str = "admiral"
     require_mention: bool = False
     max_concurrent_responses: int = 1
-    
+
 
 # Default channel configurations (can be overridden by database)
 DEFAULT_CHANNEL_CONFIGS: Dict[int, ChannelConfig] = {}

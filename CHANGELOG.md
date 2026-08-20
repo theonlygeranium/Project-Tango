@@ -9,6 +9,19 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ## [Unreleased]
 
+### Changed
+- Externalized Discord bot hardcoded constants to `fleet-config.json` via new
+  `scripts/fleet_config_loader.py`. Bots read LLM, prompt, guardrails, memory,
+  voice, MCP, and multi-agent settings at startup with fallback to existing
+  hardcoded defaults when the file is missing, corrupt, or incomplete.
+  Modified in this repo: `schubert-bot.py` (bot_id `admiral`), `cortex-bot.py`
+  (bot_id `cortex`), and `multi_agent_config.py`. Fleet-side scripts not present
+  in this repository (`schubert-bot-v2.py`, `architect-bot.py`, `dr-voss-bot.py`,
+  `cartographer-bot.py`, `quartermaster-bot.py`, `proctor-bot.py`,
+  `fleet_protocol.py`, `conversation_coordinator.py`, `context_builder.py`,
+  `scheduler.py`) were skipped — apply the same pattern on Schubert when those
+  files are synced. See ADR `docs/decisions/2026-08-20-fleet-config-externalization.md`.
+
 ### Added
 - Added Dr. Cortex bot (`cortex-bot.py`, `schubert-cortex.service`) — Chief Science Officer for the
   USS Schubert fleet. A PhD-trained crystalline alien scientist who monitors the latest AI research

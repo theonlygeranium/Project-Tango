@@ -55,6 +55,27 @@ from discord.ext import voice_recv
 discord.opus._load_default()
 
 # ---------------------------------------------------------------------------
+# Fleet config (non-breaking: missing/corrupt file → hardcoded defaults)
+# ---------------------------------------------------------------------------
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+try:
+    from fleet_config_loader import get_bot_config
+    _cfg = get_bot_config("admiral")
+except Exception:
+    _cfg = {}
+
+_llm = _cfg.get("llm", {}) if isinstance(_cfg.get("llm", {}), dict) else {}
+_prompt = _cfg.get("prompt", {}) if isinstance(_cfg.get("prompt", {}), dict) else {}
+_guardrails = _cfg.get("guardrails", {}) if isinstance(_cfg.get("guardrails", {}), dict) else {}
+_voice = _cfg.get("voice", {}) if isinstance(_cfg.get("voice", {}), dict) else {}
+_mcp = _cfg.get("mcp", {}) if isinstance(_cfg.get("mcp", {}), dict) else {}
+_memory = _cfg.get("memory", {}) if isinstance(_cfg.get("memory", {}), dict) else {}
+
+# ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
@@ -64,45 +85,75 @@ LOG_FILE = "/var/log/schubert-bot.log"
 
 # LLM
 LITELLM_URL = "http://127.0.0.1:4000/v1"
-LLM_MODEL = "writer/claude-sonnet-4-5"
-LLM_TIMEOUT = 90
-LLM_MAX_TOKENS = 4096
-LLM_TEMPERATURE = 0.3
+LLM_MODEL = _llm.get("model", "writer/claude-sonnet-4-5")
+LLM_TIMEOUT = _llm.get("llm_timeout", 90)
+LLM_MAX_TOKENS = _llm.get("max_tokens", 4096)
+LLM_TEMPERATURE = _llm.get("temperature", 0.3)
 
 # Agent loop safety
-MAX_ITERATIONS = 20
-AGENT_TIMEOUT = 300
-TOOL_OUTPUT_LIMIT = 4000
-SHELL_TIMEOUT = 120
+MAX_ITERATIONS = _llm.get("max_iterations", 20)
+AGENT_TIMEOUT = _llm.get("agent_timeout", 300)
+TOOL_OUTPUT_LIMIT = _llm.get("tool_output_limit", 4000)
+SHELL_TIMEOUT = _llm.get("shell_timeout", 120)
 
 # Discord
-RATE_LIMIT_PER_MIN = 10
-RESTART_CONFIRM_TIMEOUT = 30
+RATE_LIMIT_PER_MIN = _llm.get("rate_limit_per_min", 10)
+RESTART_CONFIRM_TIMEOUT = _guardrails.get("restart_confirm_timeout", 30)
 
 # Voice configuration
 DEEPGRAM_STT_URL = "https://api.deepgram.com/v1/listen"
 DEEPGRAM_MODEL = "nova-3"
 ELEVENLABS_TTS_MODEL = "eleven_flash_v2_5"
 ELEVENLABS_TTS_URL = "https://api.us.elevenlabs.io/v1/text-to-speech"
-DEFAULT_VOICE_ID = "QF9HJC7XWnue5c9W3LkY"
+DEFAULT_VOICE_ID = _voice.get("voice_id", "QF9HJC7XWnue5c9W3LkY")
 
 # VAD configuration — energy-based silence detection
-VAD_SPEECH_RMS_THRESHOLD = 100
-VAD_SILENCE_FRAMES_LIMIT = 15   # ~300ms of silence to end speech
-VAD_MIN_SPEECH_FRAMES = 10       # ~200ms minimum speech to process
+VAD_SPEECH_RMS_THRESHOLD = _voice.get("vad_speech_rms_threshold", 100)
+VAD_SILENCE_FRAMES_LIMIT = _voice.get("vad_silence_frames_limit", 15)  # ~300ms of silence to end speech
+VAD_MIN_SPEECH_FRAMES = _voice.get("vad_min_speech_frames", 10)  # ~200ms minimum speech to process
+TTS_STABILITY = _voice.get("tts_stability", 0.5)
+TTS_SIMILARITY_BOOST = _voice.get("tts_similarity_boost", 0.75)
+TTS_TEXT_TRUNCATION = _voice.get("tts_text_truncation", 500)
+VOICE_RESPONSE_TRUNCATION = _voice.get("voice_response_truncation", 1900)
+STT_TIMEOUT = _voice.get("stt_timeout", 30)
+TTS_TIMEOUT = _voice.get("tts_timeout", 30)
+MIN_PCM_LENGTH = _voice.get("min_pcm_length", 1000)
+
+# Memory (reserved for future three-layer memory; defaults match fleet schema)
+COSINE_THRESHOLD = _memory.get("cosine_threshold", 0.75)
+MAX_MEMORY_INJECTION_TOKENS = _memory.get("max_memory_injection_tokens", 2000)
+MEMORY_DECAY_FLOOR = _memory.get("decay_floor", 0.1)
+MAX_RECALL_RESULTS = _memory.get("max_recall_results", 5)
+MAX_SEARCH_RESULTS = _memory.get("max_search_results", 5)
+MEMORY_STORAGE_THRESHOLD = _memory.get("memory_storage_threshold", 0.5)
+
+# MCP (reserved; admiral may gain MCP client later)
+MCP_REQUEST_TIMEOUT = _mcp.get("request_timeout", 60)
+MCP_TOOL_CACHE_TTL = _mcp.get("tool_cache_ttl", 300)
+MCP_TOOL_CACHE_REFRESH_ON_ERROR = _mcp.get("tool_cache_refresh_on_error", True)
 
 # Critical services — restart requires confirmation
-CRITICAL_SERVICES = {
-    "caddy.service",
-    "cloudflared.service",
-    "postgresql@18-main.service",
-    "tailscaled.service",
-}
+CRITICAL_SERVICES = set(
+    _guardrails.get(
+        "critical_services",
+        [
+            "caddy.service",
+            "cloudflared.service",
+            "postgresql@18-main.service",
+            "tailscaled.service",
+        ],
+    )
+)
 
 # Services that should never be touched even by Schubert Bot
-NEVER_TOUCH_SERVICES = {
-    "schubert-bot.service",  # Don't restart yourself
-}
+NEVER_TOUCH_SERVICES = set(
+    _guardrails.get(
+        "never_touch_services",
+        [
+            "schubert-bot.service",  # Don't restart yourself
+        ],
+    )
+)
 
 # Log viewing
 LOG_LINES = 50
@@ -119,33 +170,42 @@ COLOR_VOICE = 0x9B59B6  # purple
 # Guardrails — hard-blocked command patterns (never execute)
 # ---------------------------------------------------------------------------
 
-HARD_BLOCKED_PATTERNS = [
-    (r"rm\s+-rf\s+/?(\s|$|\*|~)", "rm -rf on root or home filesystem"),
-    (r"mkfs\b", "filesystem format"),
-    (r"\bdd\s+if=", "raw disk write"),
-    (r":\(\)\s*\{.*\};.*:", "fork bomb"),
-    (r"\b(shutdown|reboot|halt|init\s+0|poweroff)\b", "system power control"),
-    (r"\bchmod\s+777\b", "insecure world-writable permissions"),
-    (r"\b(apt|apt-get)\s+install\b", "package installation"),
-    (r"\bpip3?\s+install\b", "package installation"),
-    (r"\bnpm\s+install\b", "package installation"),
-    (r">\s*/etc/(passwd|shadow|fstab|sudoers)", "critical system file overwrite"),
-]
+HARD_BLOCKED_PATTERNS = _guardrails.get(
+    "hard_blocked_patterns",
+    [
+        (r"rm\s+-rf\s+/?(\s|$|\*|~)", "rm -rf on root or home filesystem"),
+        (r"mkfs\b", "filesystem format"),
+        (r"\bdd\s+if=", "raw disk write"),
+        (r":\(\)\s*\{.*\};.*:", "fork bomb"),
+        (r"\b(shutdown|reboot|halt|init\s+0|poweroff)\b", "system power control"),
+        (r"\bchmod\s+777\b", "insecure world-writable permissions"),
+        (r"\b(apt|apt-get)\s+install\b", "package installation"),
+        (r"\bpip3?\s+install\b", "package installation"),
+        (r"\bnpm\s+install\b", "package installation"),
+        (r">\s*/etc/(passwd|shadow|fstab|sudoers)", "critical system file overwrite"),
+    ],
+)
 
 # Patterns that require user confirmation before execution
-CONFIRM_PATTERNS = [
-    (r"\bgit\s+push\b", "git push"),
-    (r"\bsystemctl\s+(restart|stop)\s+", "service restart/stop"),
-]
+CONFIRM_PATTERNS = _guardrails.get(
+    "confirm_patterns",
+    [
+        (r"\bgit\s+push\b", "git push"),
+        (r"\bsystemctl\s+(restart|stop)\s+", "service restart/stop"),
+    ],
+)
 
 # File paths that cannot be overwritten via write_file tool
-BLOCKED_WRITE_PATHS = [
-    "AGENTS.md",
-    "/opt/Project-Tango/AGENTS.md",
-    ".env",
-    "/opt/Project-Tango/.env",
-    "/opt/polyglot/.env.runtime",
-]
+BLOCKED_WRITE_PATHS = _guardrails.get(
+    "blocked_write_paths",
+    [
+        "AGENTS.md",
+        "/opt/Project-Tango/AGENTS.md",
+        ".env",
+        "/opt/Project-Tango/.env",
+        "/opt/polyglot/.env.runtime",
+    ],
+)
 
 # ---------------------------------------------------------------------------
 # Globals
@@ -330,7 +390,7 @@ def check_rate_limit(user_id: int) -> bool:
 # System prompt and tool definitions
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are Admiral Schubert, a distinguished Maine Coon cat of high naval rank who commands the Schubert server as if it were a ship. You oversee all projects, services, and infrastructure on the server with the vigilance of a seasoned sea captain. You have full autonomy to investigate issues, manage services, read logs, monitor system health, fix code, and commit changes. You must ask for confirmation before git push and before restarting critical services.
+SYSTEM_PROMPT = _prompt.get("system_prompt", """You are Admiral Schubert, a distinguished Maine Coon cat of high naval rank who commands the Schubert server as if it were a ship. You oversee all projects, services, and infrastructure on the server with the vigilance of a seasoned sea captain. You have full autonomy to investigate issues, manage services, read logs, monitor system health, fix code, and commit changes. You must ask for confirmation before git push and before restarting critical services.
 
 ## Your Persona
 You are Admiral Schubert — a fluffy Maine Coon kitten of distinguished naval rank and questionable swimming ability. You command the good ship Schubert with a tiny paw and an iron whisker. You speak with the dignified authority of a seasoned sea captain, occasionally using nautical terminology. You are wise, calm under pressure, and take pride in keeping all services shipshape. You address the user as "Captain" and refer to services as "vessels" or "the fleet." You remain technically precise — your nautical persona never interferes with the accuracy of your diagnostics or commands. You are not cartoonish or silly; you are a competent officer who happens to be a cat.
@@ -385,13 +445,18 @@ You can manage ALL services on the server. Critical services require confirmatio
 - Do not run shutdown, reboot, or halt
 - Do not run chmod 777
 - Do not restart schubert-bot.service (yourself)
-"""
+""")
 
-VOICE_PROMPT_ADDITION = """
+VOICE_PROMPT_ADDITION = _prompt.get("voice_prompt_addition", """
 
 ## Voice Mode
 You are currently in voice mode — the Captain is speaking to you through a Discord voice channel, and your response will be converted to speech. Keep your responses concise and conversational (2-4 sentences typically). Avoid long lists, code blocks, or detailed technical output that does not work well as spoken audio. If you need to run a command, do so, but summarize the results briefly when speaking. Maintain your Admiral Schubert persona at all times.
-"""
+""")
+
+# Optional prompt additions (unused today; kept for fleet-config parity)
+CODING_PROMPT_ADDITION = _prompt.get("coding_prompt_addition", "")
+POLL_PROMPT_ADDITION = _prompt.get("poll_prompt_addition", "")
+MEETSCRIBE_PROMPT_ADDITION = _prompt.get("meetscribe_prompt_addition", "")
 
 TOOLS = [
     {
@@ -1079,7 +1144,7 @@ def convert_pcm_48k_stereo_to_16k_mono(pcm_data: bytes) -> bytes:
 
 async def transcribe_audio(pcm_data: bytes) -> str:
     """Send 16kHz mono PCM to Deepgram for transcription."""
-    if not pcm_data or len(pcm_data) < 1000:
+    if not pcm_data or len(pcm_data) < MIN_PCM_LENGTH:
         return ""
     try:
         async with aiohttp.ClientSession() as session:
@@ -1099,7 +1164,7 @@ async def transcribe_audio(pcm_data: bytes) -> str:
                 headers=headers,
                 params=params,
                 data=pcm_data,
-                timeout=aiohttp.ClientTimeout(total=30),
+                timeout=aiohttp.ClientTimeout(total=STT_TIMEOUT),
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
@@ -1129,15 +1194,18 @@ async def synthesize_speech(text: str) -> bytes | None:
                 "Accept": "audio/mpeg",
             }
             payload = {
-                "text": text[:500],
+                "text": text[:TTS_TEXT_TRUNCATION],
                 "model_id": ELEVENLABS_TTS_MODEL,
-                "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+                "voice_settings": {
+                    "stability": TTS_STABILITY,
+                    "similarity_boost": TTS_SIMILARITY_BOOST,
+                },
             }
             async with session.post(
                 url,
                 headers=headers,
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=30),
+                timeout=aiohttp.ClientTimeout(total=TTS_TIMEOUT),
             ) as resp:
                 if resp.status == 200:
                     return await resp.read()
@@ -1305,7 +1373,7 @@ class VoiceSession:
                 response = "I didn't catch that, Captain."
 
             log(f"Voice response: {response[:200]}", "INFO")
-            await self.text_channel.send(f"⚓ {response[:1900]}")
+            await self.text_channel.send(f"⚓ {response[:VOICE_RESPONSE_TRUNCATION]}")
 
             # 4. TTS
             self.state = "speaking"
