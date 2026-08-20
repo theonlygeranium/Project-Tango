@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from typing import Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -32,14 +33,30 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("schubert-bot.context")
 
+# ---------------------------------------------------------------------------
+# Fleet config (non-breaking: missing/corrupt file → hardcoded defaults)
+# ---------------------------------------------------------------------------
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+try:
+    from fleet_config_loader import get_fleet_config
+    _fleet = get_fleet_config()
+except Exception:
+    _fleet = {}
+
+_context_builder = _fleet.get("context_builder", {}) if isinstance(_fleet.get("context_builder", {}), dict) else {}
+
 
 # ---------------------------------------------------------------------------
 # Token budget constants (approximate, character-based for simplicity)
 # ---------------------------------------------------------------------------
 
-MAX_CONTEXT_FILE_CHARS = 8000  # Per-file limit for context file injection
-MAX_TOTAL_CONTEXT_CHARS = 20000  # Total budget for all context files combined
-MAX_PROJECT_PROMPT_CHARS = 4000  # Max for project-specific system prompt
+MAX_CONTEXT_FILE_CHARS = _context_builder.get("max_context_file_chars", 8000)
+MAX_TOTAL_CONTEXT_CHARS = _context_builder.get("max_total_context_chars", 20000)
+MAX_PROJECT_PROMPT_CHARS = _context_builder.get("max_project_prompt_chars", 4000)
 
 
 class ContextBuilder:

@@ -19,12 +19,30 @@ import uuid
 import time
 import logging
 import asyncio
+import os
+import sys
 import discord
+
+# ---------------------------------------------------------------------------
+# Fleet config (non-breaking: missing/corrupt file → hardcoded defaults)
+# ---------------------------------------------------------------------------
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+try:
+    from fleet_config_loader import get_fleet_config
+    _fleet = get_fleet_config()
+except Exception:
+    _fleet = {}
+
+_fleet_protocol = _fleet.get("fleet_protocol", {}) if isinstance(_fleet.get("fleet_protocol", {}), dict) else {}
 
 logger = logging.getLogger("fleet")
 
-MAX_CHAIN_DEPTH = 3
-DELEGATION_TIMEOUT = 300  # seconds to wait for a subagent response (5 min)
+MAX_CHAIN_DEPTH = _fleet_protocol.get("max_chain_depth", 3)
+DELEGATION_TIMEOUT = _fleet_protocol.get("delegation_timeout", 300)
 
 # Tag regex: [FLEET:chain=<uuid>:turn=<int>:from=<name>:to=<name>[:status=<status>]]
 FLEET_TAG_RE = re.compile(
