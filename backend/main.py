@@ -1535,6 +1535,16 @@ async def entrypoint(ctx: Any) -> None:
             latency_ms=_message_latency_ms(ev.item),
         )
 
+        if speaker == "agent":
+            latency_ms = _message_latency_ms(ev.item)
+            if latency_ms is not None:
+                logger.info(
+                    "Agent turn latency_ms=%d persona=%s room=%s",
+                    latency_ms,
+                    persona.id,
+                    room_name,
+                )
+
     @session.on("session_usage_updated")
     def on_session_usage_updated(ev: SessionUsageUpdatedEvent) -> None:
         nonlocal total_tokens
