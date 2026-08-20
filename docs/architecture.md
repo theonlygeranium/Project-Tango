@@ -1,7 +1,7 @@
 # Project Tango — System Architecture
 
 > Keep this document in sync with the actual state of Schubert. Do not add aspirational content.
-> Last updated: 2026-08-20 — Discord fleet-config.json externalization (phase 2)
+> Last updated: 2026-08-20 — v2 voice pipeline optimization (eager EOT)
 
 ---
 
@@ -52,7 +52,8 @@ LiveKit Cloud  (wss://project-tango-0xs3szq3.livekit.cloud)
         ▼
 Deepgram STT plugin (inside LiveKit Agent Worker on Schubert)
         ├── English personas → flux-general-en (Flux STTv2)
-        │     Native end-of-turn detection, ~80ms latency
+        │     Native end-of-turn detection + eager EOT (per-persona threshold)
+        │     EagerEndOfTurn → speculative LLM generation (hundreds of ms saved)
         └── Tagalog personas → nova-3, language="tl", smart_format=True
               Correct Taglish orthography and comprehension
         │  Transcribed text
