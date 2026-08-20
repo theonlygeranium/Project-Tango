@@ -262,3 +262,20 @@ See `docs/decisions/` for full ADRs.
 | F5-TTS sidecar for Jeremiah pilot | Self-hosted TTS without disrupting other personas | ADR-008 |
 | Groq Tagalog defaults + universal voice layer | Reproduce current live persona behavior | ADR-009 |
 | Password accounts + server persona authorization | Protect every browser/API path and isolate account data | ADR-010 |
+| Discord fleet constants via fleet-config.json | Tunable without code edits; hardcoded defaults if file missing | `2026-08-20-fleet-config-externalization.md` |
+
+---
+
+## Discord Fleet Bots (Schubert)
+
+Admiral Schubert (`scripts/schubert-bot.py`, bot_id `admiral`) and Dr. Cortex
+(`scripts/cortex-bot.py`, bot_id `cortex`) load tunables from
+`/opt/Project-Tango/config/fleet-config.json` through
+`scripts/fleet_config_loader.py` (override path with `FLEET_CONFIG_PATH`).
+
+- Missing, corrupt, or incomplete config → existing hardcoded defaults
+- Multi-agent thresholds live under `bots.<bot_id>.multi_agent` and are applied
+  in `scripts/multi_agent_config.py`
+- The JSON file is owned by Fleet Command API and is not committed to this repo
+- Do not restart Discord bot services as part of this change — operator restart
+  after review
