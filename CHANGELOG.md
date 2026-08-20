@@ -15,12 +15,17 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
   voice, MCP, and multi-agent settings at startup with fallback to existing
   hardcoded defaults when the file is missing, corrupt, or incomplete.
   Modified in this repo: `schubert-bot.py` (bot_id `admiral`), `cortex-bot.py`
-  (bot_id `cortex`), and `multi_agent_config.py`. Fleet-side scripts not present
-  in this repository (`schubert-bot-v2.py`, `architect-bot.py`, `dr-voss-bot.py`,
-  `cartographer-bot.py`, `quartermaster-bot.py`, `proctor-bot.py`,
-  `fleet_protocol.py`, `conversation_coordinator.py`, `context_builder.py`,
-  `scheduler.py`) were skipped — apply the same pattern on Schubert when those
-  files are synced. See ADR `docs/decisions/2026-08-20-fleet-config-externalization.md`.
+  (bot_id `cortex`), and `multi_agent_config.py`. See ADR
+  `docs/decisions/2026-08-20-fleet-config-externalization.md`.
+- Phase 2 fleet-config externalization: remaining Discord bot scripts and shared
+  modules now read tunables from `fleet-config.json` via `fleet_config_loader`
+  with non-breaking hardcoded fallbacks. Modified bots: `architect-bot.py`
+  (`architect`), `dr-voss-bot.py` (`dr_voss`), `cartographer-bot.py`
+  (`cartographer`), `quartermaster-bot.py` (`quartermaster`), `proctor-bot.py`
+  (`proctor`), `schubert-bot-v2.py` (`admiral`), `dr-cortex-bot.py` (`cortex`).
+  Modified shared modules: `fleet_protocol.py`, `context_builder.py`,
+  `scheduler.py`, `conversation_coordinator.py`. See ADR
+  `docs/decisions/2026-08-20-fleet-config-externalization-phase-2.md`.
 
 ### Added
 - Added Dr. Cortex bot (`cortex-bot.py`, `schubert-cortex.service`) — Chief Science Officer for the

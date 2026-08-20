@@ -7,10 +7,35 @@ Uses Redis for distributed state and coordination locks.
 
 import asyncio
 import json
+import os
+import sys
 import time
 from typing import Optional, Dict, List, Set
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
+
+# ---------------------------------------------------------------------------
+# Fleet config (non-breaking: missing/corrupt file → hardcoded defaults)
+# ---------------------------------------------------------------------------
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+try:
+    from fleet_config_loader import get_fleet_config
+    _fleet = get_fleet_config()
+except Exception:
+    _fleet = {}
+
+_conversation = _fleet.get("conversation", {}) if isinstance(_fleet.get("conversation", {}), dict) else {}
+
+# Conversation coordination tunables (from fleet-config conversation section)
+RESPONSE_LOCK_TIMEOUT = _conversation.get("response_lock_timeout", 30.0)
+ANSWERED_TTL = _conversation.get("answered_ttl", 3600)
+MESSAGE_RETENTION = _conversation.get("message_retention", 50)
+REDIS_MESSAGE_TTL = _conversation.get("redis_message_ttl", 86400)
+HEARTBEAT_TTL = _conversation.get("heartbeat_ttl", 60)
 
 
 @dataclass
@@ -123,8 +148,8 @@ class ConversationCoordinator:
         self._local_messages[channel_id].append(msg)
         
         # Keep only last 50 messages per channel
-        if len(self._local_messages[channel_id]) > 50:
-            self._local_messages[channel_id] = self._local_messages[channel_id][-50:]
+        if len(self._local_messages[channel_id]) > MESSAGE_RETENTION:
+            self._local_messages[channel_id] = self._local_messages[channel_id][-MESSAGE_RETENTION:]
         
         # Store in Redis if available
         if self.redis:
@@ -137,7 +162,7 @@ class ConversationCoordinator:
             value = json.dumps(asdict(msg))
             # Store with 24h TTL
             await self.redis.zadd(key, {value: msg.timestamp})
-            await self.redis.expire(key, 86400)  # 24 hours
+            await self.redis.expire(key, REDIS_MESSAGE_TTL)  # default 24 hours
         except Exception as e:
             # Non-critical - continue without Redis
             pass
@@ -145,7 +170,7 @@ class ConversationCoordinator:
     async def acquire_response_lock(
         self,
         message_id: int,
-        timeout_seconds: float = 30.0
+        timeout_seconds: float = RESPONSE_LOCK_TIMEOUT
     ) -> bool:
         """
         Try to acquire exclusive lock to respond to a message.
@@ -220,7 +245,7 @@ class ConversationCoordinator:
         if self.redis:
             try:
                 answered_key = f"multiagent:answered:{message_id}"
-                await self.redis.set(answered_key, self.agent_name, ex=3600)  # 1 hour TTL
+                await self.redis.set(answered_key, self.agent_name, ex=ANSWERED_TTL)  # default 1 hour TTL
             except Exception:
                 pass
     
@@ -292,7 +317,7 @@ class ConversationCoordinator:
         if self.redis:
             try:
                 heartbeat_key = f"multiagent:heartbeat:{self.agent_name}"
-                await self.redis.set(heartbeat_key, int(self._last_heartbeat), ex=60)
+                await self.redis.set(heartbeat_key, int(self._last_heartbeat), ex=HEARTBEAT_TTL)
             except Exception:
                 pass
     

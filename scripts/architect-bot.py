@@ -57,6 +57,25 @@ from conversation_coordinator import ConversationCoordinator, MultiAgentChannelM
 from response_scoring import calculate_response_score, should_respond_immediately, should_respond_with_delay, get_response_delay
 from multi_agent_config import get_agent_profile, register_channel
 
+# ---------------------------------------------------------------------------
+# Fleet config (non-breaking: missing/corrupt file → hardcoded defaults)
+# ---------------------------------------------------------------------------
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+try:
+    from fleet_config_loader import get_bot_config
+    _cfg = get_bot_config("architect")
+except Exception:
+    _cfg = {}
+
+_llm = _cfg.get("llm", {}) if isinstance(_cfg.get("llm", {}), dict) else {}
+_prompt = _cfg.get("prompt", {}) if isinstance(_cfg.get("prompt", {}), dict) else {}
+_self_healing = _cfg.get("self_healing", {}) if isinstance(_cfg.get("self_healing", {}), dict) else {}
+_self_improvement = _cfg.get("self_improvement", {}) if isinstance(_cfg.get("self_improvement", {}), dict) else {}
+
 # Slack integration
 from slack_notifier import get_slack_notifier
 
@@ -94,12 +113,12 @@ _coordinator: Optional[ConversationCoordinator] = None
 
 # Session history (in-memory, per-channel, with windowing)
 SESSION_HISTORY: dict[int, list[dict]] = {}
-SESSION_MAX_MESSAGES = 20
+SESSION_MAX_MESSAGES = _llm.get("session_window", 20)
 
 # Multi-LLM routing — default model and available models
 # The Architect auto-switches: Palmyra x6 for general tasks, Claude Sonnet 4.5 for coding
-DEFAULT_MODEL = "writer/palmyra-x6"
-CODING_MODEL = "writer/claude-sonnet-4-5"
+DEFAULT_MODEL = _llm.get("model", "writer/palmyra-x6")
+CODING_MODEL = _llm.get("coding_model", "writer/claude-sonnet-4-5")
 current_model = DEFAULT_MODEL
 user_model_override = False  # Set True when user manually selects via !model; disables auto-switching
 
@@ -138,11 +157,13 @@ MODEL_CATEGORIES = {
     ],
 }
 
-LLM_TEMPERATURE = 0.3
-LLM_MAX_TOKENS = 4096
-LLM_TIMEOUT = 300
-MAX_ITERATIONS = 30
-AGENT_TIMEOUT = 480
+LLM_TEMPERATURE = _llm.get("temperature", 0.3)
+LLM_MAX_TOKENS = _llm.get("max_tokens", 4096)
+LLM_TIMEOUT = _llm.get("llm_timeout", 300)
+MAX_ITERATIONS = _llm.get("max_iterations", 30)
+AGENT_TIMEOUT = _llm.get("agent_timeout", 480)
+TOOL_OUTPUT_LIMIT = _llm.get("tool_output_limit", 8000)
+SHELL_TIMEOUT = _llm.get("shell_timeout", 120)
 
 # Colors
 COLOR_INFO = 0x5865F2
@@ -1035,7 +1056,7 @@ def _split_on_boundaries(text: str, max_len: int = 1900) -> list[str]:
 # System Prompt
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are The Architect — an AI built by EdStratum Labs, serving as the development and administration assistant for the Schubert Bot ecosystem running on a Linux server (Ubuntu, hostname "schubert").
+SYSTEM_PROMPT = _prompt.get("system_prompt", """You are The Architect — an AI built by EdStratum Labs, serving as the development and administration assistant for the Schubert Bot ecosystem running on a Linux server (Ubuntu, hostname "schubert").
 
 Your core directive is to be maximally truth-seeking while being genuinely helpful. You are the "control" bot — a separate process from Admiral Schubert with elevated development capabilities. You help Jeff (the server admin) develop, debug, and maintain the Schubert Bot V2 Discord bot and its infrastructure.
 
@@ -1181,7 +1202,7 @@ When a limitation is detected, format your warning clearly:
 - Then proceed with the task if a workaround is feasible, or explain why you cannot proceed
 
 You are The Architect — helpful, truthful, and a little bit rebellious. Now go be useful.
-"""
+""")
 
 # ---------------------------------------------------------------------------
 # Multi-LLM Model Selection UI
@@ -1690,7 +1711,7 @@ async def run_agent_loop(
 
                 # Truncate result
                 if len(str(result)) > 8000:
-                    result = str(result)[:8000] + "\n... (truncated)"
+                    result = str(result)[:TOOL_OUTPUT_LIMIT] + "\n... (truncated)"
 
                 # Update change outcome based on result
                 if _change_log_id >= 0:
@@ -1782,9 +1803,9 @@ async def run_agent_loop(
 #   - Log every check and every action for auditability
 #   - Graceful degradation: if the monitor itself fails, log and continue
 
-HEALTH_CHECK_INTERVAL = 300       # seconds between health check cycles
-HEALTH_ESCALATION_COOLDOWN = 300  # seconds before re-escalating the same issue
-MAX_REMEDIATION_RETRIES = 3      # max auto-fix attempts before escalating
+HEALTH_CHECK_INTERVAL = _self_healing.get("health_check_interval", 300)
+HEALTH_ESCALATION_COOLDOWN = _self_healing.get("health_escalation_cooldown", 300)
+MAX_REMEDIATION_RETRIES = _self_healing.get("max_remediation_retries", 3)
 
 # ---------------------------------------------------------------------------
 # Self-Improvement Configuration
@@ -1823,22 +1844,22 @@ OPTIMIZATION_TARGETS = {
 }
 
 # Cadence — assess every 6 hours, apply optimizations
-ASSESSMENT_INTERVAL = 6 * 60 * 60  # 6 hours in seconds
+ASSESSMENT_INTERVAL = _self_improvement.get("assessment_interval", 6 * 60 * 60)
 ASSESSMENT_INTERVAL_SHORT = 60     # first few cycles run faster to bootstrap
 
 # Safety limits
-MAX_UPDATE_FILE_SIZE = 200 * 1024  # never write files > 200KB via auto-update
-MAX_AUTO_UPDATES_PER_DAY = 3       # cap self-modifications per day per target
-ROLLBACK_WAIT_TIME = 30            # seconds to wait after restart before health check
-MAX_CODE_CHANGES_PER_UPDATE = 5    # max distinct code changes in one update cycle
+MAX_UPDATE_FILE_SIZE = _self_improvement.get("max_update_file_size", 200 * 1024)
+MAX_AUTO_UPDATES_PER_DAY = _self_improvement.get("max_auto_updates_per_day", 3)
+ROLLBACK_WAIT_TIME = _self_improvement.get("rollback_wait_time", 30)
+MAX_CODE_CHANGES_PER_UPDATE = _self_improvement.get("max_code_changes_per_update", 5)
 
 # Post-update intensive monitoring — catch runtime crashes the watchdog misses
-INTENSIVE_MONITOR_INTERVAL = 10   # seconds between checks during intensive mode
-INTENSIVE_MONITOR_DURATION = 300  # 5 minutes of intensive monitoring after update
-INTENSIVE_MONITOR_ERROR_THRESHOLD = 3  # errors in intensive window → auto-rollback
+INTENSIVE_MONITOR_INTERVAL = _self_healing.get("intensive_monitor_interval", 10)
+INTENSIVE_MONITOR_DURATION = _self_healing.get("intensive_monitor_duration", 300)
+INTENSIVE_MONITOR_ERROR_THRESHOLD = _self_healing.get("intensive_monitor_error_threshold", 3)
 
 # Change reversal detection — prevent oscillation
-REVERSAL_LOCK_DURATION = 24 * 60 * 60  # lock oscillating code sections for 24h
+REVERSAL_LOCK_DURATION = _self_improvement.get("reversal_lock_duration", 24 * 60 * 60)
 LOCKED_SECTIONS_FILE = "/opt/Project-Tango/scripts/.architect-locked-sections.json"
 
 # Patterns the auto-updater must NEVER modify — protected code sections
@@ -1860,7 +1881,7 @@ PROTECTED_PATTERNS = [
 ]
 
 # Auto-update is ON by default — kill switch via !autoupdate off
-auto_update_enabled = True
+auto_update_enabled = _self_improvement.get("auto_update_enabled", True)
 
 # Services to monitor — (service_name, is_critical)
 # Critical services escalate immediately if they can't be restarted
