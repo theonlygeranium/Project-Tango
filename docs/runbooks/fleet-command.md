@@ -1,14 +1,17 @@
 # Runbook: Fleet Command UI + API
 
-**UI:** `https://command.schubert.life` (Cloudflare Pages React SPA)
+**UI (Nexus roster):** `https://api-command.schubert.life/` (served by `fleet-api`)
+**UI (legacy Pages):** `https://command.schubert.life` (hardcoded 7 bots)
 **API:** `https://api-command.schubert.life` → `127.0.0.1:8097` (`fleet-api.service`)
 **Config:** `/opt/Project-Tango/config/fleet-config.json`
 
 ## What it does
 
-The SPA is the pre-Nexus operator console. After the Nexus rebuild it still
-talks to the same 19-ish endpoints. `fleet-api` merges Nexus tools into
-`bots.*.tools` on every read so the Tools / Identity views stay current.
+The Nexus console is the `command-ui/` app served by `fleet-api`. It lists
+eight cards (`voss` + `sentinel`) from `GET /api/fleet/config` and does not
+fall back to mock data. The older Cloudflare Pages app still hardcodes
+seven IDs and should be treated as legacy until it is republished from
+`command-ui/dist`.
 
 ## Health
 

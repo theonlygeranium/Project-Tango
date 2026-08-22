@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request
 
 from config_manager import ConfigManager, services_requiring_restart
 from models.responses import ApiResponse
-from nexus_catalog import enrich_config
+from nexus_catalog import enrich_config, present_config
 from service_manager import ServiceManager
 
 router = APIRouter(prefix="/api/fleet", tags=["fleet"])
@@ -25,6 +25,9 @@ def fleet_status(request: Request) -> ApiResponse:
     for bot_id, bot in config.get("bots", {}).items():
         service = bot.get("identity", {}).get("service", "")
         statuses[bot_id] = sm.status(service) if service else "unknown"
+    if "dr_voss" in statuses and "voss" not in statuses:
+        statuses["voss"] = statuses["dr_voss"]
+    statuses.setdefault("sentinel", sm.status("schubert-sentinel.service"))
     return ApiResponse(success=True, data=statuses, last_modified=_utcnow())
 
 
@@ -34,7 +37,7 @@ def get_fleet_config(request: Request) -> ApiResponse:
     config = cm.load()
     return ApiResponse(
         success=True,
-        data=enrich_config(config),
+        data=present_config(config),
         last_modified=config.get("last_modified", _utcnow()),
     )
 

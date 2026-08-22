@@ -15,12 +15,23 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-# UI / fleet-config.json IDs are the source of truth for the SPA.
+# On-disk fleet-config.json still uses dr_voss. The Nexus UI uses voss.
 BOT_ALIASES = {
     "voss": "dr_voss",
     "dr-voss": "dr_voss",
     "dr.voss": "dr_voss",
 }
+
+UI_ROSTER = [
+    "admiral",
+    "architect",
+    "quartermaster",
+    "cartographer",
+    "voss",
+    "proctor",
+    "cortex",
+    "sentinel",
+]
 
 # Nexus manifest bot_id -> fleet-config bot_id
 NEXUS_TO_CONFIG = {
@@ -203,6 +214,84 @@ def enrich_config(config: dict[str, Any]) -> dict[str, Any]:
     return enriched
 
 
+def sentinel_stub() -> dict[str, Any]:
+    """Minimal bot record so the UI can render an eighth card before deploy."""
+    return {
+        "meta": {
+            "id": "sentinel",
+            "name": "Sentinel",
+            "role": "testing",
+            "roleLabel": "Validation / QA",
+            "avatar": "SN",
+            "status": "offline",
+            "scriptLines": 0,
+            "featureTags": ["nexus", "testing", "not-deployed"],
+        },
+        "identity": {
+            "name": "Sentinel",
+            "discord_id": "",
+            "channel_id": "",
+            "service": "schubert-sentinel.service",
+            "script": "src/bots/sentinel",
+            "tier": "Tier 3 — Validation",
+        },
+        "llm": {
+            "model": "writer/palmyra-x6",
+            "coding_model": "writer/claude-sonnet-4-5",
+            "temperature": 0.2,
+            "max_tokens": 4096,
+            "llm_timeout": 120,
+            "max_iterations": 20,
+            "agent_timeout": 300,
+            "tool_output_limit": 4000,
+            "shell_timeout": 120,
+            "session_window": 20,
+            "rate_limit_per_min": None,
+        },
+        "prompt": {
+            "system_prompt": "You are Sentinel, the Nexus validation bot. Generate tests, repair failing code, and gate fleet rollouts.",
+            "voice_prompt_addition": False,
+            "coding_prompt_addition": True,
+            "poll_prompt_addition": False,
+            "meetscribe_prompt_addition": False,
+        },
+        "tools": [],
+        "guardrails": {},
+        "scheduler_enabled": False,
+        "memory": {},
+        "voice": {"enabled": False},
+        "mcp": {"servers": []},
+        "multi_agent": {
+            "response_threshold": 0.9,
+            "urgent_threshold": 0.95,
+            "cooldown_seconds": 60,
+            "fleet_delegation_role": "receive_only",
+        },
+        "self_healing": None,
+        "self_improvement": None,
+    }
+
+
+def present_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Config payload for the UI: Nexus tools, voss id, and a Sentinel card."""
+    presented = enrich_config(config)
+    bots = presented.setdefault("bots", {})
+    if "dr_voss" in bots and "voss" not in bots:
+        voss = deepcopy(bots["dr_voss"])
+        meta = dict(voss.get("meta") or {})
+        meta["id"] = "voss"
+        voss["meta"] = meta
+        identity = dict(voss.get("identity") or {})
+        if identity.get("name") == "Dr. Voss" or not identity.get("name"):
+            identity["name"] = "Dr. Voss"
+        voss["identity"] = identity
+        bots["voss"] = voss
+    if "sentinel" not in bots:
+        bots["sentinel"] = enrich_bot(sentinel_stub(), "sentinel")
+    presented["ui_roster"] = list(UI_ROSTER)
+    return presented
+
+
 def nexus_status(config: dict[str, Any], service_status: dict[str, str]) -> dict[str, Any]:
     """Summary payload for GET /api/nexus/status."""
     bots = config.get("bots") or {}
@@ -229,9 +318,9 @@ def nexus_status(config: dict[str, Any], service_status: dict[str, str]) -> dict
         "aliases": dict(BOT_ALIASES),
         "roster": roster,
         "notes": [
-            "command.schubert.life still uses pre-Nexus bot IDs (dr_voss).",
-            "GET /api/fleet/config merges Nexus tools into each bot.tools list.",
-            "sentinel is defined in fleet-manifest.yaml but is not in fleet-config yet.",
+            "GET /api/fleet/config presents voss (alias of on-disk dr_voss) and sentinel.",
+            "The shipped Pages app still hardcodes seven IDs; use the fleet-api UI.",
+            "sentinel is catalog-only until schubert-sentinel.service exists.",
             "Live systemd units may still be the pre-Nexus script services.",
         ],
     }

@@ -33,10 +33,10 @@ with the backend bootstrap command documented in
 
 ## Fleet Command
 
-The Discord fleet operator console is `https://command.schubert.life` (Cloudflare
-Pages). Its API is `fleet-api/` on Schubert port `8097`
-(`https://api-command.schubert.life`). After the Nexus rebuild the API merges
-Nexus tools into the existing SPA payload. See
+The Discord fleet operator console is `command-ui/`, served by `fleet-api` at
+`https://api-command.schubert.life/`. It uses Nexus ids (`voss`) and includes
+an eighth **Sentinel** card. The older Cloudflare Pages app at
+`https://command.schubert.life` still hardcodes seven bots. See
 [docs/runbooks/fleet-command.md](docs/runbooks/fleet-command.md) and ADR-019.
 
 ## Development

@@ -7,6 +7,23 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ---
 
+## [Unreleased] Fleet Command — Nexus roster UI
+
+### Added
+- `command-ui/` — LCARS console with an 8-bot roster (Sentinel card) and
+  canonical id `voss` instead of `dr_voss`. Served by `fleet-api` at `/`.
+- `GET /api/fleet/config` presents `voss` plus a Sentinel stub so the new
+  UI can render eight cards before `schubert-sentinel.service` exists.
+- Same-origin browser calls to `/api` no longer require a token baked into
+  the JavaScript bundle.
+
+### Changed
+- Fleet Command API version `1.2.0`. The Pages app at
+  `command.schubert.life` still hardcodes seven IDs; use
+  `https://api-command.schubert.life/` for the Nexus roster.
+
+---
+
 ## [Unreleased] Fleet Command — Nexus compatibility
 
 ### Added

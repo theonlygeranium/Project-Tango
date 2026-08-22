@@ -18,6 +18,7 @@ from nexus_catalog import (  # noqa: E402
     enrich_config,
     merge_tools,
     nexus_status,
+    present_config,
     resolve_bot_id,
 )
 
@@ -93,6 +94,19 @@ def test_enrich_config_does_not_mutate_and_tags_nexus() -> None:
     assert "view_logs" in {t["id"] for t in enriched["bots"]["dr_voss"]["tools"]}
 
 
+def test_present_config_adds_voss_and_sentinel() -> None:
+    presented = present_config(_config())
+    bots = presented["bots"]
+    assert "dr_voss" in bots
+    assert "voss" in bots
+    assert bots["voss"]["meta"]["id"] == "voss"
+    assert "view_logs" in {t["id"] for t in bots["voss"]["tools"]}
+    assert "sentinel" in bots
+    assert bots["sentinel"]["meta"]["id"] == "sentinel"
+    assert "generate_tests" in {t["id"] for t in bots["sentinel"]["tools"]}
+    assert presented["ui_roster"][-1] == "sentinel"
+
+
 def test_nexus_status_marks_sentinel_undeployed() -> None:
     payload = nexus_status(_config(), {bot: "online" for bot in MINIMAL_BOTS})
     assert payload["architecture"] == "nexus-v2"
@@ -127,9 +141,28 @@ def test_fleet_api_get_config_and_voss_alias(tmp_path: Path, monkeypatch: pytest
     admiral_tools = {t["id"] for t in cfg["data"]["bots"]["admiral"]["tools"]}
     assert "fleet_delegate" in admiral_tools
 
+    assert "voss" in cfg["data"]["bots"]
+    assert "sentinel" in cfg["data"]["bots"]
+    assert cfg["data"]["bots"]["voss"]["meta"]["id"] == "voss"
+    assert cfg["data"]["ui_roster"] == [
+        "admiral",
+        "architect",
+        "quartermaster",
+        "cartographer",
+        "voss",
+        "proctor",
+        "cortex",
+        "sentinel",
+    ]
+
     voss = client.get("/api/bots/voss").json()
     assert voss["success"] is True
+    assert voss["data"]["meta"]["id"] == "voss"
     assert "view_logs" in {t["id"] for t in voss["data"]["tools"]}
+
+    sentinel = client.get("/api/bots/sentinel").json()
+    assert sentinel["success"] is True
+    assert sentinel["data"]["identity"]["service"] == "schubert-sentinel.service"
 
     tools = client.get("/api/bots/dr_voss/tools").json()
     assert "Nexus" in tools["data"]["note"]

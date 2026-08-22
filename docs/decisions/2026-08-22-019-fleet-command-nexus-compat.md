@@ -24,11 +24,13 @@ and a note that live MCP discovery was unavailable.
 
 ## Decision
 
-Keep the existing SPA contract. Teach `fleet-api` to:
+Keep the existing SPA contract for the legacy Pages app, and ship a Nexus
+roster UI (`command-ui/`) served by `fleet-api`. Teach `fleet-api` to:
 
 1. Merge the Nexus tool catalog into every bot `tools` array on read
    (`GET /api/fleet/config`, `GET /api/bots/{id}`, `GET /api/bots/{id}/tools`).
-2. Accept Nexus aliases (`voss` → `dr_voss`) without renaming UI IDs.
+2. Present `voss` (and keep on-disk `dr_voss`) plus a Sentinel stub so the
+   new UI can show eight cards.
 3. Expose `GET /api/nexus/status` for roster / alias / sentinel visibility.
 4. Leave live systemd unit names as recorded in `fleet-config.json`
    (for example `cortex-bot.service` remains the running unit;
