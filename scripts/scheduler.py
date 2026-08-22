@@ -138,8 +138,36 @@ class Scheduler:
             return True
         return False
 
+    def _dispatch_n8n_alert(self, embed: discord.Embed) -> None:
+        """Mirror scheduler alerts to the n8n hub without replacing Discord."""
+        try:
+            from alert_dispatcher import get_dispatcher
+
+            color = getattr(embed, "color", None)
+            color_value = getattr(color, "value", None)
+            if color_value in {0xE74C3C, 0xED4245}:
+                severity = "CRITICAL"
+            elif color_value in {0x2ECC71, 0x57F287}:
+                severity = "INFO"
+            else:
+                severity = "WARN"
+            title = embed.title or "Scheduler alert"
+            message = embed.description or title
+            alert_type = "service_failed" if "Service" in title else "scheduler_alert"
+            get_dispatcher().send_generic(
+                source="scheduler",
+                severity=severity,
+                alert_type=alert_type,
+                title=title,
+                message=message,
+                bot_name="Scheduler",
+            )
+        except Exception as e:
+            logger.debug("n8n alert dispatch skipped: %s", e)
+
     async def _send_alert(self, embed: discord.Embed):
-        """Send an alert embed to the configured channel."""
+        """Send an alert embed to the configured channel and the n8n hub."""
+        self._dispatch_n8n_alert(embed)
         channel = self.bot.get_channel(self.channel_id)
         if channel:
             try:

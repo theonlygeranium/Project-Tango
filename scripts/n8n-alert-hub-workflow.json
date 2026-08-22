@@ -1,0 +1,284 @@
+{
+  "name": "Tango Alert Aggregation Hub",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "type": "n8n-nodes-base.webhook",
+      "name": "Alert Webhook",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "parameters": {
+        "path": "tango-alert",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "validate-payload",
+      "type": "n8n-nodes-base.code",
+      "name": "Validate & Enrich",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "parameters": {
+        "jsCode": "// Validate incoming alert payload and enrich with defaults\n// n8n webhook v2 wraps body in $json.body\nconst raw = $input.first().json;\nconst body = raw.body || raw;\n\n// Required fields\nconst required = ['source', 'severity', 'alert_type', 'title', 'message'];\nfor (const field of required) {\n  if (!body[field]) {\n    throw new Error(`Missing required field: ${field}`);\n  }\n}\n\n// Normalize severity to uppercase\nconst aliases = {WARNING:'WARN',ERROR:'CRITICAL',FATAL:'CRITICAL',OK:'INFO',HEALTHY:'INFO',PASS:'INFO'};\nconst severity = (aliases[(body.severity||'').toUpperCase()] || (body.severity||'').toUpperCase());\nconst validSeverities = ['DEBUG', 'INFO', 'WARN', 'CRITICAL'];\nif (!validSeverities.includes(severity)) {\n  throw new Error(`Invalid severity: ${body.severity}. Must be one of: ${validSeverities.join(', ')}`);\n}\n\n// Build enriched alert object\nconst alert = {\n  source: body.source,\n  severity: severity,\n  alert_type: body.alert_type,\n  title: body.title,\n  message: body.message,\n  bot_name: body.bot_name || body.source,\n  metadata: body.metadata || {},\n  timestamp: body.timestamp || new Date().toISOString(),\n  received_at: new Date().toISOString(),\n  alert_id: `${body.source}-${body.alert_type}-${Date.now()}`\n};\n\nreturn [{ json: alert }];"
+      }
+    },
+    {
+      "id": "dedup-check",
+      "type": "n8n-nodes-base.code",
+      "name": "Dedup Check",
+      "typeVersion": 2,
+      "position": [440, 300],
+      "parameters": {
+        "jsCode": "// Deduplication using n8n static data (persists between executions)\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.alertCache) {\n  staticData.alertCache = {};\n}\n\nconst alert = $input.first().json;\n\n// Create a fingerprint from source + alert_type + title\nconst crypto = require('crypto');\nconst fingerprint = crypto\n  .createHash('md5')\n  .update(`${alert.source}:${alert.alert_type}:${alert.title}`)\n  .digest('hex');\n\nconst now = Date.now();\nconst cooldownMs = 30 * 60 * 1000; // 30 minutes\n\n// Clean expired entries\nfor (const key of Object.keys(staticData.alertCache)) {\n  if (now - staticData.alertCache[key] > cooldownMs) {\n    delete staticData.alertCache[key];\n  }\n}\n\n// Check if this alert is a duplicate\nif (staticData.alertCache[fingerprint] && (now - staticData.alertCache[fingerprint] < cooldownMs)) {\n  return [{ json: { ...alert, is_duplicate: true, fingerprint } }];\n} else {\n  staticData.alertCache[fingerprint] = now;\n  return [{ json: { ...alert, is_duplicate: false, fingerprint } }];\n}"
+      }
+    },
+    {
+      "id": "filter-duplicates",
+      "type": "n8n-nodes-base.if",
+      "name": "Is New Alert?",
+      "typeVersion": 2,
+      "position": [660, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-duplicate",
+              "leftValue": "={{ $json.is_duplicate }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "build-discord-payload",
+      "type": "n8n-nodes-base.code",
+      "name": "Build Discord Payload",
+      "typeVersion": 2,
+      "position": [880, 300],
+      "parameters": {
+        "jsCode": "// Build Discord webhook payload based on severity\nconst alert = $input.first().json;\n\nconst colors = {\n  CRITICAL: 0xED4245,\n  WARN: 0xFEE75C,\n  INFO: 0x57F287,\n  DEBUG: 0x5865F2\n};\n\nconst emojis = {\n  CRITICAL: '🔴',\n  WARN: '🟡',\n  INFO: '🟢',\n  DEBUG: '🔵'\n};\n\nconst color = colors[alert.severity] || 0x5865F2;\nconst emoji = emojis[alert.severity] || 'ℹ️';\n\nconst embed = {\n  title: `${emoji} ${alert.severity} — ${alert.title}`,\n  description: alert.message,\n  color: color,\n  footer: { text: `Source: ${alert.source} | Type: ${alert.alert_type}` },\n  timestamp: alert.timestamp,\n  fields: [\n    { name: 'Severity', value: alert.severity, inline: true },\n    { name: 'Bot', value: alert.bot_name, inline: true }\n  ]\n};\n\nif (alert.severity === 'CRITICAL') {\n  embed.fields.push({ name: 'Alert ID', value: alert.alert_id, inline: false });\n}\n\nconst payload = {\n  username: 'Tango Alert Hub',\n  embeds: [embed]\n};\n\nreturn [{ json: { ...alert, discord_payload: payload } }];"
+      }
+    },
+    {
+      "id": "severity-check",
+      "type": "n8n-nodes-base.if",
+      "name": "Should Send to Discord?",
+      "typeVersion": 2,
+      "position": [1100, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-severity",
+              "leftValue": "={{ $json.severity }}",
+              "rightValue": "DEBUG",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "send-discord",
+      "type": "n8n-nodes-base.httpRequest",
+      "name": "Send to Discord",
+      "typeVersion": 4.2,
+      "position": [1320, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/webhooks/REPLACE_WITH_DISCORD_WEBHOOK_URL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.discord_payload }}",
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "skip-debug",
+      "type": "n8n-nodes-base.noOp",
+      "name": "Skip (Debug Level)",
+      "typeVersion": 1,
+      "position": [1320, 400],
+      "parameters": {}
+    },
+    {
+      "id": "duplicate-log",
+      "type": "n8n-nodes-base.noOp",
+      "name": "Duplicate (Suppressed)",
+      "typeVersion": 1,
+      "position": [660, 500],
+      "parameters": {}
+    },
+    {
+      "id": "response-success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "name": "Response — Success",
+      "typeVersion": 1,
+      "position": [1540, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'ok', message: 'Alert processed', alert_id: $json.alert_id } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "response-duplicate",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "name": "Response — Duplicate",
+      "typeVersion": 1,
+      "position": [880, 500],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: 'duplicate', message: 'Alert suppressed (duplicate)', fingerprint: $json.fingerprint } }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Alert Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & Enrich",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Enrich": {
+      "main": [
+        [
+          {
+            "node": "Dedup Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Check": {
+      "main": [
+        [
+          {
+            "node": "Is New Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is New Alert?": {
+      "main": [
+        [
+          {
+            "node": "Build Discord Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Duplicate (Suppressed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Discord Payload": {
+      "main": [
+        [
+          {
+            "node": "Should Send to Discord?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send to Discord?": {
+      "main": [
+        [
+          {
+            "node": "Send to Discord",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip (Debug Level)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Discord": {
+      "main": [
+        [
+          {
+            "node": "Response — Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip (Debug Level)": {
+      "main": [
+        [
+          {
+            "node": "Response — Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate (Suppressed)": {
+      "main": [
+        [
+          {
+            "node": "Response — Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
