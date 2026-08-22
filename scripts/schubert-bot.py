@@ -5,7 +5,7 @@ Schubert Bot — Level 3 autonomous agent with voice channel support.
 An LLM-powered Discord bot that supervises the entire Schubert server. Supports
 both text channel commands and voice channel conversations. In voice mode, the
 bot joins a Discord voice channel, receives speech via discord-ext-voice-recv,
-transcribes with Deepgram Nova-3, reasons with writer/claude-sonnet-4-5 via
+transcribes with Deepgram Nova-3, reasons with writer/palmyra-x6 via
 LiteLLM, and responds with ElevenLabs Flash v2.5 TTS.
 
 Security:
@@ -85,7 +85,7 @@ LOG_FILE = "/var/log/schubert-bot.log"
 
 # LLM
 LITELLM_URL = "http://127.0.0.1:4000/v1"
-LLM_MODEL = _llm.get("model", "writer/claude-sonnet-4-5")
+LLM_MODEL = _llm.get("model", "writer/palmyra-x6")
 LLM_TIMEOUT = _llm.get("llm_timeout", 90)
 LLM_MAX_TOKENS = _llm.get("max_tokens", 4096)
 LLM_TEMPERATURE = _llm.get("temperature", 0.3)

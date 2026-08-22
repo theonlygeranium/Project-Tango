@@ -16,7 +16,7 @@ from routes import bots, fleet, memory, nexus, scheduler
 from service_manager import ServiceManager
 
 API_TOKEN = os.environ.get("FLEET_API_TOKEN", "")
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 UI_DIST = Path(os.environ.get("FLEET_UI_DIST", Path(__file__).resolve().parent.parent / "command-ui" / "dist"))
 
 

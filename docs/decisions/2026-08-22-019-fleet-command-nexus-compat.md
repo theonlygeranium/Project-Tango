@@ -60,6 +60,7 @@ Nexus capabilities without changing the SPA.
 - `sentinel` remains catalog-only until it is added to `fleet-config.json`
   and a systemd unit exists.
 - A later SPA rebuild can drop the merge once it reads Nexus natively.
+- LLM presentation defaults moved to ADR-020 (`writer/palmyra-x6`).
 
 ## References
 

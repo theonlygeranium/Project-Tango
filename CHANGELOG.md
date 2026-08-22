@@ -7,6 +7,19 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ---
 
+## [Unreleased] Fleet Command — Palmyra x6 defaults
+
+### Changed
+- Fleet Command default LLM is `writer/palmyra-x6` for both `model` and
+  `coding_model`. The Sentinel stub no longer advertises Claude Sonnet.
+- `GET /api/fleet/config` fills a blank coding model with Palmyra x6 so the
+  UI does not show an empty or leftover Claude field.
+- Discord bot script fallbacks (`CODING_MODEL` / `LLM_MODEL`) now default to
+  Palmyra x6. Claude remains selectable via `!model`.
+- Fleet Command API version `1.2.1`.
+
+---
+
 ## [Unreleased] Fleet Command — Nexus roster UI
 
 ### Added

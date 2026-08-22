@@ -6,6 +6,7 @@ Cloudflare Pages app that hardcoded seven bot IDs (`dr_voss`, no Sentinel).
 - Eighth card: **Sentinel**
 - Dr. Voss id: **`voss`**
 - No mock-data fallback — API errors stay visible
+- LLM default: **`writer/palmyra-x6`** for primary and coding models
 - Served by `fleet-api` at `https://api-command.schubert.life/`
 
 ```bash

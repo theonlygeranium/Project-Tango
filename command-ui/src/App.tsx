@@ -196,9 +196,10 @@ function BotPanel({
 
       {tab === "llm" && (
         <section className="panel" style={{ padding: 16 }}>
+          <p className="field-label">Fleet default is <code>writer/palmyra-x6</code> for primary and coding models.</p>
           <div className="grid-2">
-            <Field label="Primary Model" value={String(draft.llm.model ?? "")} onChange={(v) => setDraft({ ...draft, llm: { ...draft.llm, model: v } })} />
-            <Field label="Coding Model" value={String(draft.llm.coding_model ?? "")} onChange={(v) => setDraft({ ...draft, llm: { ...draft.llm, coding_model: v || null } })} />
+            <Field label="Primary Model" value={String(draft.llm.model ?? "")} placeholder="writer/palmyra-x6" onChange={(v) => setDraft({ ...draft, llm: { ...draft.llm, model: v } })} />
+            <Field label="Coding Model" value={String(draft.llm.coding_model ?? "")} placeholder="writer/palmyra-x6" onChange={(v) => setDraft({ ...draft, llm: { ...draft.llm, coding_model: v || null } })} />
             <Field label="Temperature" value={String(draft.llm.temperature ?? "")} onChange={(v) => setDraft({ ...draft, llm: { ...draft.llm, temperature: Number(v) } })} />
             <Field label="Max Output Tokens" value={String(draft.llm.max_tokens ?? "")} onChange={(v) => setDraft({ ...draft, llm: { ...draft.llm, max_tokens: Number(v) } })} />
             <Field label="LLM Call Timeout" value={String(draft.llm.llm_timeout ?? "")} onChange={(v) => setDraft({ ...draft, llm: { ...draft.llm, llm_timeout: Number(v) } })} />
@@ -278,16 +279,18 @@ function Field({
   value,
   onChange,
   readOnly,
+  placeholder,
 }: {
   label: string;
   value: string;
   onChange?: (value: string) => void;
   readOnly?: boolean;
+  placeholder?: string;
 }) {
   return (
     <div className="row">
       <label className="field-label">{label}</label>
-      <input value={value} readOnly={readOnly} onChange={(e) => onChange?.(e.target.value)} />
+      <input value={value} readOnly={readOnly} placeholder={placeholder} onChange={(e) => onChange?.(e.target.value)} />
     </div>
   );
 }

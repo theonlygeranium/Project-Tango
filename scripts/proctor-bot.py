@@ -120,9 +120,9 @@ SESSION_HISTORY: dict[int, list[dict]] = {}
 SESSION_MAX_MESSAGES = _llm.get("session_window", 35)
 
 # Multi-LLM routing — default model and available models
-# The Proctor auto-switches: Palmyra x6 for general tasks, Claude Sonnet 4.5 for coding
+# The Proctor defaults to Palmyra x6 for general and coding tasks
 DEFAULT_MODEL = _llm.get("model", "writer/palmyra-x6")
-CODING_MODEL = _llm.get("coding_model", "writer/claude-sonnet-4-5")
+CODING_MODEL = _llm.get("coding_model", "writer/palmyra-x6")
 current_model = DEFAULT_MODEL
 user_model_override = False  # Set True when user manually selects via !model; disables auto-switching
 
@@ -1376,7 +1376,7 @@ async def handle_model_command(message: discord.Message):
             f"**Current model:** `{current_model}`\n"
             f"**Routing:** {routing_status}\n\n"
             f"Select a model from the dropdown below, or use `!model <model_name>` to switch directly.\n"
-            f"Use `!model auto` to re-enable auto-routing (Palmyra x6 → Claude Sonnet 4.5 for coding)."
+            f"Use `!model auto` to re-enable auto-routing (Palmyra x6 for general and coding tasks)."
         ),
         color=COLOR_ARCHITECT,
         timestamp=datetime.now(timezone.utc),

@@ -8,3 +8,6 @@ FastAPI service for the Fleet Command SPA at `https://command.schubert.life`.
 
 `GET /api/fleet/config` and bot tool endpoints merge the Nexus catalog so the
 pre-Nexus UI stays connected. See ADR-019.
+
+Blank `llm.model` / `llm.coding_model` fields are presented as
+`writer/palmyra-x6`. See ADR-020.

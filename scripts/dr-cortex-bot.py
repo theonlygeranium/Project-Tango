@@ -132,8 +132,8 @@ LOG_FILE = "/var/log/dr-cortex-bot.log"
 
 # LLM
 LITELLM_URL = "http://127.0.0.1:4000/v1"
-LLM_MODEL = _llm.get("model", "writer/claude-sonnet-4-5")
-CODING_MODEL = _llm.get("coding_model", "writer/claude-sonnet-4-5")
+LLM_MODEL = _llm.get("model", "writer/palmyra-x6")
+CODING_MODEL = _llm.get("coding_model", "writer/palmyra-x6")
 DEFAULT_MODEL = LLM_MODEL
 
 # Multi-LLM routing — available models grouped by provider

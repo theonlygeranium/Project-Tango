@@ -52,6 +52,19 @@ Do not restart Discord bot units from this runbook unless an operator asked.
 
 `GET /api/bots/voss` resolves to `dr_voss`.
 
+## LLM defaults
+
+Every bot's primary and coding model default is `writer/palmyra-x6` (LiteLLM
+on `:4000`). `GET /api/fleet/config` fills a blank `coding_model` so the
+console does not show the old Claude Sonnet fallback.
+
+Use `https://api-command.schubert.life/` — the legacy Pages app at
+`command.schubert.life` still has a baked mock that lists Claude Sonnet when
+the API is unreachable.
+
+Do not restart Discord bots from a model-default change unless an operator
+asked. Config is read at process start.
+
 ## Do not
 
 - Commit `FLEET_API_TOKEN` or the Discord webhook from the n8n editor.

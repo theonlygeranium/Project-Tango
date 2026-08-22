@@ -15,6 +15,9 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+# Fleet-wide LiteLLM default. Coding used to fall back to Claude Sonnet.
+DEFAULT_FLEET_MODEL = "writer/palmyra-x6"
+
 # On-disk fleet-config.json still uses dr_voss. The Nexus UI uses voss.
 BOT_ALIASES = {
     "voss": "dr_voss",
@@ -192,9 +195,20 @@ def merge_tools(
     return merged
 
 
+def apply_llm_defaults(bot: dict[str, Any]) -> dict[str, Any]:
+    """Fill blank primary/coding models with Palmyra x6. Do not rewrite a set override."""
+    llm = dict(bot.get("llm") or {})
+    if not llm.get("model"):
+        llm["model"] = DEFAULT_FLEET_MODEL
+    if not llm.get("coding_model"):
+        llm["coding_model"] = DEFAULT_FLEET_MODEL
+    bot["llm"] = llm
+    return bot
+
+
 def enrich_bot(bot: dict[str, Any], bot_id: str) -> dict[str, Any]:
     """Return a copy of a bot config with Nexus tools merged in."""
-    enriched = deepcopy(bot)
+    enriched = apply_llm_defaults(deepcopy(bot))
     enriched["tools"] = merge_tools(bot.get("tools"), bot_id)
     tags = list(enriched.get("meta", {}).get("featureTags") or [])
     if "nexus" not in tags:
@@ -236,8 +250,8 @@ def sentinel_stub() -> dict[str, Any]:
             "tier": "Tier 3 — Validation",
         },
         "llm": {
-            "model": "writer/palmyra-x6",
-            "coding_model": "writer/claude-sonnet-4-5",
+            "model": DEFAULT_FLEET_MODEL,
+            "coding_model": DEFAULT_FLEET_MODEL,
             "temperature": 0.2,
             "max_tokens": 4096,
             "llm_timeout": 120,

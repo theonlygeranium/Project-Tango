@@ -14,6 +14,7 @@ if str(FLEET_API) not in sys.path:
     sys.path.insert(0, str(FLEET_API))
 
 from nexus_catalog import (  # noqa: E402
+    DEFAULT_FLEET_MODEL,
     canonicalize_bot_id,
     enrich_config,
     merge_tools,
@@ -105,6 +106,17 @@ def test_present_config_adds_voss_and_sentinel() -> None:
     assert bots["sentinel"]["meta"]["id"] == "sentinel"
     assert "generate_tests" in {t["id"] for t in bots["sentinel"]["tools"]}
     assert presented["ui_roster"][-1] == "sentinel"
+    assert bots["sentinel"]["llm"]["model"] == DEFAULT_FLEET_MODEL
+    assert bots["sentinel"]["llm"]["coding_model"] == DEFAULT_FLEET_MODEL
+    assert bots["cartographer"]["llm"]["coding_model"] == DEFAULT_FLEET_MODEL
+    assert bots["voss"]["llm"]["model"] == DEFAULT_FLEET_MODEL
+
+
+def test_present_config_keeps_explicit_coding_override() -> None:
+    config = _config()
+    config["bots"]["architect"]["llm"]["coding_model"] = "writer/palmyra-x5-code"
+    presented = present_config(config)
+    assert presented["bots"]["architect"]["llm"]["coding_model"] == "writer/palmyra-x5-code"
 
 
 def test_nexus_status_marks_sentinel_undeployed() -> None:
