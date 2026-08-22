@@ -31,6 +31,14 @@ created in the dashboard are always regular users; the first admin is created
 with the backend bootstrap command documented in
 [RB-04](docs/runbooks/RB-04-account-administration.md).
 
+## Fleet Command
+
+The Discord fleet operator console is `https://command.schubert.life` (Cloudflare
+Pages). Its API is `fleet-api/` on Schubert port `8097`
+(`https://api-command.schubert.life`). After the Nexus rebuild the API merges
+Nexus tools into the existing SPA payload. See
+[docs/runbooks/fleet-command.md](docs/runbooks/fleet-command.md) and ADR-019.
+
 ## Development
 
 See [docs/setup.md](docs/setup.md) for environment, migration, build, and

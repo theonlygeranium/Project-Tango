@@ -7,6 +7,24 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ---
 
+## [Unreleased] Fleet Command — Nexus compatibility
+
+### Added
+- `fleet-api/` — Fleet Command API that backs `command.schubert.life`
+  (`api-command.schubert.life` → `127.0.0.1:8097`).
+- `fleet-api/nexus_catalog.py` — merges Nexus tools into the pre-Nexus UI
+  `bots.*.tools` contract and maps `voss` → `dr_voss`.
+- `GET /api/nexus/status` — roster, aliases, and sentinel deploy state.
+- ADR-019 and runbook `docs/runbooks/fleet-command.md`.
+
+### Changed
+- `GET /api/fleet/config`, `GET /api/bots/{id}`, and
+  `GET /api/bots/{id}/tools` return the union of `fleet-config.json` tools
+  and the Nexus catalog so the Cloudflare Pages SPA stays connected after
+  the fleet rebuild.
+
+---
+
 ## [Unreleased] v2 — Voice Pipeline Optimization
 
 ### Added
