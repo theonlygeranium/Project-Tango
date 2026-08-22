@@ -103,9 +103,9 @@ SESSION_HISTORY: dict[int, list[dict]] = {}
 SESSION_MAX_MESSAGES = _llm.get("session_window", 35)
 
 # Multi-LLM routing — default model and available models
-# Dr. Cortex: Palmyra x6 for research/analysis, Claude Sonnet 4.5 for code review
+# Dr. Cortex: Palmyra x6 for research/analysis and code review
 DEFAULT_MODEL = _llm.get("model", "writer/palmyra-x6")
-CODING_MODEL = _llm.get("coding_model", "writer/claude-sonnet-4-5")
+CODING_MODEL = _llm.get("coding_model", "writer/palmyra-x6")
 current_model = DEFAULT_MODEL
 user_model_override = False  # Set True when user manually selects via !model
 
@@ -191,7 +191,7 @@ THREAD_RESPONSE_THRESHOLD = 500
 THREAD_TOOL_CALL_THRESHOLD = 3
 
 # ---------------------------------------------------------------------------
-# Auto Model Routing — Palmyra x6 (research) → Claude Sonnet 4.5 (code)
+# Auto Model Routing — Palmyra x6 for research and code
 # ---------------------------------------------------------------------------
 
 CODING_PATTERNS = [

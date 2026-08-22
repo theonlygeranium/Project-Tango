@@ -259,6 +259,13 @@ Per-bot sections live under `bots.<bot_id>` (e.g. `architect`, `admiral`,
 `scheduler`. The JSON file is owned by the Fleet Command API; this repository
 does not modify it.
 
+The operator UI is the pre-Nexus Cloudflare Pages SPA at
+`https://command.schubert.life`. It calls `https://api-command.schubert.life`
+(`fleet-api.service` on `127.0.0.1:8097`). After the Nexus rebuild, reads
+merge `src/bots/*/tools.py` catalog entries into each bot's `tools` list so
+the shipped SPA stays current. Nexus alias `voss` resolves to `dr_voss`.
+See ADR-019 and `docs/runbooks/fleet-command.md`.
+
 ---
 
 ## Key Architectural Decisions
@@ -278,6 +285,7 @@ See `docs/decisions/` for full ADRs.
 | Groq Tagalog defaults + universal voice layer | Reproduce current live persona behavior | ADR-009 |
 | Password accounts + server persona authorization | Protect every browser/API path and isolate account data | ADR-010 |
 | Discord fleet constants via `fleet-config.json` | Tunable without editing bot sources; missing file → defaults | 2026-08-20 fleet-config ADRs |
+| Fleet Command API merges Nexus tools on read | Keep `command.schubert.life` working after the fleet rebuild | ADR-019 |
 
 ---
 

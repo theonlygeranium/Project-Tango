@@ -140,7 +140,7 @@ LOG_FILE = "/var/log/schubert-bot.log"
 
 # LLM
 LITELLM_URL = "http://127.0.0.1:4000/v1"
-LLM_MODEL = _llm.get("model", "writer/claude-sonnet-4-5")
+LLM_MODEL = _llm.get("model", "writer/palmyra-x6")
 
 # Multi-LLM routing — available models grouped by provider
 MODEL_CATEGORIES = {

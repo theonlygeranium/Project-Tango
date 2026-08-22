@@ -7,6 +7,54 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ---
 
+## [Unreleased] Fleet Command — Palmyra x6 defaults
+
+### Changed
+- Fleet Command default LLM is `writer/palmyra-x6` for both `model` and
+  `coding_model`. The Sentinel stub no longer advertises Claude Sonnet.
+- `GET /api/fleet/config` fills a blank coding model with Palmyra x6 so the
+  UI does not show an empty or leftover Claude field.
+- Discord bot script fallbacks (`CODING_MODEL` / `LLM_MODEL`) now default to
+  Palmyra x6. Claude remains selectable via `!model`.
+- Fleet Command API version `1.2.1`.
+
+---
+
+## [Unreleased] Fleet Command — Nexus roster UI
+
+### Added
+- `command-ui/` — LCARS console with an 8-bot roster (Sentinel card) and
+  canonical id `voss` instead of `dr_voss`. Served by `fleet-api` at `/`.
+- `GET /api/fleet/config` presents `voss` plus a Sentinel stub so the new
+  UI can render eight cards before `schubert-sentinel.service` exists.
+- Same-origin browser calls to `/api` no longer require a token baked into
+  the JavaScript bundle.
+
+### Changed
+- Fleet Command API version `1.2.0`. The Pages app at
+  `command.schubert.life` still hardcodes seven IDs; use
+  `https://api-command.schubert.life/` for the Nexus roster.
+
+---
+
+## [Unreleased] Fleet Command — Nexus compatibility
+
+### Added
+- `fleet-api/` — Fleet Command API that backs `command.schubert.life`
+  (`api-command.schubert.life` → `127.0.0.1:8097`).
+- `fleet-api/nexus_catalog.py` — merges Nexus tools into the pre-Nexus UI
+  `bots.*.tools` contract and maps `voss` → `dr_voss`.
+- `GET /api/nexus/status` — roster, aliases, and sentinel deploy state.
+- ADR-019 and runbook `docs/runbooks/fleet-command.md`.
+
+### Changed
+- `GET /api/fleet/config`, `GET /api/bots/{id}`, and
+  `GET /api/bots/{id}/tools` return the union of `fleet-config.json` tools
+  and the Nexus catalog so the Cloudflare Pages SPA stays connected after
+  the fleet rebuild.
+
+---
+
 ## [Unreleased] v2 — Voice Pipeline Optimization
 
 ### Added

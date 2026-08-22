@@ -31,6 +31,14 @@ created in the dashboard are always regular users; the first admin is created
 with the backend bootstrap command documented in
 [RB-04](docs/runbooks/RB-04-account-administration.md).
 
+## Fleet Command
+
+The Discord fleet operator console is `command-ui/`, served by `fleet-api` at
+`https://api-command.schubert.life/`. It uses Nexus ids (`voss`) and includes
+an eighth **Sentinel** card. The older Cloudflare Pages app at
+`https://command.schubert.life` still hardcodes seven bots. See
+[docs/runbooks/fleet-command.md](docs/runbooks/fleet-command.md) and ADR-019.
+
 ## Development
 
 See [docs/setup.md](docs/setup.md) for environment, migration, build, and

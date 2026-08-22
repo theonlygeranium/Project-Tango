@@ -522,7 +522,7 @@ class MemoryStore:
 
         litellm_url = os.environ.get("LITELLM_URL", "http://127.0.0.1:4000/v1")
         litellm_key = os.environ.get("LITELLM_MASTER_KEY", "")
-        model = os.environ.get("LLM_MODEL", "writer/claude-sonnet-4-5")
+        model = os.environ.get("LLM_MODEL", "writer/palmyra-x6")
 
         # Truncate text to keep the prompt small
         text_excerpt = text[:1000]

@@ -43,6 +43,7 @@ backend/PyWhatKit_DB.txt
 
 # Node modules
 frontend/node_modules/
+command-ui/node_modules/
 
 # Next.js build output and cache
 frontend/.next/
