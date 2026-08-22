@@ -13,6 +13,7 @@ self-hosted on Schubert at `https://project-tango.schubert.life`.
 - Deepgram Flux for English and Nova-3 `tl` for Tagalog speech recognition
 - ElevenLabs Flash v2.5 and the optional Jeremiah F5-TTS sidecar
 - LiteLLM-only model routing to local and approved hosted models
+- n8n Alert Aggregation Hub for Health Guardian, scheduler, and Nexus `health.alert` events
 
 ## Account model
 

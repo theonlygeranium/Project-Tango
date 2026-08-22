@@ -117,20 +117,42 @@ def _discord_webhook_url() -> str:
     return env.get("DISCORD_WEBHOOK_URL", "")
 
 
-def send_discord_notification(message: str, level: str = "WARN") -> None:
-    """Send an alert to the Discord webhook channel.
+def _try_n8n_dispatch(message: str, level: str) -> bool:
+    """Forward the alert to the n8n hub. Returns True if n8n handled it."""
+    env = load_env()
+    enabled = env.get(
+        "N8N_ALERT_ENABLED", os.environ.get("N8N_ALERT_ENABLED", "true")
+    ).strip().lower()
+    if enabled in {"0", "false", "no", "off"}:
+        return False
+    try:
+        scripts_dir = os.path.dirname(os.path.abspath(__file__))
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        from alert_dispatcher import get_dispatcher
 
-    Uses Discord's webhook API with an embed for richer formatting.
+        get_dispatcher().send_health_alert(message, severity=level)
+        return True
+    except Exception:
+        return False
+
+
+def send_discord_notification(message: str, level: str = "WARN") -> None:
+    """Send an alert via the n8n hub, falling back to Discord webhook.
+
     Failures are silently ignored — notifications are best-effort and must
     never prevent the health check from completing.
     """
-    url = _discord_webhook_url()
-    if not url:
-        return  # no webhook configured, skip silently
-
     # Check severity threshold
     if _SEVERITY_ORDER.get(level, 0) < _SEVERITY_ORDER.get(DISCORD_MIN_SEVERITY, 0):
         return  # below threshold, don't send
+
+    if _try_n8n_dispatch(message, level):
+        return
+
+    url = _discord_webhook_url()
+    if not url:
+        return  # no webhook configured, skip silently
 
     emoji = _DISCORD_EMOJI.get(level, "⚠️")
     color = _DISCORD_COLORS.get(level, 0xFEE75C)

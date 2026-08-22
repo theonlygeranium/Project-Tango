@@ -7,6 +7,29 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ---
 
+## [Unreleased] n8n — Nexus alert bridge
+
+### Added
+- `scripts/alert_dispatcher.py` — unified POST client for the n8n Alert
+  Aggregation Hub (`/webhook/tango-alert`), including
+  `send_nexus_health_alert()` for Nexus Bus `health.alert` payloads.
+- `scripts/nexus_n8n_bridge.py` — import surface for FleetBot
+  `_handle_health_alert` after the Nexus Fleet rebuild.
+- Sanitized workflow export `scripts/n8n-alert-hub-workflow.json` (Discord
+  webhook URL replaced with a placeholder).
+- ADR-017 (hub) and ADR-018 (Nexus → n8n bridge).
+- Runbook `docs/runbooks/n8n-alert-hub.md`.
+
+### Changed
+- `tango-healthcheck.py` prefers n8n for WARN/CRITICAL alerts and falls back
+  to `DISCORD_WEBHOOK_URL` only if the dispatcher cannot start.
+- `scheduler.py` mirrors channel embeds to n8n so fleet sweeps still feed the
+  hub after the bot architecture change.
+- n8n validate node accepts Nexus severity aliases (`warning`, `error`,
+  `healthy`) so raw bus events do not fail schema checks.
+
+---
+
 ## [Unreleased] v2 — Voice Pipeline Optimization
 
 ### Added

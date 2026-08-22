@@ -278,6 +278,8 @@ See `docs/decisions/` for full ADRs.
 | Groq Tagalog defaults + universal voice layer | Reproduce current live persona behavior | ADR-009 |
 | Password accounts + server persona authorization | Protect every browser/API path and isolate account data | ADR-010 |
 | Discord fleet constants via `fleet-config.json` | Tunable without editing bot sources; missing file → defaults | 2026-08-20 fleet-config ADRs |
+| n8n Alert Aggregation Hub | Central Discord/Slack routing + 30m dedup | ADR-017 |
+| Nexus `health.alert` → n8n mapper | Keep the hub working after the Fleet rebuild | ADR-018 |
 
 ---
 
@@ -295,3 +297,14 @@ each script's previous hardcoded defaults — bots must not crash.
 - The JSON file is owned by the Fleet Command API and is not committed to this repo.
 - Do not restart Discord bot services as part of this change — operator restart
   after review.
+
+---
+
+## n8n Alert Hub
+
+n8n runs on Schubert at Tailscale `100.86.47.6:5678`. The active Tango
+workflow is **Alert Aggregation Hub** (`e4bjWJfSx6h5rfKd`) at
+`POST /webhook/tango-alert`. Callers use `scripts/alert_dispatcher.py`.
+Nexus Fleet `health.alert` events are mapped by
+`scripts/nexus_n8n_bridge.py`. See ADR-017, ADR-018, and
+`docs/runbooks/n8n-alert-hub.md`.
