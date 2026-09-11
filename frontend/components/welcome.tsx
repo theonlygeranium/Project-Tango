@@ -5,11 +5,14 @@ import { FaReact } from 'react-icons/fa';
 import dynamic from 'next/dynamic';
 import { useReducedMotion } from 'motion/react';
 import { LoopBanner } from '@/components/LoopBanner';
+import { MeditationTile } from '@/components/MeditationTile';
 import { PersonaSelector } from '@/components/PersonaSelector';
+import { ProgramLibrary } from '@/components/ProgramLibrary';
 import { Button } from '@/components/ui/button';
 import type { BackendLlmModel } from '@/lib/auth';
 import type { LlmModelSelectionId } from '@/lib/llm-models';
 import { type PersonaId, type TangoPersona } from '@/lib/personas';
+import type { Program } from '@/lib/programs';
 import { cn } from '@/lib/utils';
 
 // Lazy-load the heavy TippingButton (~15 KB) — deferred until after first paint
@@ -57,70 +60,45 @@ const AnimatedSquares: React.FC<AnimatedSquaresProps> = ({
       };
     };
 
-    const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+    // ---- State ---------------------------------------------------------------
+    let palette = getCanvasPalette();
+    let cssWidth = 0;
+    let cssHeight = 0;
+    let dpr = 1;
+
+    // Re-read palette when the color scheme changes
+    const observer = new MutationObserver(() => {
+      palette = getCanvasPalette();
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
+    // ---- Sizing --------------------------------------------------------------
+    const resize = () => {
+      dpr = window.devicePixelRatio || 1;
+      cssWidth = canvas.clientWidth;
+      cssHeight = canvas.clientHeight;
+      canvas.width = Math.round(cssWidth * dpr);
+      canvas.height = Math.round(cssHeight * dpr);
     };
+    resize();
 
-    const drawGrid = () => {
-      const state = animationState.current;
-      const palette = getCanvasPalette();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(canvas);
 
-      for (let x = 0; x < canvas.width + squareSize; x += squareSize) {
-        for (let y = 0; y < canvas.height + squareSize; y += squareSize) {
-          const squareX = x - (state.gridOffset.x % squareSize);
-          const squareY = y - (state.gridOffset.y % squareSize);
-
-          const isHovered =
-            state.hoveredSquare &&
-            Math.floor(x / squareSize) === state.hoveredSquare.x &&
-            Math.floor(y / squareSize) === state.hoveredSquare.y;
-
-          if (isHovered) {
-            ctx.fillStyle = palette.hover;
-            ctx.fillRect(squareX, squareY, squareSize, squareSize);
-          }
-
-          ctx.strokeStyle = palette.border;
-          ctx.strokeRect(squareX, squareY, squareSize, squareSize);
-        }
-      }
-
-      const gradient = ctx.createRadialGradient(
-        canvas.width / 2,
-        canvas.height / 2,
-        0,
-        canvas.width / 2,
-        canvas.height / 2,
-        Math.max(canvas.width, canvas.height) / 1.5
-      );
-      gradient.addColorStop(0, palette.center);
-      gradient.addColorStop(1, palette.edge);
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    };
-
-    const updateAnimation = () => {
-      const state = animationState.current;
-      const effectiveSpeed = Math.max(speed, 0.1);
-      state.gridOffset.x = (state.gridOffset.x - effectiveSpeed + squareSize) % squareSize;
-      drawGrid();
-      state.requestRef = requestAnimationFrame(updateAnimation);
+    // ---- Mouse / touch interaction ------------------------------------------
+    const getGridPos = (clientX: number, clientY: number) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+      return { x: Math.floor(x / squareSize), y: Math.floor(y / squareSize) };
     };
 
     const handleMouseMove = (event: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      const mouseY = event.clientY - rect.top;
-      const state = animationState.current;
-      const hoveredX = Math.floor((mouseX + state.gridOffset.x) / squareSize);
-      const hoveredY = Math.floor((mouseY + state.gridOffset.y) / squareSize);
-      state.hoveredSquare = { x: hoveredX, y: hoveredY };
-    };
-
-    const handleMouseLeave = () => {
-      animationState.current.hoveredSquare = null;
+      const { x, y } = getGridPos(event.clientX, event.clientY);
+      animationState.current.hoveredSquare = { x, y };
     };
 
     const handleTouchMove = (event: TouchEvent) => {
@@ -129,68 +107,128 @@ const AnimatedSquares: React.FC<AnimatedSquaresProps> = ({
       const rect = canvas.getBoundingClientRect();
       const mouseX = touch.clientX - rect.left;
       const mouseY = touch.clientY - rect.top;
-      const state = animationState.current;
-      state.hoveredSquare = {
-        x: Math.floor((mouseX + state.gridOffset.x) / squareSize),
-        y: Math.floor((mouseY + state.gridOffset.y) / squareSize),
+      animationState.current.hoveredSquare = {
+        x: Math.floor(mouseX / squareSize),
+        y: Math.floor(mouseY / squareSize),
       };
     };
 
-    resizeCanvas();
+    const handleMouseLeave = () => {
+      animationState.current.hoveredSquare = null;
+    };
 
-    // Respect prefers-reduced-motion: draw a static grid, skip rAF loop
-    if (prefersReducedMotion) {
-      drawGrid();
-    } else {
-      updateAnimation();
-    }
-
-    window.addEventListener('resize', resizeCanvas);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('touchmove', handleTouchMove, { passive: true });
     window.addEventListener('mouseleave', handleMouseLeave);
 
-    const state = animationState.current;
-    return () => {
-      if (state.requestRef) {
-        cancelAnimationFrame(state.requestRef);
+    // ---- Animation loop ------------------------------------------------------
+    const directions = {
+      diagonal: { x: 1, y: 1 },
+      up: { x: 0, y: -1 },
+      right: { x: 1, y: 0 },
+      down: { x: 0, y: 1 },
+      left: { x: -1, y: 0 },
+    };
+    const dir = directions[direction];
+
+    const draw = () => {
+      if (!ctx) return;
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+      const cols = Math.ceil(cssWidth / squareSize) + 1;
+      const rows = Math.ceil(cssHeight / squareSize) + 1;
+      const { x: offsetX, y: offsetY } = animationState.current.gridOffset;
+
+      for (let row = -1; row < rows; row++) {
+        for (let col = -1; col < cols; col++) {
+          const px = col * squareSize + (offsetX % squareSize);
+          const py = row * squareSize + (offsetY % squareSize);
+
+          // Distance from center for fade effect
+          const centerX = cssWidth / 2;
+          const centerY = cssHeight / 2;
+          const dist = Math.sqrt((px - centerX) ** 2 + (py - centerY) ** 2);
+          const maxDist = Math.sqrt(centerX ** 2 + centerY ** 2);
+          const alpha = 1 - dist / maxDist;
+
+          // Hover highlight
+          const isHovered =
+            animationState.current.hoveredSquare?.x === col &&
+            animationState.current.hoveredSquare?.y === row;
+
+          ctx.strokeStyle = palette.border || 'rgba(0,0,0,0.1)';
+          ctx.lineWidth = 1;
+
+          if (isHovered) {
+            ctx.fillStyle = palette.hover || 'rgba(0,0,0,0.05)';
+            ctx.fillRect(px, py, squareSize, squareSize);
+          }
+
+          ctx.globalAlpha = alpha * 0.5;
+          ctx.strokeRect(px, py, squareSize, squareSize);
+        }
       }
-      window.removeEventListener('resize', resizeCanvas);
+
+      ctx.restore();
+
+      // Update grid offset
+      if (!prefersReducedMotion) {
+        animationState.current.gridOffset.x += dir.x * speed;
+        animationState.current.gridOffset.y += dir.y * speed;
+      }
+
+      animationState.current.requestRef = requestAnimationFrame(draw);
+    };
+
+    draw();
+
+    return () => {
+      if (animationState.current.requestRef) {
+        cancelAnimationFrame(animationState.current.requestRef);
+      }
+      observer.disconnect();
+      resizeObserver.disconnect();
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('mouseleave', handleMouseLeave);
     };
   }, [direction, speed, squareSize, prefersReducedMotion]);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 -z-10 h-full w-full" />;
+  // Canvas is fixed to the viewport so it stays as a background while the page scrolls
+  return <canvas ref={canvasRef} className="fixed inset-0 -z-10 h-svh w-full" />;
 };
 
 interface WelcomeProps {
-  disabled: boolean;
-  startButtonText: string;
   selectedPersonaId: PersonaId;
   personas: TangoPersona[];
-  isAdmin: boolean;
-  availableLlmModels: BackendLlmModel[];
-  selectedModels: Partial<Record<PersonaId, LlmModelSelectionId>>;
+  isAdmin?: boolean;
+  availableLlmModels?: BackendLlmModel[];
+  selectedModels?: Partial<Record<PersonaId, LlmModelSelectionId>>;
   onPersonaChange: (personaId: PersonaId) => void;
-  onModelChange: (personaId: PersonaId, modelId: LlmModelSelectionId) => void;
+  onModelChange?: (personaId: PersonaId, modelId: LlmModelSelectionId) => void;
   onStartCall: () => void;
+  onSelectProgram: (program: Program) => void;
+  startButtonText: string;
+  disabled?: boolean;
 }
 
 export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
   (
     {
-      disabled,
-      startButtonText,
       selectedPersonaId,
       personas,
-      isAdmin,
-      availableLlmModels,
-      selectedModels,
+      isAdmin = false,
+      availableLlmModels = [],
+      selectedModels = {},
       onPersonaChange,
       onModelChange,
       onStartCall,
+      onSelectProgram,
+      startButtonText,
+      disabled = false,
     },
     ref
   ) => {
@@ -203,8 +241,13 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
         ref={ref}
         inert={disabled}
         className={cn(
-          'fixed inset-0 z-10 mx-auto flex h-svh flex-col items-center justify-start overflow-y-auto px-3 pt-[calc(env(safe-area-inset-top)+3.25rem)] pb-[calc(env(safe-area-inset-bottom)+4.5rem)] text-center sm:justify-center sm:p-0',
-          isAdmin ? 'sm:justify-start sm:overflow-y-auto sm:pt-8 sm:pb-24' : 'sm:overflow-hidden'
+          // Use relative + min-h-svh instead of fixed + h-svh + overflow-y-auto.
+          // On mobile (especially iOS Safari), position:fixed + overflow-y:auto
+          // does not scroll — the content is clipped and unreachable.
+          // By using relative positioning and letting the document scroll natively,
+          // all content (including the Start Conversation button) is reachable.
+          'relative z-10 mx-auto flex min-h-svh flex-col items-center justify-start px-3 pt-[calc(env(safe-area-inset-top)+3.25rem)] pb-[calc(env(safe-area-inset-bottom)+4.5rem)] text-center',
+          isAdmin ? 'sm:pt-8 sm:pb-24' : 'sm:py-6'
         )}
       >
         <AnimatedSquares direction="diagonal" speed={0.5} squareSize={42} />
@@ -249,6 +292,21 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
             />
           </div>
 
+          <div className="pointer-events-auto flex w-full flex-col items-center gap-2">
+            <span className="text-foreground/60 font-mono text-xs font-bold uppercase">
+              Meditation
+            </span>
+            <div className="grid w-full max-w-4xl grid-cols-1 gap-2 sm:grid-cols-2">
+              <MeditationTile />
+            </div>
+          </div>
+
+          <ProgramLibrary
+            personas={personas}
+            disabled={disabled}
+            onSelectProgram={onSelectProgram}
+          />
+
           <Button
             variant="primary"
             size="lg"
@@ -263,7 +321,7 @@ export const Welcome = React.forwardRef<HTMLDivElement, WelcomeProps>(
         <div
           className={cn(
             'pointer-events-none flex w-full max-w-prose flex-col items-center gap-1 px-4 text-center text-xs',
-            isAdmin ? 'relative z-10 mt-1 pb-4' : 'fixed bottom-6 left-1/2 -translate-x-1/2'
+            isAdmin ? 'relative z-10 mt-1 pb-4' : 'relative z-10 mt-2 pb-6'
           )}
         >
           <p className="font-medium text-sky-500 dark:text-sky-400">

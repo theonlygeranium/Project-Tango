@@ -16,7 +16,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -913,6 +913,72 @@ async def deploy_info() -> dict[str, Any]:
             "note": "No deployment info available.",
             "version": None,
         }
+
+
+# ---------------------------------------------------------------------------
+# Meditation audio streaming endpoint
+# ---------------------------------------------------------------------------
+
+MEDITATION_AUDIO_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "assets", "meditation", "nathaniel_deep_return.mp3",
+)
+
+
+@app.get("/api/meditation-audio")
+async def meditation_audio(request: Request):
+    """Stream the meditation audio file with HTTP range support for seeking."""
+    if not os.path.exists(MEDITATION_AUDIO_PATH):
+        raise HTTPException(status_code=404, detail="Meditation audio not found")
+
+    file_size = os.path.getsize(MEDITATION_AUDIO_PATH)
+    range_header = request.headers.get("range")
+
+    if range_header:
+        # Parse Range header for seeking support
+        range_match = range_header.strip()
+        if range_match.startswith("bytes="):
+            range_spec = range_match[6:].split("-")
+            start = int(range_spec[0]) if range_spec[0] else 0
+            end = int(range_spec[1]) if range_spec[1] else file_size - 1
+        else:
+            start, end = 0, file_size - 1
+
+        end = min(end, file_size - 1)
+        content_length = end - start + 1
+
+        def iter_chunks():
+            with open(MEDITATION_AUDIO_PATH, "rb") as f:
+                f.seek(start)
+                remaining = content_length
+                while remaining > 0:
+                    chunk = f.read(min(65536, remaining))
+                    if not chunk:
+                        break
+                    remaining -= len(chunk)
+                    yield chunk
+
+        return StreamingResponse(
+            iter_chunks(),
+            status_code=206,
+            media_type="audio/mpeg",
+            headers={
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(content_length),
+                "Cache-Control": "public, max-age=3600",
+            },
+        )
+    else:
+        return FileResponse(
+            MEDITATION_AUDIO_PATH,
+            media_type="audio/mpeg",
+            headers={
+                "Accept-Ranges": "bytes",
+                "Cache-Control": "public, max-age=3600",
+            },
+        )
+
 
 
 @app.get("/api/personas")
