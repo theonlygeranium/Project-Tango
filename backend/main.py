@@ -1582,6 +1582,7 @@ async def entrypoint(ctx: Any) -> None:
                 logger.error("TANGO_SIP_OWNER_USER_ID is invalid; SIP history disabled")
                 account_user_id = None
     account_uuid: uuid.UUID | None = None
+    account_user_email: str | None = None
     if account_user_id:
         try:
             account_uuid = uuid.UUID(account_user_id)
@@ -1747,6 +1748,15 @@ async def entrypoint(ctx: Any) -> None:
         if speaker not in {"user", "agent"}:
             return
 
+        # Record agent turns for transcription
+        if speaker == "agent":
+            _agent_text = _chat_message_text(ev.item)
+            if _agent_text and hasattr(_tango_agent, 'add_agent_turn'):
+                try:
+                    asyncio.create_task(_tango_agent.add_agent_turn(_agent_text))
+                except Exception:
+                    logger.exception("Could not record agent turn for transcription")
+
         latency_ms = _message_latency_ms(ev.item)
         record_turn(
             session_turns,
@@ -1836,6 +1846,20 @@ async def entrypoint(ctx: Any) -> None:
     ctx.add_shutdown_callback(flush_history)
     ctx.add_shutdown_callback(vision_context.aclose)
 
+    # Resolve user email for transcription feature
+    if account_uuid is not None:
+        try:
+            _pool = await get_pool()
+            async with _pool.acquire() as _conn:
+                _row = await _conn.fetchrow(
+                    "SELECT email FROM tango.users WHERE id = $1",
+                    account_uuid,
+                )
+                if _row:
+                    account_user_email = _row["email"]
+        except Exception:
+            logger.exception("Could not resolve user email for transcription")
+
     account_monitor_task = (
         asyncio.create_task(_account_access_monitor(ctx, account_uuid, room_name))
         if account_uuid is not None and not is_sip
@@ -1851,15 +1875,34 @@ async def entrypoint(ctx: Any) -> None:
 
     ctx.add_shutdown_callback(stop_account_monitor)
 
+    async def finalize_tango_transcription() -> None:
+        """Finalize transcription on session shutdown (call-drop resilience)."""
+        try:
+            if hasattr(_tango_agent, 'finalize_transcription'):
+                await _tango_agent.finalize_transcription()
+        except Exception:
+            logger.exception("Could not finalize transcription on shutdown")
+
+    ctx.add_shutdown_callback(finalize_tango_transcription)
+
+    _tango_agent = Jarvis(
+        persona_for_agent,
+        llm_model=llm_model,
+        vision_context=vision_context,
+        db_pool=await get_pool(),
+        initial_program=participant_context.get("program_name"),
+    )
+
+    # Set user email on the transcription recorder if available
+    if account_user_email and hasattr(_tango_agent, '_transcription_recorder'):
+        if _tango_agent._transcription_recorder is not None:
+            _tango_agent._transcription_recorder.user_email = account_user_email
+            _tango_agent._transcription_recorder.user_id = str(account_uuid) if account_uuid else None
+            _tango_agent._transcription_recorder.room_name = room_name
+
     try:
         await session.start(
-            agent=Jarvis(
-                persona_for_agent,
-                llm_model=llm_model,
-                vision_context=vision_context,
-                db_pool=await get_pool(),
-                initial_program=participant_context.get("program_name"),
-            ),
+            agent=_tango_agent,
             room=ctx.room,
         )
     except Exception as exc:

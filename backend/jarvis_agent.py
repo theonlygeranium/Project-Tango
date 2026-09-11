@@ -33,6 +33,13 @@ from meditation_tools import (
     build_meditation_tools,
     detect_meditation_command,
 )
+from transcription_tools import (
+    TRANSCRIPTION_ENABLED,
+    TranscriptionRecorder,
+    TRANSCRIPTION_INSTRUCTIONS,
+    build_transcription_tools,
+    detect_transcription_command,
+)
 
 logger = logging.getLogger("project-tango.agent")
 LOCAL_QWEN_MODEL = "local/qwen3-fast"
@@ -106,6 +113,7 @@ class Jarvis(Agent):
         self._active_program: str | None = None
         self._initial_program: str | None = initial_program
         self._meditation_player: MeditationPlayer | None = None
+        self._transcription_recorder: TranscriptionRecorder | None = None
         self._control_mode_saved_instructions: str | None = None
 
         local_model_guidance = ""
@@ -153,6 +161,7 @@ class Jarvis(Agent):
             "full page content. Summarize documentation naturally in your own "
             "voice; do not read raw markdown to the user."
             + MEDITATION_INSTRUCTIONS
+            + TRANSCRIPTION_INSTRUCTIONS
         )
 
         # Build control mode tools if enabled and DB pool is available.
@@ -188,7 +197,8 @@ class Jarvis(Agent):
             + program_tools
             + list(WIKI_TOOLS)
             + list(MINTLIFY_TOOLS)
-            + self._build_meditation_tools(),
+            + self._build_meditation_tools()
+            + self._build_transcription_tools(),
         )
 
     def _build_meditation_tools(self) -> list:
@@ -197,6 +207,28 @@ class Jarvis(Agent):
             return []
         self._meditation_player = MeditationPlayer()
         return build_meditation_tools(self._meditation_player)
+
+    def _build_transcription_tools(self) -> list:
+        """Build transcription recording tools if enabled."""
+        if not TRANSCRIPTION_ENABLED:
+            return []
+        self._transcription_recorder = TranscriptionRecorder(
+            persona_id=self.persona.id,
+            persona_name=self.persona.display_name,
+            db_pool=self._db_pool,
+        )
+        return build_transcription_tools(self._transcription_recorder)
+
+    async def add_agent_turn(self, text: str) -> None:
+        """Record an agent speech turn for transcription."""
+        if self._transcription_recorder is not None and self._transcription_recorder.is_active:
+            if text:
+                await self._transcription_recorder.add_turn("Agent", text)
+
+    async def finalize_transcription(self) -> None:
+        """Finalize transcription on session shutdown (call-drop resilience)."""
+        if self._transcription_recorder is not None:
+            await self._transcription_recorder.finalize()
 
     async def on_enter(self):
         if self.vision_context is not None:
@@ -273,6 +305,11 @@ class Jarvis(Agent):
 
     async def on_user_turn_completed(self, turn_ctx: Any, new_message: Any) -> None:
         user_text = _chat_message_text(new_message)
+
+        # --- Accumulate user turn for transcription ---
+        if self._transcription_recorder is not None and self._transcription_recorder.is_active:
+            if user_text:
+                await self._transcription_recorder.add_turn("User", user_text)
 
         # --- Control Mode phrase detection ---
         if control_mode_enabled():
@@ -404,6 +441,35 @@ class Jarvis(Agent):
                     "The meditation track has been stopped. "
                     "Acknowledge this briefly."
                 ]
+                return
+
+        # --- Transcription voice commands ---
+        if self._transcription_recorder is not None:
+            transcription_cmd = detect_transcription_command(
+                user_text, self._transcription_recorder.is_active
+            )
+            if transcription_cmd == "start":
+                await self._transcription_recorder.start()
+                new_message.content = [
+                    "The user has asked to begin transcription. "
+                    "Acknowledge this briefly and let them know you're "
+                    "now recording the conversation. They can say "
+                    "'stop transcription' when done."
+                ]
+                return
+            elif transcription_cmd == "stop":
+                transcript = await self._transcription_recorder.stop()
+                if transcript:
+                    new_message.content = [
+                        "The transcription has been stopped. "
+                        "The transcript has been saved to the database "
+                        "and emailed to the user. Acknowledge this briefly."
+                    ]
+                else:
+                    new_message.content = [
+                        "The transcription was stopped but no conversation "
+                        "was recorded. Acknowledge this briefly."
+                    ]
                 return
 
         # --- Vision context injection (existing behavior) ---
