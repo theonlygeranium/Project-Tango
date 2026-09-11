@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from typing import Annotated
 
 import httpx
@@ -56,6 +57,20 @@ def _outline_request(base_url: str, api_key: str, method: str, body: dict) -> di
         return None
 
 
+def _strip_html(text: str) -> str:
+    """Remove HTML tags from Outline search context (highlight <b> tags)."""
+    return re.sub(r"<[^>]+>", "", text)
+
+
+def _strip_markdown(text: str) -> str:
+    """Remove markdown formatting that would sound awkward when spoken."""
+    text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.+?)\*", r"\1", text)
+    text = re.sub(r"`(.+?)`", r"\1", text)
+    return text
+
+
 @register_tool
 @function_tool
 async def search_wiki(
@@ -77,23 +92,29 @@ async def search_wiki(
     if result is None:
         return "EL Wiki search request failed. The wiki may be unreachable."
 
-    data = result.get("data", {})
-    documents = data.get("documents", [])
+    # Outline documents.search returns data as a list of {ranking, context, document} objects
+    data = result.get("data", [])
+    if not isinstance(data, list):
+        return f"Unexpected response format from EL Wiki search for '{query}'."
 
-    if not documents:
+    if not data:
         return f"No documents found in the EL Wiki for '{query}'."
 
     parts: list[str] = []
-    for doc in documents:
+    for item in data:
+        doc = item.get("document", {}) if isinstance(item, dict) else {}
         title = doc.get("title", "Untitled")
-        snippet = doc.get("text", "") or doc.get("summary", "")
-        # Truncate snippet to keep voice response concise
+        # Use the search context snippet if available, fall back to document text
+        snippet = item.get("context", "") if isinstance(item, dict) else ""
+        if not snippet:
+            snippet = doc.get("text", "")
+        snippet = _strip_html(snippet)
         if len(snippet) > 300:
             snippet = snippet[:297] + "..."
         doc_id = doc.get("id", "")
         parts.append(f"- {title}: {snippet} (id: {doc_id})")
 
-    return f"Found {len(documents)} document(s) in the EL Wiki:\n" + "\n".join(parts)
+    return f"Found {len(data)} document(s) in the EL Wiki:\n" + "\n".join(parts)
 
 
 @register_tool
@@ -117,16 +138,22 @@ async def get_wiki_document(
         return "EL Wiki document retrieval failed. The wiki may be unreachable."
 
     data = result.get("data", {})
-    title = data.get("title", "Untitled")
-    body = data.get("body", "")
+    if not isinstance(data, dict):
+        return "Unexpected response format from EL Wiki document retrieval."
 
-    if not body:
+    title = data.get("title", "Untitled")
+    # Outline stores document content in the 'text' field (markdown), not 'body'
+    content = data.get("text", "") or data.get("body", "")
+
+    if not content:
         return f"Document '{title}' was found but has no readable content."
 
-    # Truncate very long documents to keep the LLM context manageable
-    # for voice responses (approximately 4000 chars ≈ 2 minutes of speech)
-    max_chars = 4000
-    if len(body) > max_chars:
-        body = body[:max_chars] + "\n\n[Document truncated. Use search_wiki for more specific queries.]"
+    content = _strip_markdown(content)
 
-    return f"Document: {title}\n\n{body}"
+    # Truncate very long documents to keep the LLM context manageable
+    # for voice responses (approximately 4000 chars)
+    max_chars = 4000
+    if len(content) > max_chars:
+        content = content[:max_chars] + "\n\n[Document truncated. Use search_wiki for more specific queries.]"
+
+    return f"Document: {title}\n\n{content}"
