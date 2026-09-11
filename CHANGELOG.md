@@ -7,26 +7,6 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ---
 
-## [Unreleased] v2 — Voice Pipeline Optimization
-
-### Added
-- DeepGram Flux Eager End-of-Turn (`eager_eot_threshold`) for English personas.
-  Per-persona tunable: Chris (0.6), Jeremiah (0.6), Jeremiah V2 (0.55),
-  Jacob (0.65); disabled for Damian, Nathaniel, and Tagalog personas.
-  See ADR-011.
-- Optional global override `TANGO_EAGER_EOT_THRESHOLD` env var.
-- ElevenLabs voice clone audit script (`scripts/audit_elevenlabs_voices.py`).
-- ElevenLabs TTFB verification script (`scripts/verify_elevenlabs_ttfb.py`).
-- Per-agent-turn latency logging in `tango-backend` logs.
-- Conditional `use_pvc_as_ivc` support via `TANGO_ELEVENLABS_USE_PVC_AS_IVC` env var
-  with graceful fallback when the installed plugin version doesn't support it.
-
-### Changed
-- Startup log line now includes `eager_eot_threshold`.
-- `docs/architecture.md` voice pipeline diagram updated to reflect eager EOT.
-
----
-
 ## [Unreleased]
 
 ### Added
@@ -114,8 +94,8 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 - Added Admiral Schubert nautical personality to Schubert Bot. The system
   prompt now defines Admiral Schubert as a distinguished Maine Coon cat of
   high naval rank who commands the Schubert server as a ship. The bot
-  addresses the user as "Captain", uses nautical terminology, and refers
-  to services as "vessels" or "the fleet". Technical precision is
+  addresses the user as "Captain", uses nautical terminology, and refers to
+  services as "vessels" or "the fleet". Technical precision is
   preserved — the persona enhances communication without affecting
   diagnostic accuracy. Updated help text and on_ready log message to
   match the persona.
@@ -318,6 +298,26 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ---
 
+## [2.0.0] - 2026-09-11 — Stable Baseline `v2.0-stable`
+
+### Added
+- DeepGram Flux Eager End-of-Turn (`eager_eot_threshold`) for English personas.
+  Per-persona tunable: Chris (0.6), Jeremiah (0.6), Jeremiah V2 (0.55),
+  Jacob (0.65); disabled for Damian, Nathaniel, and Tagalog personas.
+  See ADR-011.
+- Optional global override `TANGO_EAGER_EOT_THRESHOLD` env var.
+- ElevenLabs voice clone audit script (`scripts/audit_elevenlabs_voices.py`).
+- ElevenLabs TTFB verification script (`scripts/verify_elevenlabs_ttfb.py`).
+- Per-agent-turn latency logging in `tango-backend` logs.
+- Conditional `use_pvc_as_ivc` support via `TANGO_ELEVENLABS_USE_PVC_AS_IVC` env var
+  with graceful fallback when the installed plugin version doesn't support it.
+
+### Changed
+- Startup log line now includes `eager_eot_threshold`.
+- `docs/architecture.md` voice pipeline diagram updated to reflect eager EOT.
+
+---
+
 ## [1.0.0] - 2026-06-28 — Stable Baseline `v1.0-stable`
 
 ### Added
@@ -392,5 +392,6 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ---
 
-[Unreleased]: https://github.com/theonlygeranium/Project-Tango/compare/v1.0-stable...HEAD
+[Unreleased]: https://github.com/theonlygeranium/Project-Tango/compare/v2.0-stable...HEAD
+[2.0.0]: https://github.com/theonlygeranium/Project-Tango/releases/tag/v2.0-stable
 [1.0.0]: https://github.com/theonlygeranium/Project-Tango/releases/tag/v1.0-stable
