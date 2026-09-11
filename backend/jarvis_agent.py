@@ -11,6 +11,7 @@ from livekit.agents import Agent
 
 from personas import Persona
 from search_tools import SEARCH_TOOLS as WEB_SEARCH_TOOLS
+from wiki_tools import WIKI_TOOLS
 
 logger = logging.getLogger("project-tango.agent")
 LOCAL_QWEN_MODEL = "local/qwen3-fast"
@@ -92,10 +93,17 @@ class Jarvis(Agent):
                 "Palmyra unless the route starts with writer/palmyra. When visual context "
                 "from the user's camera or screen share is provided as a system note, use it "
                 "naturally if it helps answer the user's latest turn; do not claim you are "
-                "watching continuously."
+                "watching continuously.\n\n"
+                "EL WIKI ACCESS: You have tools to search the EL Wiki (Outline), the team "
+                "knowledge base at EdStratum Labs. When the user asks about project "
+                "documentation, architecture decisions, runbooks, or any knowledge that "
+                "might be stored in the wiki, use the search_wiki tool to find relevant "
+                "documents, and get_wiki_document to retrieve full content. Do not claim "
+                "you cannot access the wiki — you can. Summarize wiki content naturally "
+                "in your own voice; do not read raw markdown to the user."
                 f"{local_model_guidance}"
             ),
-            tools=list(_load_tools()) + list(WEB_SEARCH_TOOLS),
+            tools=list(_load_tools()) + list(WEB_SEARCH_TOOLS) + list(WIKI_TOOLS),
         )
 
     async def on_enter(self):
