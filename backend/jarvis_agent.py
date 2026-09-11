@@ -12,6 +12,7 @@ from livekit.agents import Agent
 from personas import Persona
 from search_tools import SEARCH_TOOLS as WEB_SEARCH_TOOLS
 from wiki_tools import WIKI_TOOLS
+from mintlify_tools import MINTLIFY_TOOLS
 
 logger = logging.getLogger("project-tango.agent")
 LOCAL_QWEN_MODEL = "local/qwen3-fast"
@@ -100,10 +101,16 @@ class Jarvis(Agent):
                 "might be stored in the wiki, use the search_wiki tool to find relevant "
                 "documents, and get_wiki_document to retrieve full content. Do not claim "
                 "you cannot access the wiki — you can. Summarize wiki content naturally "
-                "in your own voice; do not read raw markdown to the user."
+                "in your own voice; do not read raw markdown to the user.\n\n"
+                "DOCS SITE ACCESS: You have tools to search and read the EdStratum Labs "
+                "documentation site (Mintlify). When the user asks about product "
+                "documentation, API references, guides, or how-to articles, use the "
+                "search_docs tool to find relevant pages and read_doc to retrieve "
+                "full page content. Summarize documentation naturally in your own "
+                "voice; do not read raw markdown to the user."
                 f"{local_model_guidance}"
             ),
-            tools=list(_load_tools()) + list(WEB_SEARCH_TOOLS) + list(WIKI_TOOLS),
+            tools=list(_load_tools()) + list(WEB_SEARCH_TOOLS) + list(WIKI_TOOLS) + list(MINTLIFY_TOOLS),
         )
 
     async def on_enter(self):
