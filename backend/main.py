@@ -73,6 +73,7 @@ DEFAULT_F5_TTS_BASE_URL = "http://127.0.0.1:8020"
 DEFAULT_F5_TTS_SAMPLE_RATE = 24000
 DEFAULT_F5_TTS_TIMEOUT_SECONDS = 60.0
 DEFAULT_F5_TTS_START_TIMEOUT_SECONDS = 600.0
+DEFAULT_SESSION_TTL_MINUTES = 480  # 8 hours — allows extended conversations without token expiry cutoffs
 
 
 # Deepgram Aura TTS voice mapping for fallback when primary TTS fails.
@@ -206,6 +207,15 @@ def _livekit_num_idle_processes() -> int:
     if value < 0:
         raise ValueError("LIVEKIT_NUM_IDLE_PROCESSES must be zero or greater")
     return value
+
+
+def _session_ttl_minutes() -> int:
+    """Return the participant token TTL in minutes.
+
+    Defaults to 8 hours (480 min) so long conversations are not cut off by
+    token expiry. Override with TANGO_SESSION_TTL_MINUTES env var.
+    """
+    return _env_int("TANGO_SESSION_TTL_MINUTES", DEFAULT_SESSION_TTL_MINUTES)
 
 
 def _env_bool(name: str, *, default: bool = True) -> bool:
@@ -714,7 +724,7 @@ def create_participant_token(
     from livekit import api
 
     token = api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
-    token = token.with_ttl(timedelta(minutes=15))
+    token = token.with_ttl(timedelta(minutes=_session_ttl_minutes()))
     token = token.with_identity(
         request.participant_identity or f"tango_user_{uuid.uuid4().hex[:8]}"
     ).with_name(request.participant_name or "Project Tango User")
@@ -825,13 +835,14 @@ async def authorized_connection_details(
             INSERT INTO tango.voice_room_grants
                 (room_name, user_id, persona_id, effective_llm_model,
                  participant_identity, expires_at)
-            VALUES ($1, $2, $3, $4, $5, now() + interval '15 minutes')
+            VALUES ($1, $2, $3, $4, $5, now() + ($6::text::interval))
             """,
             room_name,
             user.id,
             persona.id,
             llm_model,
             participant_identity,
+            f"{_session_ttl_minutes()} minutes",
         )
     except Exception:
         logger.exception(
@@ -1646,6 +1657,10 @@ async def entrypoint(ctx: Any) -> None:
         tts=_build_tts(persona, elevenlabs),
         turn_handling=turn_handling,
         use_tts_aligned_transcript=False,
+        # Disable the 15s user-away timeout so extended pauses in conversation
+        # do not degrade the agent into an away state. Set to a value in
+        # seconds (e.g. 300) via TANGO_USER_AWAY_TIMEOUT to re-enable.
+        user_away_timeout=_env_float("TANGO_USER_AWAY_TIMEOUT", 0) or None,
     )
 
     session_turns: list[dict[str, Any]] = []

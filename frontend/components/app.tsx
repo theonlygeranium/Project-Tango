@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Room, RoomEvent } from 'livekit-client';
 import { motion } from 'motion/react';
 import { RoomAudioRenderer, RoomContext, StartAudio } from '@livekit/components-react';
@@ -23,6 +23,7 @@ import {
   type TangoPersona,
   isPersonaId,
 } from '@/lib/personas';
+import type { Program } from '@/lib/programs';
 import type { AppConfig } from '@/lib/types';
 
 const MotionWelcome = motion.create(Welcome);
@@ -95,9 +96,12 @@ export function App({
   availableLlmModels,
 }: AppProps) {
   const room = useMemo(() => new Room(), []);
+  const userInitiatedDisconnect = useRef(false);
+  const reconnectAttempts = useRef(0);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [canPlayAudio, setCanPlayAudio] = useState(room.canPlaybackAudio);
   const [selectedPersonaId, setSelectedPersonaId] = useState<PersonaId>(defaultPersonaId);
+  const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [selectedModels, setSelectedModels] = useState<AdminModelSelections>({});
   const [preferencesReady, setPreferencesReady] = useState(false);
   const selectedModelId = selectedModels[selectedPersonaId] ?? DEFAULT_LLM_MODEL_SELECTION_ID;
@@ -105,7 +109,8 @@ export function App({
     useConnectionDetails(
       selectedPersonaId,
       preferencesReady && sessionStarted,
-      isAdmin ? llmModelRequestValue(selectedModelId) : undefined
+      isAdmin ? llmModelRequestValue(selectedModelId) : undefined,
+      selectedProgram?.name
     );
 
   useEffect(() => {
@@ -138,11 +143,32 @@ export function App({
 
   useEffect(() => {
     const onDisconnected = () => {
-      setSessionStarted(false);
-      setCanPlayAudio(room.canPlaybackAudio);
-      // Clear stale connection details so a persona switch always starts a
-      // fresh fetch when the user taps Start — never reuse the old token.
-      clearConnectionDetails();
+      if (userInitiatedDisconnect.current) {
+        setSessionStarted(false);
+        setCanPlayAudio(room.canPlaybackAudio);
+        setSelectedProgram(null);
+        clearConnectionDetails();
+        return;
+      }
+      // Unexpected disconnect — attempt auto-reconnect with a fresh token.
+      if (reconnectAttempts.current < 3) {
+        reconnectAttempts.current += 1;
+        toastAlert({
+          title: "Connection interrupted. Reconnecting...",
+          description: "Attempt " + reconnectAttempts.current + " of 3",
+        });
+        refreshConnectionDetails();
+      } else {
+        setSessionStarted(false);
+        setCanPlayAudio(room.canPlaybackAudio);
+        setSelectedProgram(null);
+        clearConnectionDetails();
+        reconnectAttempts.current = 0;
+        toastAlert({
+          title: "Connection lost.",
+          description: "Please tap Start to reconnect.",
+        });
+      }
     };
     const onAudioPlaybackStatusChanged = () => {
       setCanPlayAudio(room.canPlaybackAudio);
@@ -165,7 +191,7 @@ export function App({
       room.off(RoomEvent.MediaDevicesError, onMediaDevicesError);
       room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlaybackStatusChanged);
     };
-  }, [room, clearConnectionDetails]);
+  }, [room, clearConnectionDetails, refreshConnectionDetails]);
 
   useEffect(() => {
     let aborted = false;
@@ -217,6 +243,7 @@ export function App({
         }
 
         try {
+          reconnectAttempts.current = 0;
           await room.localParticipant.setMicrophoneEnabled(true, undefined, {
             preConnectBuffer: appConfig.isPreConnectBufferEnabled,
           });
@@ -237,6 +264,7 @@ export function App({
     }
     return () => {
       aborted = true;
+      userInitiatedDisconnect.current = true;
       room.disconnect();
     };
   }, [
@@ -254,6 +282,21 @@ export function App({
   const handleModelChange = useCallback((personaId: PersonaId, modelId: LlmModelSelectionId) => {
     setSelectedModels((current) => ({ ...current, [personaId]: modelId }));
   }, []);
+
+  const handleSelectProgram = useCallback(
+    (program: Program) => {
+      setSelectedProgram(program);
+      setSelectedPersonaId(program.base_persona_id);
+      void room
+        .startAudio()
+        .catch(() => undefined)
+        .finally(() => {
+          setCanPlayAudio(room.canPlaybackAudio);
+        });
+      setSessionStarted(true);
+    },
+    [room]
+  );
 
   return (
     <>
@@ -276,6 +319,7 @@ export function App({
             });
           setSessionStarted(true);
         }}
+        onSelectProgram={handleSelectProgram}
         disabled={sessionStarted}
         initial={{ opacity: 0 }}
         animate={{ opacity: sessionStarted ? 0 : 1 }}
@@ -289,20 +333,22 @@ export function App({
           className="border-primary/30 bg-primary text-primary-foreground hover:bg-primary-hover focus-visible:ring-ring/50 fixed top-4 left-1/2 z-[70] min-h-11 -translate-x-1/2 rounded-full border px-5 text-xs font-bold tracking-wider uppercase shadow-lg transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
         />
         {/* --- */}
-        <MotionSessionView
-          key="session-view"
-          appConfig={appConfig}
-          selectedPersonaId={selectedPersonaId}
-          disabled={!sessionStarted}
-          sessionStarted={sessionStarted}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: sessionStarted ? 1 : 0 }}
-          transition={{
-            duration: 0.5,
-            ease: 'linear',
-            delay: sessionStarted ? 0.5 : 0,
-          }}
-        />
+        {sessionStarted && (
+          <MotionSessionView
+            key="session-view"
+            appConfig={appConfig}
+            selectedPersonaId={selectedPersonaId}
+            disabled={false}
+            sessionStarted={sessionStarted}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{
+              duration: 0.5,
+              ease: 'linear',
+              delay: 0.5,
+            }}
+          />
+        )}
       </RoomContext.Provider>
 
       <HistoryPanel hidden={sessionStarted} />
