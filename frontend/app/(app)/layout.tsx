@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { AccountMenu } from '@/components/auth/AccountMenu';
 import { getCurrentUser } from '@/lib/server/backend';
+import { DeployBadge } from '@/components/DeployBadge';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -53,6 +54,7 @@ export default async function AppLayout({ children }: AppLayoutProps) {
       </header>
       <AccountMenu user={user} />
       {children}
+      <DeployBadge />
     </>
   );
 }

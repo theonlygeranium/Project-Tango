@@ -36,6 +36,7 @@ from history import (
     record_turn,
 )
 from memory import generate_session_memory, load_context_for_session
+from mcp_tools import voice_mcp_bridge
 from personas import (
     DEFAULT_PERSONA_ID,
     Persona,
@@ -44,6 +45,7 @@ from personas import (
     list_personas,
     resolve_llm_model,
 )
+from programs import load_programs, programs_enabled
 from sip import SIP_GREETING_ADDENDUM, persona_key_from_room_name
 
 dotenv_path = Path(__file__).parent / ".env"
@@ -93,9 +95,11 @@ limiter = Limiter(key_func=get_remote_address)
 async def lifespan(_: FastAPI):
     validate_auth_config()
     await get_pool()
+    await voice_mcp_bridge.connect()
     try:
         yield
     finally:
+        await voice_mcp_bridge.disconnect()
         await close_pool()
 
 
@@ -141,6 +145,7 @@ class TokenRequest(BaseModel):
     persona: str | None = None
     llm_model: str | None = None
     room_config: dict[str, Any] | None = None
+    program_name: str | None = None
 
 
 def _require_livekit_env() -> None:
@@ -686,12 +691,15 @@ def _token_metadata(
 def _token_attributes(
     persona: Persona, request: TokenRequest, llm_model: str
 ) -> dict[str, str]:
-    return {
+    attrs = {
         **request.participant_attributes,
         "tango.persona": persona.id,
         "tango.display_name": persona.display_name,
         "tango.llm_model": llm_model,
     }
+    if request.program_name:
+        attrs["tango.program_name"] = request.program_name
+    return attrs
 
 
 def create_participant_token(
@@ -874,6 +882,28 @@ async def healthz() -> str:
     return "ok"
 
 
+_DEPLOY_INFO_PATH = Path(__file__).parent / "deploy_info.json"
+
+
+@app.get("/api/deploy-info")
+async def deploy_info() -> dict[str, Any]:
+    """Return the current deployment timestamp and update notes.
+
+    This is a public endpoint (no auth) so the frontend can display
+    build provenance without requiring a session. The data is written
+    by the deploy script on each deployment.
+    """
+    try:
+        with open(_DEPLOY_INFO_PATH) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {
+            "timestamp": None,
+            "note": "No deployment info available.",
+            "version": None,
+        }
+
+
 @app.get("/api/personas")
 async def personas(user: CurrentUser = Depends(require_user)) -> dict[str, Any]:
     pool = await get_pool()
@@ -906,6 +936,65 @@ async def personas(user: CurrentUser = Depends(require_user)) -> dict[str, Any]:
         ),
         "personas": visible_personas,
         "llm_models": list_llm_models(),
+    }
+
+
+@app.get("/api/programs")
+async def get_programs(
+    persona_id: str | None = None,
+    user: CurrentUser = Depends(require_user),
+) -> dict[str, Any]:
+    """Return all active programs, optionally filtered by persona_id."""
+    if not programs_enabled():
+        return {"programs": [], "enabled": False}
+
+    pool = await get_pool()
+    programs_list: list[dict[str, Any]] = []
+
+    try:
+        if persona_id:
+            programs_list = await load_programs(pool, persona_id)
+        else:
+            # Load programs for all personas.
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, base_persona_id, name, description,
+                           active, created_at, updated_at
+                    FROM tango.programs
+                    WHERE active = TRUE
+                    ORDER BY base_persona_id, created_at DESC
+                    """
+                )
+            programs_list = [
+                {
+                    "id": str(row["id"]),
+                    "base_persona_id": row["base_persona_id"],
+                    "name": row["name"],
+                    "description": row["description"],
+                    "active": row["active"],
+                    "created_at": _serialize_time(row["created_at"]),
+                    "updated_at": _serialize_time(row["updated_at"]),
+                }
+                for row in rows
+            ]
+    except Exception:
+        logger.exception("Failed to load programs for API persona_id=%s", persona_id)
+        return _api_database_error()
+
+    return {
+        "programs": [
+            {
+                "id": p["id"],
+                "base_persona_id": p["base_persona_id"],
+                "name": p["name"],
+                "description": p["description"],
+                "created_at": _serialize_time(p.get("created_at")),
+                "updated_at": _serialize_time(p.get("updated_at")),
+            }
+            for p in programs_list
+        ],
+        "enabled": True,
     }
 
 
@@ -1152,6 +1241,10 @@ def _history_context_from_participant(participant: Any | None) -> dict[str, str]
     if isinstance(user_agent, str):
         context["user_agent"] = user_agent[:512]
 
+    program_name = attributes.get("tango.program_name")
+    if isinstance(program_name, str) and program_name:
+        context["program_name"] = program_name
+
     return context
 
 
@@ -1342,6 +1435,11 @@ async def entrypoint(ctx: Any) -> None:
     from livekit.plugins import deepgram, elevenlabs, openai, silero
     from vision_context import LiveVideoContext, VisionContextConfig
 
+    # Connect the MCP bridge for this worker process if not already connected.
+    # The bridge is a module-level singleton; each worker process gets its own.
+    if not voice_mcp_bridge._connected:
+        await voice_mcp_bridge.connect()
+
     await ctx.connect(auto_subscribe=AutoSubscribe.SUBSCRIBE_ALL)
     try:
         participant = await ctx.wait_for_participant()
@@ -1357,7 +1455,45 @@ async def entrypoint(ctx: Any) -> None:
         persona_key_from_room_name(room_name) if not metadata_persona_id else None
     )
     is_sip = sip_persona_id is not None
-    persona = get_persona(metadata_persona_id or sip_persona_id)
+
+    # Load persisted Control Mode overrides for this persona so they apply
+    # to the session from the very first turn.
+    from control_mode import load_persona_overrides
+
+    _persona_overrides: list[dict[str, str]] = []
+    try:
+        _persona_overrides = await load_persona_overrides(
+            await get_pool(), metadata_persona_id or sip_persona_id or ""
+        )
+    except Exception:
+        logger.exception(
+            "entrypoint: could not load persona overrides room=%s persona_id=%s",
+            room_name,
+            metadata_persona_id or sip_persona_id,
+        )
+
+    # Load active programs for this persona (for logging/availability check).
+    _active_programs: list[dict[str, Any]] = []
+    if programs_enabled():
+        try:
+            _active_programs = await load_programs(
+                await get_pool(), metadata_persona_id or sip_persona_id or ""
+            )
+            if _active_programs:
+                logger.info(
+                    "entrypoint: loaded %d programs for persona_id=%s room=%s",
+                    len(_active_programs),
+                    metadata_persona_id or sip_persona_id,
+                    room_name,
+                )
+        except Exception:
+            logger.exception(
+                "entrypoint: could not load programs room=%s persona_id=%s",
+                room_name,
+                metadata_persona_id or sip_persona_id,
+            )
+
+    persona = get_persona(metadata_persona_id or sip_persona_id, overrides=_persona_overrides)
     llm_model = resolve_llm_model(persona, participant_context.get("llm_model"))
     account_user_id = participant_context.get("user_id")
     if is_sip and not account_user_id:
@@ -1637,7 +1773,11 @@ async def entrypoint(ctx: Any) -> None:
     try:
         await session.start(
             agent=Jarvis(
-                persona_for_agent, llm_model=llm_model, vision_context=vision_context
+                persona_for_agent,
+                llm_model=llm_model,
+                vision_context=vision_context,
+                db_pool=await get_pool(),
+                initial_program=participant_context.get("program_name"),
             ),
             room=ctx.room,
         )
@@ -1651,6 +1791,33 @@ async def entrypoint(ctx: Any) -> None:
             )
         raise
     logger.info("Tango agent session started.")
+
+    # Audible thinking indicator — plays keyboard-typing sound while the agent
+    # is in the "thinking" state (LLM round-trips, tool calls, agent handoffs).
+    # Auto-triggered by LiveKit session lifecycle events; stops when the agent
+    # speaks. Env-gated via TANGO_THINKING_SOUND (default true).
+    if os.getenv("TANGO_THINKING_SOUND", "true").lower() in {"1", "true", "yes"}:
+        try:
+            from livekit.agents import (
+                AudioConfig,
+                BackgroundAudioPlayer,
+                BuiltinAudioClip,
+            )
+
+            background_audio = BackgroundAudioPlayer(
+                thinking_sound=[
+                    AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.6),
+                    AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.5),
+                ],
+            )
+            await background_audio.start(room=ctx.room, agent_session=session)
+            logger.info("Audible thinking indicator enabled persona=%s", persona.id)
+        except Exception:
+            logger.warning(
+                "Could not start BackgroundAudioPlayer; thinking indicator disabled persona=%s",
+                persona.id,
+                exc_info=True,
+            )
 
 
 if __name__ == "__main__":
