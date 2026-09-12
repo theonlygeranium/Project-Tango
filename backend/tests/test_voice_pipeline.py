@@ -1,6 +1,43 @@
 from __future__ import annotations
 
+import inspect
+import sys
+import types
+
 import pytest
+
+# These modules exist on Schubert but are not always present in this checkout.
+# Stub only what is missing so the voice-pipeline helpers in main.py can import.
+if "mcp_tools" not in sys.modules:
+    try:
+        import mcp_tools  # noqa: F401
+    except ModuleNotFoundError:
+        _mcp = types.ModuleType("mcp_tools")
+
+        class _Bridge:
+            _connected = False
+
+            async def connect(self) -> None:
+                return None
+
+            async def disconnect(self) -> None:
+                return None
+
+        _mcp.voice_mcp_bridge = _Bridge()
+        sys.modules["mcp_tools"] = _mcp
+
+if "programs" not in sys.modules:
+    try:
+        import programs  # noqa: F401
+    except ModuleNotFoundError:
+        _programs = types.ModuleType("programs")
+
+        async def _load_programs(*_a: object, **_k: object) -> list:
+            return []
+
+        _programs.load_programs = _load_programs
+        _programs.programs_enabled = lambda: False
+        sys.modules["programs"] = _programs
 
 import main
 
@@ -49,3 +86,19 @@ def test_preemptive_generation_never_starts_tts() -> None:
     disabled = main._preemptive_generation_options(enabled=False)
     assert enabled == {"enabled": True, "preemptive_tts": False}
     assert disabled == {"enabled": False, "preemptive_tts": False}
+
+
+def test_room_options_disable_playback_paced_sync(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TANGO_SYNC_TRANSCRIPTION", raising=False)
+    options = main._room_options_for_session()
+    text_output = options.text_output
+    assert text_output.sync_transcription is False
+
+
+def test_livekit_roomio_skips_synchronizer_when_sync_is_false() -> None:
+    """Installed livekit-agents must treat sync_transcription=False as 'do not sync'."""
+    from livekit.agents.voice.room_io import room_io as room_io_mod
+
+    source = inspect.getsource(room_io_mod.RoomIO.start)
+    assert "sync_transcription is not False" in source
+    assert "TranscriptSynchronizer" in source
