@@ -1,7 +1,7 @@
 # ADR-004: Disable `use_tts_aligned_transcript` in AgentSession
 
 **Date:** 2026-06-27
-**Status:** Accepted
+**Status:** Accepted (incomplete — see ADR-012)
 **Decided by:** Writer Agent (WRITER Agent platform)
 
 ## Context
@@ -33,3 +33,7 @@ Set `use_tts_aligned_transcript=False` in the `AgentSession` constructor for all
 - Sentence-level transcripts still work correctly
 - All personas benefit — no per-persona conditional needed
 - Must be preserved in `backend/main.py` — do not re-enable without testing
+- This flag does **not** disable RoomIO `TranscriptSynchronizer`. Production
+  session `62a4ab7c-3200-402b-8870-dc983b1fc4e9` (2026-09-11) still logged
+  21× `_SegmentSynchronizerImpl.on_playback_started called after start_fut is set`
+  with this setting already false. ADR-012 disables `sync_transcription`.

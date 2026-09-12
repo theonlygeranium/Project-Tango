@@ -74,6 +74,11 @@ DEFAULT_F5_TTS_SAMPLE_RATE = 24000
 DEFAULT_F5_TTS_TIMEOUT_SECONDS = 60.0
 DEFAULT_F5_TTS_START_TIMEOUT_SECONDS = 600.0
 DEFAULT_SESSION_TTL_MINUTES = 480  # 8 hours — allows extended conversations without token expiry cutoffs
+# Tool-heavy personas (wiki + Mintlify + MCP) routinely exceed LiveKit's default
+# of 3 consecutive tool steps. When the ceiling is hit the SDK forces
+# tool_choice='none'; Palmyra still emits ignored tool calls and the user hears
+# a long silence before a final reply. 8 covers search → read → follow-up read.
+DEFAULT_MAX_TOOL_STEPS = 8
 
 
 # Deepgram Aura TTS voice mapping for fallback when primary TTS fails.
@@ -190,8 +195,62 @@ def _turn_handling_for_session(
     # the audio TurnDetector.
     turn_handling: dict[str, Any] = {}
     turn_handling["turn_detection"] = inference.TurnDetector()
-    turn_handling["preemptive_generation"] = {"enabled": preemptive_generation_enabled}
+    turn_handling["preemptive_generation"] = _preemptive_generation_options(
+        enabled=preemptive_generation_enabled
+    )
     return turn_handling
+
+
+def _preemptive_generation_options(*, enabled: bool) -> dict[str, Any]:
+    """LiveKit preemptive-generation options for Tango voice sessions.
+
+    Speculative TTS before the turn is confirmed is the cutout path when
+    on_user_turn_completed later mutates chat context or tools (transcription
+    start, Control Mode, vision). Keep LLM speculation for latency; never
+    start speaking until the turn is confirmed.
+    """
+    return {"enabled": enabled, "preemptive_tts": False}
+
+
+def _max_tool_steps() -> int:
+    """Consecutive tool-call steps allowed per LLM turn.
+
+    LiveKit default is 3. Override with TANGO_MAX_TOOL_STEPS.
+    """
+    return _env_int("TANGO_MAX_TOOL_STEPS", DEFAULT_MAX_TOOL_STEPS)
+
+
+def _sync_transcription() -> bool:
+    """Whether RoomIO should pace agent captions with audio playback.
+
+    Default False. Word-paced sync constructs TranscriptSynchronizer /
+    _SegmentSynchronizerImpl, which races with ElevenLabs streaming and
+    produces mid-speech pauses even when use_tts_aligned_transcript=False.
+    Override with TANGO_SYNC_TRANSCRIPTION=true only for caption-debug.
+    """
+    return _env_bool("TANGO_SYNC_TRANSCRIPTION", default=False)
+
+
+def _preemptive_generation_enabled(*, vision_enabled: bool) -> bool:
+    """Whether speculative LLM generation may start before end-of-turn.
+
+    Disabled while vision is injecting context (must land before the reply).
+    Otherwise follows TANGO_PREEMPTIVE_GENERATION (default true).
+    """
+    if vision_enabled:
+        return False
+    return _env_bool("TANGO_PREEMPTIVE_GENERATION", default=True)
+
+
+def _room_options_for_session() -> Any:
+    """RoomIO options that keep captions on but disable playback-paced sync."""
+    from livekit.agents import room_io
+
+    return room_io.RoomOptions(
+        text_output=room_io.TextOutputOptions(
+            sync_transcription=_sync_transcription(),
+        ),
+    )
 
 
 def _livekit_num_idle_processes() -> int:
@@ -1639,20 +1698,21 @@ async def entrypoint(ctx: Any) -> None:
         else persona
     )
     vision_config = VisionContextConfig.from_env(LITELLM_BASE_URL, LITELLM_MASTER_KEY)
+    preemptive_generation_enabled = _preemptive_generation_enabled(
+        vision_enabled=vision_config.enabled
+    )
     turn_handling = _turn_handling_for_session(
         persona,
         llm_model,
-        preemptive_generation_enabled=not vision_config.enabled,
+        preemptive_generation_enabled=preemptive_generation_enabled,
     )
-    preemptive_generation_enabled = turn_handling.get("preemptive_generation", {}).get(
-        "enabled",
-        "default",
-    )
+    max_tool_steps = _max_tool_steps()
+    sync_transcription = _sync_transcription()
     _use_nova3 = persona.stt_language in ("tl",)
     _flux_model = "flux-general-en" if not _use_nova3 else "nova-3-multi"
 
     logger.info(
-        "Starting Tango agent room=%s persona_id=%s model=%s tts_backend=%s is_sip=%s flux_stt=%s eot_threshold=%s eot_timeout_ms=%s eager_eot_threshold=%s preemptive_generation=%s llm_base_url=%s",
+        "Starting Tango agent room=%s persona_id=%s model=%s tts_backend=%s is_sip=%s flux_stt=%s eot_threshold=%s eot_timeout_ms=%s eager_eot_threshold=%s preemptive_generation=%s preemptive_tts=False sync_transcription=%s max_tool_steps=%s llm_base_url=%s",
         room_name,
         persona.id,
         llm_model,
@@ -1663,6 +1723,8 @@ async def entrypoint(ctx: Any) -> None:
         persona.eot_timeout_ms,
         persona.eager_eot_threshold,
         preemptive_generation_enabled,
+        sync_transcription,
+        max_tool_steps,
         LITELLM_BASE_URL,
     )
 
@@ -1724,6 +1786,7 @@ async def entrypoint(ctx: Any) -> None:
         tts=_build_tts(persona, elevenlabs),
         turn_handling=turn_handling,
         use_tts_aligned_transcript=False,
+        max_tool_steps=max_tool_steps,
         # Disable the 15s user-away timeout so extended pauses in conversation
         # do not degrade the agent into an away state. Set to a value in
         # seconds (e.g. 300) via TANGO_USER_AWAY_TIMEOUT to re-enable.
@@ -1904,6 +1967,7 @@ async def entrypoint(ctx: Any) -> None:
         await session.start(
             agent=_tango_agent,
             room=ctx.room,
+            room_options=_room_options_for_session(),
         )
     except Exception as exc:
         error_text = str(exc).lower()
