@@ -80,3 +80,6 @@ lerna-debug.log*
 # Optional: If you have a top-level build directory
 /build
 /dist
+
+# Large local meditation audio kept on Schubert, not in git.
+assets/meditation/

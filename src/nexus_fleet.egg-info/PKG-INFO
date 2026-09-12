@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: nexus-fleet
+Version: 2.0.0
+Summary: Nexus Fleet Model — AI bot fleet orchestration framework
+Requires-Python: >=3.12
+Requires-Dist: redis[hiredis]>=5.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: pydantic>=2.0
+Requires-Dist: discord.py>=2.4
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
+Requires-Dist: fakeredis>=2.21; extra == "dev"

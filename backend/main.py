@@ -69,6 +69,7 @@ LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
 TANGO_AGENT_NAME = os.getenv("TANGO_AGENT_NAME", "tango-agent")
 LOCAL_QWEN_MODEL = "local/qwen3-fast"
 DEFAULT_LIVEKIT_NUM_IDLE_PROCESSES = 1
+DEFAULT_MAX_TOOL_STEPS = 8
 DEFAULT_F5_TTS_BASE_URL = "http://127.0.0.1:8020"
 DEFAULT_F5_TTS_SAMPLE_RATE = 24000
 DEFAULT_F5_TTS_TIMEOUT_SECONDS = 60.0
@@ -78,7 +79,7 @@ DEFAULT_SESSION_TTL_MINUTES = 480  # 8 hours — allows extended conversations w
 # of 3 consecutive tool steps. When the ceiling is hit the SDK forces
 # tool_choice='none'; Palmyra still emits ignored tool calls and the user hears
 # a long silence before a final reply. 8 covers search → read → follow-up read.
-DEFAULT_MAX_TOOL_STEPS = 8
+# NOTE: DEFAULT_MAX_TOOL_STEPS is defined once above with the other defaults.
 
 
 # Deepgram Aura TTS voice mapping for fallback when primary TTS fails.

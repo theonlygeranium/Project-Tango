@@ -37,6 +37,14 @@ from typing import Any, Optional
 
 import httpx
 
+try:
+    from slack_write_guard import annotate_tool_description, check_slack_write
+except ImportError:  # voice worker PYTHONPATH may omit scripts/
+    def annotate_tool_description(description: str, namespaced_name: str) -> str:
+        return description
+    def check_slack_write(namespaced_name: str, arguments: dict | None, user_prompt: str):
+        return None
+
 logger = logging.getLogger("schubert-bot.mcp")
 
 
@@ -287,10 +295,13 @@ class MCPClient:
                 "type": "function",
                 "function": {
                     "name": tool.name,
-                    "description": (
-                        f"[{tool.server_name}] {tool.description}"
-                        if tool.description
-                        else f"[{tool.server_name}] {tool.original_name}"
+                    "description": annotate_tool_description(
+                        tool.name,
+                        (
+                            f"[{tool.server_name}] {tool.description}"
+                            if tool.description
+                            else f"[{tool.server_name}] {tool.original_name}"
+                        ),
                     ),
                     "parameters": tool.input_schema,
                 },
@@ -319,6 +330,11 @@ class MCPClient:
         tool = self._tool_index.get(namespaced_name)
         if not tool:
             return f"Error: unknown tool '{namespaced_name}'"
+
+        blocked = check_slack_write(namespaced_name, arguments)
+        if blocked:
+            logger.warning(blocked)
+            return blocked
 
         conn = self._connections.get(tool.server_name)
         if not conn:
@@ -546,6 +562,12 @@ def build_default_client() -> MCPClient:
             url="https://gmailmcp.googleapis.com/mcp/v1",
             bearer_token=os.environ.get("MCP_GMAIL_WORK_TOKEN"),
             enabled=False,  # Requires OAuth consent — may be blocked by Workspace admin
+        ),
+        # Outline Wiki — EL knowledge base and documentation
+        MCPServerConfig(
+            name="outline",
+            url="http://127.0.0.1:3101/mcp",
+            bearer_token=os.environ.get("MCP_OUTLINE_TOKEN"),
         ),
     ]
 

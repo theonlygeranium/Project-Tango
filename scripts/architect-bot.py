@@ -40,6 +40,8 @@ from discord import ui
 SCRIPT_DIR = "/opt/Project-Tango/scripts"
 sys.path.insert(0, SCRIPT_DIR)
 
+from singleton_lock import acquire_singleton
+
 from mcp_client import MCPClient, MCPServerConfig
 from cloudflare_api import execute_cloudflare_tool, get_cloudflare_tool_definition
 from memory_store import MemoryStore
@@ -50,7 +52,8 @@ from fleet_protocol import (
     parse_fleet_message, is_fleet_message, check_chain_depth,
     format_response, track_chain, MAX_CHAIN_DEPTH, StreamingMessage,
 )
-from discord_ux_utils import keep_typing, should_use_thread
+from discord_ux_utils import keep_typing, should_use_thread, safe_create_thread, session_channel_id
+from approval_buttons import AgentReplyView, PROCEED_TEXT, should_attach_proceed, progress_anchor
 
 # Multi-agent coordinator imports
 from conversation_coordinator import ConversationCoordinator, MultiAgentChannelManager
@@ -118,7 +121,7 @@ SESSION_MAX_MESSAGES = _llm.get("session_window", 20)
 # Multi-LLM routing — default model and available models
 # The Architect auto-switches: Palmyra x6 for general tasks, Claude Sonnet 4.5 for coding
 DEFAULT_MODEL = _llm.get("model", "writer/palmyra-x6")
-CODING_MODEL = _llm.get("coding_model", "writer/claude-sonnet-4-5")
+CODING_MODEL = _llm.get("coding_model") or _llm.get("model") or "writer/palmyra-x6"
 current_model = DEFAULT_MODEL
 user_model_override = False  # Set True when user manually selects via !model; disables auto-switching
 
@@ -133,10 +136,10 @@ MODEL_CATEGORIES = {
     ],
     "Claude": [
         "writer/claude-sonnet-4-5",
-        "writer/claude-sonnet-4",
-        "writer/claude-opus-4",
-        "writer/claude-3-5-sonnet",
-        "writer/claude-haiku-4-5",
+        "writer/claude-sonnet-4-5",
+        "writer/claude-sonnet-4-5",
+        "writer/claude-sonnet-4-5",
+        "writer/claude-sonnet-4-5",
     ],
     "OpenAI": [
         "openai/gpt-4o",
@@ -159,7 +162,7 @@ MODEL_CATEGORIES = {
 
 LLM_TEMPERATURE = _llm.get("temperature", 0.3)
 LLM_MAX_TOKENS = _llm.get("max_tokens", 4096)
-LLM_TIMEOUT = _llm.get("llm_timeout", 300)
+LLM_TIMEOUT = _llm.get("llm_timeout", 120)
 MAX_ITERATIONS = _llm.get("max_iterations", 30)
 AGENT_TIMEOUT = _llm.get("agent_timeout", 480)
 TOOL_OUTPUT_LIMIT = _llm.get("tool_output_limit", 8000)
@@ -216,16 +219,16 @@ CODING_PATTERNS = [
     # Direct code actions
     "code", "function", "class", "method", "variable", "def ", "import ",
     "script", "deploy", "bug", "fix", "debug", "patch", "refactor",
-    "edit", "modify", "update", "rewrite", "implement", "write a",
+    "edit", "modify", "rewrite", "implement",
     # File/code artifacts
     ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".toml", ".sh",
     ".html", ".css", ".sql", ".env", "config", "syntax",
-    # Dev concepts
-    "error", "traceback", "exception", "stack trace", "log",
-    "regex", "api", "endpoint", "database", "query", "schema",
-    "service", "systemd", "restart", "deploy", "commit", "git",
-    "test", "pytest", "unittest", "lint", "type error",
-    "async", "await", "thread", "coroutine", "event loop",
+    # Dev concepts (specific terms only — avoid generic words like "log", "error", "update", "service", "test")
+    "traceback", "exception", "stack trace", "error message",
+    "regex", "endpoint", "database", "query", "schema",
+    "systemd", "restart", "deploy", "commit", "git",
+    "pytest", "unittest", "lint", "type error",
+    "async", "await", "coroutine", "event loop",
     "docker", "container", "nginx", "caddy",
 ]
 
@@ -321,6 +324,11 @@ async def llm_chat(messages: list, tools: list | None = None, model: str | None 
             try:
                 return await llm_chat(messages, tools, model)
             except aiohttp.ClientError:
+                if attempt == 1:
+                    break
+                continue
+            except Exception as retry_err:
+                log(f"LLM retry {attempt + 1} failed with non-network error: {retry_err}", "ERROR")
                 if attempt == 1:
                     break
                 continue
@@ -515,22 +523,7 @@ async def execute_dev_tool(tool_name: str, args: dict, mcp: MCPClient | None = N
     """Execute a development-specific tool."""
 
     if tool_name == "send_writer_feedback_to_slack":
-        # Import the feedback message
-        from send_feedback_slack import FEEDBACK_MESSAGE, SLACK_CHANNEL_ID
-        
-        try:
-            # Send via Slack MCP
-            if mcp:
-                result = await mcp.call_tool("slack__slack_post_message", {
-                    "channel": SLACK_CHANNEL_ID,
-                    "text": FEEDBACK_MESSAGE
-                })
-                return f"✅ Writer Event Feedback Summary sent to Slack #demo-cape-webinars. Response: {result[:200]}"
-            else:
-                return "❌ Error: MCP client not available"
-        except Exception as e:
-            log(f"Failed to send feedback to Slack: {e}", "ERROR")
-            return f"❌ Failed to send to Slack: {str(e)}"
+        return "⏸️ Slack notifications have been disabled. The send_writer_feedback_to_slack tool is currently inactive."
     
     if tool_name == "deploy_file":
         path = args.get("path", "")
@@ -811,6 +804,7 @@ def get_dev_tools() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 _last_inputs: dict[int, str] = {}
+_last_user_messages: dict[int, discord.Message] = {}
 _running_tasks: dict[int, asyncio.Task] = {}
 
 
@@ -832,36 +826,52 @@ class ProgressView(discord.ui.View):
             await interaction.response.send_message("No active task.", ephemeral=True)
 
 
-class ResponseView(discord.ui.View):
-    """View with a Regenerate button attached to the final response."""
+class ResponseView(AgentReplyView):
+    """Proceed / Cancel / Regenerate on the final response."""
 
-    def __init__(self, channel_id: int):
-        super().__init__(timeout=300)
-        self.channel_id = channel_id
+    def __init__(self, channel_id: int, show_proceed: bool = True):
+        super().__init__(
+            channel_id,
+            ADMIN_USER_ID,
+            show_proceed=show_proceed,
+            on_proceed=_on_proceed_click,
+            on_regenerate=_on_regenerate_click,
+        )
 
-    @discord.ui.button(label="Regenerate", style=discord.ButtonStyle.secondary, emoji="🔁")
-    async def regenerate_button(self, interaction, button):
-        last_input = _last_inputs.get(self.channel_id)
-        if not last_input:
-            await interaction.response.send_message("No previous input.", ephemeral=True)
-            return
-        log(f"Regenerate pressed for channel {self.channel_id}", "INFO")
-        await interaction.response.send_message("🔁 Regenerating...", ephemeral=True)
-        button.disabled = True
-        try: await interaction.message.edit(view=self)
-        except Exception: pass
-        channel = bot.get_channel(self.channel_id)
-        if not channel: return
-        progress = AgentProgressView(interaction.message)
-        await progress.start(f"Regenerating: {last_input[:200]}")
-        try:
-            response = await run_agent_loop(interaction.message, last_input, mcp_client, progress)
-            await progress.finalize(response)
-        except asyncio.CancelledError:
-            await progress.finalize("⏹️ Task cancelled.")
-        except Exception as e:
-            log(f"Regenerate error: {e}", "ERROR")
-            await progress.finalize(f"Error: {str(e)[:500]}")
+
+async def _on_proceed_click(interaction: discord.Interaction) -> None:
+    channel_id = interaction.channel.id if interaction.channel else 0
+    source = _last_user_messages.get(channel_id) or interaction.message
+    log(f"Proceed pressed for channel {channel_id}", "INFO")
+    progress = AgentProgressView(progress_anchor(source, interaction))
+    await progress.start("Proceeding with the approved plan...")
+    try:
+        response = await run_agent_loop(source, PROCEED_TEXT, mcp_client, progress)
+        await progress.finalize(response)
+    except asyncio.CancelledError:
+        await progress.finalize("⏹️ Task cancelled.")
+    except Exception as e:
+        log(f"Proceed error: {e}", "ERROR")
+        await progress.finalize(f"Error: {str(e)[:500]}")
+
+
+async def _on_regenerate_click(interaction: discord.Interaction) -> None:
+    channel_id = interaction.channel.id if interaction.channel else 0
+    last_input = _last_inputs.get(channel_id)
+    if not last_input:
+        return
+    log(f"Regenerate pressed for channel {channel_id}", "INFO")
+    source = _last_user_messages.get(channel_id) or interaction.message
+    progress = AgentProgressView(progress_anchor(source, interaction))
+    await progress.start(f"Regenerating: {last_input[:200]}")
+    try:
+        response = await run_agent_loop(source, last_input, mcp_client, progress)
+        await progress.finalize(response)
+    except asyncio.CancelledError:
+        await progress.finalize("⏹️ Task cancelled.")
+    except Exception as e:
+        log(f"Regenerate error: {e}", "ERROR")
+        await progress.finalize(f"Error: {str(e)[:500]}")
 
 
 # ---------------------------------------------------------------------------
@@ -887,11 +897,22 @@ class AgentProgressView:
         self._typing_paused = False
         self._is_fleet_request = False
 
+    @property
+    def _channel(self):
+        """Resolve the Discord channel, handling both Message and Thread objects."""
+        return self.message.channel if hasattr(self.message, 'channel') else self.message
+
+    async def _reply(self, *args, **kwargs):
+        """Send a reply to the appropriate channel, handling both Message and Thread objects."""
+        if hasattr(self.message, 'reply'):
+            return await self.message.reply(*args, **kwargs)
+        return await self._channel.send(*args, **kwargs)
+
     async def start(self, initial_text: str):
         self._start_time = time.time()
         embed = self._build_embed(initial_text)
-        view = ProgressView(self.message.channel.id)
-        self.progress_msg = await self.message.reply(embed=embed, view=view)
+        view = ProgressView(self._channel.id)
+        self.progress_msg = await self._reply(embed=embed, view=view)
         self.current_status = initial_text
         self._typing_task = asyncio.create_task(self._typing_loop())
         self._spinner_task = asyncio.create_task(self._spinner_loop())
@@ -930,7 +951,7 @@ class AgentProgressView:
     async def _typing_loop(self):
         try:
             while True:
-                async with self.message.channel.typing():
+                async with self._channel.typing():
                     await asyncio.sleep(8)
         except asyncio.CancelledError:
             pass
@@ -994,16 +1015,19 @@ class AgentProgressView:
                 pass
         if self._streamed:
             return
-        view = ResponseView(self.message.channel.id)
+        view = ResponseView(
+            self._channel.id,
+            show_proceed=should_attach_proceed(response),
+        )
         if len(response) <= 1900:
-            await self.message.reply(response, view=view)
+            await self._reply(response, view=view)
         elif len(response) <= 4096:
             embed = discord.Embed(
                 description=response[:4096],
                 color=COLOR_ARCHITECT,
                 timestamp=datetime.now(timezone.utc),
             )
-            await self.message.reply(embed=embed, view=view)
+            await self._reply(embed=embed, view=view)
         else:
             for chunk in _split_on_boundaries(response, 4096):
                 embed = discord.Embed(
@@ -1011,19 +1035,19 @@ class AgentProgressView:
                     color=COLOR_ARCHITECT,
                     timestamp=datetime.now(timezone.utc),
                 )
-                await self.message.reply(embed=embed)
+                await self._reply(embed=embed)
 
         # Enhancement 3: Auto-thread creation for long responses
         if not self._is_fleet_request and not self._streamed:
             if len(response) > THREAD_RESPONSE_THRESHOLD or len(self.tool_calls) >= THREAD_TOOL_CALL_THRESHOLD:
                 try:
-                    thread_name = f"Discussion: {self.message.content[:80]}"
-                    thread = await self.message.create_thread(
-                        name=thread_name,
-                        auto_archive_duration=60,
-                    )
-                    log(f"Auto-thread created: {thread_name}", "INFO")
-                except discord.HTTPException as e:
+                    # Get the original user message content for the thread name
+                    orig_content = getattr(self.message, 'content', '') or ''
+                    thread_name = f"Discussion: {orig_content[:80]}"
+                    thread = await safe_create_thread(self.message, thread_name, auto_archive_duration=60)
+                    if thread:
+                        log(f"Auto-thread created: {thread_name}", "INFO")
+                except Exception as e:
                     log(f"Auto-thread creation failed: {e}", "WARN")
 
 
@@ -1481,7 +1505,7 @@ async def run_agent_loop(
     messages = [{"role": "system", "content": system_prompt}]
 
     # Add session history (prior conversation in this channel)
-    session_history = get_session_history(message.channel.id)
+    session_history = get_session_history(session_channel_id(message.channel))
     messages.extend(session_history)
 
     messages.append({"role": "user", "content": user_input})
@@ -1558,18 +1582,19 @@ async def run_agent_loop(
                 # Attach Regenerate button to streamed response (non-fleet only)
                 if not _fleet_chain_id and stream_msg.was_started:
                     try:
-                        view = ResponseView(message.channel.id)
+                        view = ResponseView(
+                            message.channel.id,
+                            show_proceed=should_attach_proceed(content),
+                        )
                         await stream_msg._stream_msg.edit(view=view)
                     except Exception as e:
                         log(f"Could not attach Regenerate button to streamed response: {e}", "WARN")
                 # Auto-thread for long streamed responses (non-fleet only)
                 if not _fleet_chain_id and (len(content) > THREAD_RESPONSE_THRESHOLD or len(progress.tool_calls) >= THREAD_TOOL_CALL_THRESHOLD):
-                    try:
-                        thread_name = f"Discussion: {message.content[:80]}"
-                        thread = await message.create_thread(name=thread_name, auto_archive_duration=60)
+                    thread_name = f"Discussion: {(getattr(message, 'content', None) or '')[:80]}"
+                    thread = await safe_create_thread(message, thread_name, auto_archive_duration=60)
+                    if thread:
                         log(f"Auto-thread created: {thread_name}", "INFO")
-                    except discord.HTTPException as e:
-                        log(f"Auto-thread creation failed: {e}", "WARN")
                 # Store the conversation exchange in persistent memory
                 store_memory(f"User: {user_input[:500]}\nArchitect: {content[:500]}", event_type="conversation")
                 # Log the conversation as a change event for auditability
@@ -1582,8 +1607,8 @@ async def run_agent_loop(
                     outcome="completed",
                 )
                 # Add to session history
-                add_to_session_history(message.channel.id, "user", user_input)
-                add_to_session_history(message.channel.id, "assistant", content)
+                add_to_session_history(session_channel_id(message.channel), "user", user_input)
+                add_to_session_history(session_channel_id(message.channel), "assistant", content)
                 # If this was a FLEET delegation, send the response back to Schubert
                 if _fleet_chain_id:
                     try:
@@ -1719,44 +1744,12 @@ async def run_agent_loop(
                     update_change_outcome(_change_log_id, "success" if success else "failed",
                                           {"result": str(result)[:500]})
                 
-                    # Send Slack notifications for successful operations
-                    if success:
-                        slack_notifier = get_slack_notifier(mcp_client)
-                        try:
-                            if tool_name == "deploy_file":
-                                file_path = tool_args.get("path", "")
-                                file_size = len(tool_args.get("content", ""))
-                                asyncio.create_task(slack_notifier.send_deployment_alert(
-                                    title=f"File Deployed: {os.path.basename(file_path)}",
-                                    message=f"The Architect successfully deployed a file:\n\n"
-                                            f"**Path:** `{file_path}`\n"
-                                            f"**Size:** {file_size:,} bytes\n"
-                                            f"**Requested by:** <@{ADMIN_USER_ID}>",
-                                    bot_name="The Architect",
-                                    status="success",
-                                    metadata={
-                                        "file": file_path,
-                                        "size_bytes": str(file_size),
-                                        "action": "deploy_file"
-                                    }
-                                ))
-                            elif tool_name == "restart_service":
-                                service_name = tool_args.get("service", "")
-                                asyncio.create_task(slack_notifier.send_deployment_alert(
-                                    title=f"Service Restarted: {service_name}",
-                                    message=f"The Architect successfully restarted a service:\n\n"
-                                            f"**Service:** `{service_name}`\n"
-                                            f"**Result:** {str(result)[:200]}\n"
-                                            f"**Requested by:** <@{ADMIN_USER_ID}>",
-                                    bot_name="The Architect",
-                                    status="success",
-                                    metadata={
-                                        "service": service_name,
-                                        "action": "restart_service"
-                                    }
-                                ))
-                        except Exception as e:
-                            log(f"Slack notification failed: {e}", "WARN")
+                    # Slack notifications disabled — was sending messages as user to work channels
+                    # slack_notifier = get_slack_notifier(mcp_client)
+                    # if success:
+                    #     try:
+                    #         if tool_name == "deploy_file":
+                    #             ... (removed — see git history to restore)
 
                 log(f"Tool {tool_name} result: {str(result)[:200]}", "INFO")
 
@@ -1830,16 +1823,7 @@ OPTIMIZATION_TARGETS = {
         "service": "schubert-architect",
         "health_indicator": "MCP:.*tools available",
         "can_restart_self": True,
-        "source_max_chars": 30000,  # truncation for LLM context
-    },
-    "schubert": {
-        "path": SCHUBERT_SCRIPT_PATH,
-        "backup_dir": SCHUBERT_BACKUP_DIR,
-        "golden_dir": SCHUBERT_BACKUP_DIR + "-golden",
-        "service": "schubert-bot",
-        "health_indicator": "MCP:.*tools available",  # schubert-bot also logs MCP tool count
-        "can_restart_self": False,  # architect can restart schubert, not itself
-        "source_max_chars": 30000,
+        "source_max_chars": 20000,  # truncation for LLM context
     },
 }
 
@@ -1848,8 +1832,8 @@ ASSESSMENT_INTERVAL = _self_improvement.get("assessment_interval", 6 * 60 * 60)
 ASSESSMENT_INTERVAL_SHORT = 60     # first few cycles run faster to bootstrap
 
 # Safety limits
-MAX_UPDATE_FILE_SIZE = _self_improvement.get("max_update_file_size", 200 * 1024)
-MAX_AUTO_UPDATES_PER_DAY = _self_improvement.get("max_auto_updates_per_day", 3)
+MAX_UPDATE_FILE_SIZE = int(_self_improvement.get("max_update_file_size") or _self_improvement.get("max_file_size") or (512 * 1024))
+MAX_AUTO_UPDATES_PER_DAY = int(_self_improvement.get("max_auto_updates_per_day") or _self_improvement.get("max_updates_per_day") or 3)
 ROLLBACK_WAIT_TIME = _self_improvement.get("rollback_wait_time", 30)
 MAX_CODE_CHANGES_PER_UPDATE = _self_improvement.get("max_code_changes_per_update", 5)
 
@@ -1881,7 +1865,7 @@ PROTECTED_PATTERNS = [
 ]
 
 # Auto-update is ON by default — kill switch via !autoupdate off
-auto_update_enabled = _self_improvement.get("auto_update_enabled", True)
+auto_update_enabled = bool(_self_improvement.get("enabled", True)) and bool(_self_improvement.get("auto_update_enabled", True))
 
 # Services to monitor — (service_name, is_critical)
 # Critical services escalate immediately if they can't be restarted
@@ -2745,6 +2729,29 @@ metrics: Optional[MetricsCollector] = None
 #   - Update history: all changes are logged to JSON for auditability
 
 
+
+def _extract_assessment_text(response: dict | None) -> str:
+    """Pull proposal text out of a chat-completions payload."""
+    try:
+        from llm_response_utils import extract_llm_text
+        return extract_llm_text(response)
+    except Exception:
+        if not isinstance(response, dict):
+            return ""
+        choices = response.get("choices") or []
+        if not choices:
+            return ""
+        return ((choices[0] or {}).get("message") or {}).get("content") or ""
+
+
+def _describe_assessment_response(response: dict | None) -> str:
+    try:
+        from llm_response_utils import describe_llm_response
+        return describe_llm_response(response)
+    except Exception:
+        return str(type(response).__name__)
+
+
 class AutoUpdater:
     """Self-assessment and self-improvement engine for The Architect."""
 
@@ -2863,6 +2870,12 @@ class AutoUpdater:
                 metrics_summary, recent_logs, current_source, target_name, source_max
             )
 
+            if proposals is None:
+                log(
+                    f"Assessment LLM failed for {target_name} — not treating as all-clear",
+                    "ERROR",
+                )
+                continue
             if not proposals:
                 log(f"No proposals for {target_name} this cycle", "INFO")
                 continue
@@ -2922,8 +2935,9 @@ class AutoUpdater:
 
     async def _get_optimization_proposals(
         self, metrics_summary: dict, logs: str, source: str,
-        target_name: str = "architect", source_max_chars: int = 30000,
-    ) -> list[dict]:
+        target_name: str = "architect", source_max_chars: int = 20000,
+        _retried: bool = False,
+    ) -> list[dict] | None:
         """Ask the LLM to analyze metrics and propose specific code optimizations."""
         # Truncate source to keep within token limits
         source_truncated = source[:source_max_chars]
@@ -3025,15 +3039,23 @@ Return ONLY the JSON array, no other text."""
             log(f"Optimization LLM call failed: {response.get('error', '?')}", "ERROR")
             return []
 
-        choices = response.get("choices", [])
-        if not choices:
-            log("No choices in optimization response", "WARN")
-            return []
-
-        content = choices[0].get("message", {}).get("content", "")
+        content = _extract_assessment_text(response)
         if not content:
-            log("Empty content in optimization response", "WARN")
-            return []
+            log(
+                f"Empty content in optimization response ({_describe_assessment_response(response)})",
+                "ERROR",
+            )
+            if not _retried and source_max_chars > 8000:
+                log(
+                    f"Retrying {target_name} assessment with truncated source "
+                    f"({source_max_chars // 2} chars)",
+                    "WARN",
+                )
+                return await self._get_optimization_proposals(
+                    metrics_summary, logs, source, target_name,
+                    source_max_chars // 2, _retried=True,
+                )
+            return None
 
         # Parse JSON from response — LLM may wrap in ```json blocks
         proposals = self._parse_proposals(content)
@@ -3689,6 +3711,7 @@ def get_mcp_configs() -> list[MCPServerConfig]:
         ("github", "http://127.0.0.1:8091", "MCP_GITHUB_TOKEN"),
         ("gmail_freelance", "http://127.0.0.1:8071/mcp", "MCP_GMAIL_TOKEN"),
         ("slack", "http://127.0.0.1:8075/mcp", "MCP_SLACK_TOKEN"),
+        ("outline", "http://127.0.0.1:3101/mcp", "MCP_OUTLINE_TOKEN"),
     ]
     for name, url, token_env in servers:
         token = os.environ.get(token_env, "")
@@ -3764,7 +3787,8 @@ async def handle_multi_agent_message(message: discord.Message):
         return
     
     # Check cooldown
-    if not _coordinator.check_cooldown(message.channel.id, agent_profile.cooldown_seconds):
+    # @mention (score 1.0) skips cooldown so follow-ups are not dropped.
+    if score < 1.0 and not _coordinator.check_cooldown(message.channel.id, agent_profile.cooldown_seconds):
         log(f"Cooldown active for channel {message.channel.id}, skipping", "INFO")
         return
     
@@ -3838,8 +3862,15 @@ async def handle_single_agent_message(message: discord.Message):
             return
 
     # Only respond in the designated channels (or DMs or multi-agent channels)
+    # Also allow messages in threads whose parent is a monitored channel
     if not is_multi_agent:
-        if message.channel.id not in MONITORED_CHANNEL_IDS and not isinstance(message.channel, discord.DMChannel):
+        in_monitored = message.channel.id in MONITORED_CHANNEL_IDS
+        in_thread_of_monitored = (
+            isinstance(message.channel, discord.Thread)
+            and hasattr(message.channel, 'parent_id')
+            and message.channel.parent_id in MONITORED_CHANNEL_IDS
+        )
+        if not in_monitored and not in_thread_of_monitored and not isinstance(message.channel, discord.DMChannel):
             return
 
     # Check for bot mention or direct message
@@ -3852,8 +3883,15 @@ async def handle_single_agent_message(message: discord.Message):
         return
 
     # For natural language: respond if mentioned or in DM or in a monitored channel or in multi-agent channel
+    # Also allow responses in threads of monitored channels
     if not is_multi_agent:
-        if not (is_mentioned or is_dm or message.channel.id in MONITORED_CHANNEL_IDS):
+        in_monitored = message.channel.id in MONITORED_CHANNEL_IDS
+        in_thread_of_monitored = (
+            isinstance(message.channel, discord.Thread)
+            and hasattr(message.channel, 'parent_id')
+            and message.channel.parent_id in MONITORED_CHANNEL_IDS
+        )
+        if not (is_mentioned or is_dm or in_monitored or in_thread_of_monitored):
             return
 
     # Fleet delegation: accept messages from Schubert or Proctor
@@ -3937,32 +3975,40 @@ async def handle_single_agent_message(message: discord.Message):
         metrics.record_agent_request()
 
     _last_inputs[message.channel.id] = user_input
+    _last_user_messages[message.channel.id] = message
 
     # Thread isolation — decide whether to create a dedicated thread
-    use_thread = should_use_thread(user_input)
+    # Skip thread creation if we're already inside a thread
+    use_thread = should_use_thread(user_input) and not isinstance(message.channel, discord.Thread) and not message.author.bot
     response_channel = message.channel
     
     if use_thread and not _fleet_chain_id:  # Only create threads for non-FLEET requests
         thread_name = f"🔧 Task: {user_input[:80]}{'...' if len(user_input) > 80 else ''}"
         try:
-            thread = await message.create_thread(
-                name=thread_name,
-                auto_archive_duration=1440,  # 24 hours
+            thread = await safe_create_thread(
+                message, thread_name, auto_archive_duration=1440
             )
-            response_channel = thread
-            
-            # Notify in main channel (silent)
-            await message.reply(
-                f"📋 Started a thread for this task: {thread.jump_url}",
-                silent=True,
-            )
-            log(f"Created thread for task: {thread_name}", "INFO")
+            if thread:
+                response_channel = thread
+                try:
+                    await message.reply(
+                        f"📋 Started a thread for this task: {thread.jump_url}",
+                        silent=True,
+                    )
+                except Exception as e:
+                    log(f"Could not notify main channel of new thread: {e}", "WARN")
+                log(f"Created thread for task: {thread_name}", "INFO")
+            else:
+                response_channel = message.channel
         except Exception as e:
             log(f"Failed to create thread, using main channel: {e}", "WARN")
             response_channel = message.channel
 
+    _last_inputs[response_channel.id] = user_input
+    _last_user_messages[response_channel.id] = message
+
     # Start progress view in the response channel
-    progress = AgentProgressView(message if not use_thread else thread)
+    progress = AgentProgressView(response_channel)
     if _fleet_chain_id:
         progress._is_fleet_request = True
     await progress.start(f"Working on: {user_input[:200]}")
@@ -3985,8 +4031,11 @@ async def handle_single_agent_message(message: discord.Message):
     except Exception as e:
         log(f"Agent error: {e}", "ERROR")
         import traceback
-        log(f"TRACEBACK: {traceback.format_exc()}", "ERROR")
-        await progress.finalize(f"❌ Error: {str(e)[:500]}")
+        tb = traceback.format_exc()
+        log(f"TRACEBACK: {tb}", "ERROR")
+        tb_lines = tb.strip().split('\n')
+        compact_tb = '\n'.join(tb_lines[-7:]) if len(tb_lines) > 7 else tb
+        await progress.finalize(f"❌ Error: {str(e)[:200]}\n```\n{compact_tb[:1500]}\n```")
     finally:
         _running_tasks.pop(message.channel.id, None)
 
@@ -4027,31 +4076,10 @@ class SendFeedbackButtonView(ui.View):
     )
     async def send_button(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.defer(ephemeral=True)
-        
-        try:
-            from send_feedback_slack import FEEDBACK_MESSAGE, SLACK_CHANNEL_ID
-            
-            if not self.mcp:
-                await interaction.followup.send("❌ MCP client not available", ephemeral=True)
-                return
-            
-            # Debug logging
-            log(f"Sending to Slack - Channel: {SLACK_CHANNEL_ID}, Message length: {len(FEEDBACK_MESSAGE)}", "INFO")
-            
-            result = await self.mcp.call_tool("slack__slack_post_message", {
-                "channel_id": SLACK_CHANNEL_ID,
-                "text": FEEDBACK_MESSAGE
-            })
-            
-            await interaction.followup.send(
-                f"✅ Writer Event Feedback Summary sent to Slack **#demo-cape-webinars**!\n\nResponse: {str(result)[:200]}",
-                ephemeral=True
-            )
-            log(f"Feedback summary sent via button click by {interaction.user.name}", "INFO")
-            
-        except Exception as e:
-            log(f"Button click error: {e}", "ERROR")
-            await interaction.followup.send(f"❌ Failed to send to Slack: {str(e)}", ephemeral=True)
+        await interaction.followup.send(
+            "⏸️ Slack notifications have been disabled. This button is currently inactive.",
+            ephemeral=True
+        )
 
 
 async def post_kickstart_button(force_refresh=False):
@@ -4279,7 +4307,14 @@ async def on_message(message: discord.Message):
                     agent_name="architect",
                 )
         return  # Don't respond to own messages
-    
+
+    # --- Ignore other bots outside of multi-agent channels ---
+    # Bots should only interact in designated multi-agent channels.
+    # In their own channels or other bots' channels, ignore bot messages
+    # to prevent feedback loops.
+    if message.author.bot and not is_multi_agent_channel(message.channel.id):
+        return
+
     # Check if this is a reply to a WRITER playbook result (for follow-ups)
     if message.reference and message.reference.message_id in _playbook_threads:
         thread_id = _playbook_threads[message.reference.message_id]
@@ -4367,32 +4402,7 @@ async def handle_command(message: discord.Message):
             await handle_model_command(message)
 
     elif cmd == "send-feedback":
-        # Direct command to send Writer Event Feedback Summary to Slack
-        # Bypasses LLM - direct execution
-        if message.channel.id != KICKSTART_DEMO_CHANNEL_ID:
-            await message.reply("❌ This command only works in the kickstart-demo channel.")
-            return
-        
-        try:
-            from send_feedback_slack import FEEDBACK_MESSAGE, SLACK_CHANNEL_ID
-            
-            if not mcp_client:
-                await message.reply("❌ MCP client not available")
-                return
-            
-            await message.reply("📤 Sending Writer Event Feedback Summary to Slack #demo-cape-webinars...")
-            
-            result = await mcp_client.call_tool("slack__slack_post_message", {
-                "channel": SLACK_CHANNEL_ID,
-                "text": FEEDBACK_MESSAGE
-            })
-            
-            await message.reply(f"✅ Writer Event Feedback Summary sent to Slack #demo-cape-webinars!\n\nResponse: {str(result)[:500]}")
-            log(f"Feedback summary sent to Slack by {message.author.name}", "INFO")
-            
-        except Exception as e:
-            log(f"Failed to send feedback to Slack: {e}", "ERROR")
-            await message.reply(f"❌ Failed to send to Slack: {str(e)}")
+        await message.reply("⏸️ Slack notifications have been disabled. The !send-feedback command is currently inactive.")
         return
 
     elif cmd == "status":
@@ -4455,7 +4465,7 @@ async def handle_command(message: discord.Message):
             result = handle_query_memory({"type": "recent"})
             await message.reply(result[:1900])
         elif args.startswith("clear"):
-            clear_session_history(message.channel.id)
+            clear_session_history(session_channel_id(message.channel))
             await message.reply("Session history cleared (persistent memories are retained).")
         elif args.startswith("stats"):
             result = handle_query_memory({"type": "stats"})
@@ -4700,7 +4710,11 @@ async def handle_command(message: discord.Message):
 # Main
 # ---------------------------------------------------------------------------
 
+_SINGLETON_LOCK = None
+
 def main():
+    global _SINGLETON_LOCK
+    _SINGLETON_LOCK = acquire_singleton("architect")
     if not BOT_TOKEN:
         print("ERROR: ARCHITECT_BOT_TOKEN not set in environment")
         sys.exit(1)

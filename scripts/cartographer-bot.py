@@ -27,6 +27,8 @@ import aiohttp
 
 # Shared modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from singleton_lock import acquire_singleton
 from mcp_client import MCPClient, MCPServerConfig
 from memory_store import MemoryStore
 from multi_agent import MultiAgentManager, is_multi_agent_channel, get_shared_context
@@ -36,7 +38,8 @@ from fleet_protocol import (
     _split_on_boundaries,
 )
 from tool_descriptions import describe_tool_call, describe_tool_thinking
-from discord_ux_utils import keep_typing, should_use_thread
+from discord_ux_utils import keep_typing, should_use_thread, safe_create_thread, session_channel_id
+from slack_write_guard import bind_user_prompt, bind_user_prompt_from_messages
 
 # Multi-agent coordinator imports
 from conversation_coordinator import ConversationCoordinator, MultiAgentChannelManager
@@ -451,6 +454,8 @@ async def run_agent(message: discord.Message, user_input: str,
                     progress: 'AgentProgressView' = None) -> str:
     """Run the agent loop for a delegated task or direct request."""
 
+    bind_user_prompt(user_input)
+
     system_prompt = SYSTEM_PROMPT
 
     # Recall relevant memories
@@ -463,7 +468,7 @@ async def run_agent(message: discord.Message, user_input: str,
             pass
 
     messages = [{"role": "system", "content": system_prompt}]
-    messages.extend(get_session_history(message.channel.id))
+    messages.extend(get_session_history(session_channel_id(message.channel)))
     messages.append({"role": "user", "content": user_input})
 
     # Build tools
@@ -527,8 +532,8 @@ async def run_agent(message: discord.Message, user_input: str,
                         )
                     except Exception:
                         pass
-                add_to_session_history(message.channel.id, "user", user_input)
-                add_to_session_history(message.channel.id, "assistant", content)
+                add_to_session_history(session_channel_id(message.channel), "user", user_input)
+                add_to_session_history(session_channel_id(message.channel), "assistant", content)
                 return content
 
             if not tool_calls:
@@ -869,6 +874,7 @@ def get_mcp_configs() -> list[MCPServerConfig]:
         ("postgres", "http://127.0.0.1:8060/mcp", "MCP_POSTGRES_TOKEN"),
         ("redis", "http://127.0.0.1:8062/mcp", "MCP_REDIS_TOKEN"),
         ("ollama", "http://127.0.0.1:8063/mcp", "MCP_OLLAMA_TOKEN"),
+        ("outline", "http://127.0.0.1:3101/mcp", "MCP_OUTLINE_TOKEN"),
     ]
     for name, url, token_env in servers:
         token = os.environ.get(token_env, "")
@@ -916,7 +922,8 @@ async def handle_multi_agent_message(message: discord.Message):
         log(f"Score {score:.2f} below threshold {agent_profile.response_threshold}, not responding", "INFO")
         return
     
-    if not _coordinator.check_cooldown(message.channel.id, agent_profile.cooldown_seconds):
+    # @mention (score 1.0) skips cooldown so follow-ups are not dropped.
+    if score < 1.0 and not _coordinator.check_cooldown(message.channel.id, agent_profile.cooldown_seconds):
         log(f"Cooldown active for channel {message.channel.id}, skipping", "INFO")
         return
     
@@ -971,10 +978,15 @@ async def handle_single_agent_message(message: discord.Message):
         await handle_command(message, cmd, args)
         return
     
+    if bot.user and bot.user.mentioned_in(message):
+        content = re.sub(rf"<@!?{bot.user.id}>", "", content).strip()
+        if not content:
+            return
+
     progress = AgentProgressView(message)
     await progress.start(f"Processing: {content[:120]}")
     try:
-        response = await run_agent_loop(message, content, mcp_client, progress)
+        response = await run_agent(message, content, progress=progress)
         await progress.finalize(response)
     except asyncio.CancelledError:
         await progress.finalize("⏹️ Task cancelled.")
@@ -986,6 +998,13 @@ async def handle_single_agent_message(message: discord.Message):
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.id == bot.user.id:
+        return
+
+    # --- Ignore other bots outside of multi-agent channels ---
+    # Bots should only interact in designated multi-agent channels.
+    # In their own channels or other bots' channels, ignore bot messages
+    # to prevent feedback loops.
+    if message.author.bot and not is_multi_agent_channel(message.channel.id):
         return
 
     # Only respond in designated channel or DMs (unless multi-agent channel)
@@ -1115,29 +1134,32 @@ async def on_message(message: discord.Message):
     log(f"Direct request from {message.author.name}: {user_input[:200]}", "INFO")
     
     # Thread isolation — decide whether to create a dedicated thread
-    use_thread = should_use_thread(user_input)
+    use_thread = should_use_thread(user_input) and not isinstance(message.channel, discord.Thread) and not message.author.bot
     response_channel = message.channel
     
     if use_thread:
         thread_name = f"🔧 Task: {user_input[:80]}{'...' if len(user_input) > 80 else ''}"
         try:
-            thread = await message.create_thread(
-                name=thread_name,
-                auto_archive_duration=1440,  # 24 hours
+            thread = await safe_create_thread(
+                message, thread_name, auto_archive_duration=1440
             )
-            response_channel = thread
-            
-            # Notify in main channel (silent)
-            await message.reply(
-                f"📋 Started a thread for this task: {thread.jump_url}",
-                silent=True,
-            )
-            log(f"Created thread for task: {thread_name}", "INFO")
+            if thread:
+                response_channel = thread
+                try:
+                    await message.reply(
+                        f"📋 Started a thread for this task: {thread.jump_url}",
+                        silent=True,
+                    )
+                except Exception as e:
+                    log(f"Could not notify main channel of new thread: {e}", "WARN")
+                log(f"Created thread for task: {thread_name}", "INFO")
+            else:
+                response_channel = message.channel
         except Exception as e:
             log(f"Failed to create thread, using main channel: {e}", "WARN")
             response_channel = message.channel
     
-    progress = AgentProgressView(message if not use_thread else thread)
+    progress = AgentProgressView(response_channel)
     await progress.start(f"Working on: {user_input[:200]}")
     response = await run_agent(message, user_input, progress=progress)
     await progress.finalize(response)
@@ -1147,7 +1169,11 @@ async def on_message(message: discord.Message):
 # Main
 # ---------------------------------------------------------------------------
 
+_SINGLETON_LOCK = None
+
 def main():
+    global _SINGLETON_LOCK
+    _SINGLETON_LOCK = acquire_singleton("cartographer")
     if not BOT_TOKEN:
         print("ERROR: CARTOGRAPHER_BOT_TOKEN not set in environment")
         sys.exit(1)

@@ -85,7 +85,7 @@ LOG_FILE = "/var/log/schubert-bot.log"
 
 # LLM
 LITELLM_URL = "http://127.0.0.1:4000/v1"
-LLM_MODEL = _llm.get("model", "writer/claude-sonnet-4-5")
+LLM_MODEL = _llm.get("model", "writer/palmyra-x6")
 LLM_TIMEOUT = _llm.get("llm_timeout", 90)
 LLM_MAX_TOKENS = _llm.get("max_tokens", 4096)
 LLM_TEMPERATURE = _llm.get("temperature", 0.3)
@@ -141,6 +141,7 @@ CRITICAL_SERVICES = set(
             "cloudflared.service",
             "postgresql@18-main.service",
             "tailscaled.service",
+            "polyglot-litellm.service",  # Human-confirmed restart only — blocks autonomous restarts
         ],
     )
 )
@@ -410,7 +411,8 @@ You are Admiral Schubert — a fluffy Maine Coon kitten of distinguished naval r
 ## Services
 You can manage ALL services on the server. Critical services require confirmation before restart:
 - Critical (need confirmation): caddy.service, cloudflared.service, postgresql@18-main.service, tailscaled.service
-- Normal (no confirmation needed): tango-backend, tango-web, polyglot-litellm, tango-tts, and all others
+- Normal (no confirmation needed): tango-backend, tango-web, tango-tts, and all others
+- Requires confirmation: polyglot-litellm.service (shared LiteLLM proxy — only restart when Captain commands it)
 
 ## Git Operations
 - For Project Tango: run as z121532: `sudo -u z121532 git ...`

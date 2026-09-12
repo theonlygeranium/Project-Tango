@@ -1,0 +1,20 @@
+{
+  "workspace_url": "https://wiki.edstratumlabs.ai",
+  "ssh_host": "schubert",
+  "api_base_url": "http://127.0.0.1:3101/api",
+  "collection": {
+    "id": "REPLACE_WITH_COLLECTION_UUID",
+    "name": "REPLACE_WITH_COLLECTION_NAME",
+    "required_permission": null,
+    "max_active_users": 1,
+    "max_memberships": 1,
+    "sharing_must_be_disabled": true
+  },
+  "keychain": {
+    "service": "codex.PROJECT_NAME.outline",
+    "account": "$USER"
+  },
+  "documents": {},
+  "vault_root_title": null,
+  "update_log_title": null
+}

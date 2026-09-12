@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Tango Health Guardian — six-layer self-healing health monitor.
+Tango Health Guardian — eight-layer self-healing health monitor.
 
 Runs as a systemd timer (every 3 minutes, ~5 seconds execution).
 Checks service health, endpoint health, ElevenLabs billing, TTS synthesis,
-log anomalies, and worker registration. Auto-remediates where possible.
+log anomalies, worker registration, auto-patch escalation, and fleet agent
+liveness. Auto-remediates where possible.
 
 Usage:
     python3 tango-healthcheck.py [--dry-run]
@@ -36,6 +37,26 @@ WEB_SERVICE = "tango-web.service"
 LITELLM_SERVICE = "polyglot-litellm.service"
 TTS_SERVICE = "tango-tts.service"
 
+# Fleet agent services — monitored for liveness (Layer 8)
+FLEET_AGENT_SERVICES = {
+    "schubert-bot.service",
+    "schubert-architect.service",
+    "schubert-cartographer.service",
+    "schubert-dr-voss.service",
+    "schubert-monitor.service",
+    "schubert-proctor.service",
+    "schubert-quartermaster.service",
+}
+
+# Fleet agent services that can be safely restarted by auto-patch
+FLEET_SAFE_SERVICES = FLEET_AGENT_SERVICES
+
+# How long without log output before a fleet agent is considered stale.
+# Fleet agents are event-driven Discord bots — they only log when they
+# receive messages. A 60-minute threshold is appropriate; anything shorter
+# will cause false positives and restart loops for idle bots.
+FLEET_AGENT_STALE_MINUTES = 60
+
 # Services that are alert-only (never auto-restart)
 FORBIDDEN_SERVICES = {
     "caddy.service",
@@ -44,8 +65,16 @@ FORBIDDEN_SERVICES = {
     "tailscaled.service",
 }
 
-# Services we can safely restart
-SAFE_SERVICES = {BACKEND_SERVICE, WEB_SERVICE, LITELLM_SERVICE, TTS_SERVICE}
+# Services we can safely restart (Layer 1)
+# Includes both Tango services and fleet agents — inactive agents get
+# restarted directly by Layer 1, while Layer 8 handles the more subtle
+# case of agents that are "active" but silently hung.
+SAFE_SERVICES = {
+    BACKEND_SERVICE,
+    WEB_SERVICE,
+    LITELLM_SERVICE,
+    TTS_SERVICE,
+} | FLEET_AGENT_SERVICES
 
 # Endpoint health checks: (name, url, expected_substring)
 ENDPOINT_CHECKS = [
@@ -81,6 +110,9 @@ RESTART_SETTLE_SECONDS = 5
 # Rate limiting: don't restart the same service more than once per 10 minutes
 RESTART_COOLDOWN_SECONDS = 600
 RESTART_COOLDOWN_FILE = "/tmp/tango-healthcheck-restart-cooldowns.json"
+
+# Auto-patch script path (Layer 7)
+AUTO_PATCH_SCRIPT = "/opt/Project-Tango/scripts/tango-auto-patch.py"
 
 # Discord notification settings
 # Severity levels: DEBUG < INFO < WARN < CRITICAL
@@ -170,7 +202,6 @@ def send_discord_notification(message: str, level: str = "WARN") -> None:
 # Logging
 # ---------------------------------------------------------------------------
 
-
 def log(message: str, level: str = "INFO") -> None:
     """Write a timestamped log line to the log file and stdout.
 
@@ -193,7 +224,6 @@ def log(message: str, level: str = "INFO") -> None:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
 
 def load_env() -> dict[str, str]:
     """Load environment variables from the .env file."""
@@ -243,7 +273,6 @@ def systemctl_start(service: str) -> bool:
 # Restart cooldown
 # ---------------------------------------------------------------------------
 
-
 def can_restart(service: str) -> bool:
     """Check if we're allowed to restart this service (cooldown not expired)."""
     try:
@@ -278,7 +307,6 @@ def record_restart(service: str) -> None:
 # Layer 1: Service health
 # ---------------------------------------------------------------------------
 
-
 def check_service_health() -> list[str]:
     """Layer 1: Check if critical services are active. Restart if not."""
     issues = []
@@ -308,7 +336,6 @@ def check_service_health() -> list[str]:
 # ---------------------------------------------------------------------------
 # Layer 2: Endpoint health
 # ---------------------------------------------------------------------------
-
 
 def check_endpoint_health() -> list[str]:
     """Layer 2: Check if endpoints respond. Restart if active but unresponsive."""
@@ -343,7 +370,6 @@ def check_endpoint_health() -> list[str]:
 # ---------------------------------------------------------------------------
 # Layer 3: ElevenLabs billing
 # ---------------------------------------------------------------------------
-
 
 def check_elevenlabs_billing() -> list[str]:
     """Layer 3: Check ElevenLabs subscription status. Alert if not active."""
@@ -410,7 +436,6 @@ def check_elevenlabs_billing() -> list[str]:
 # Layer 4: TTS synthesis test
 # ---------------------------------------------------------------------------
 
-
 def check_tts_synthesis() -> list[str]:
     """Layer 4: Send a tiny TTS request to verify synthesis works. Restart backend on failure."""
     issues = []
@@ -435,7 +460,7 @@ def check_tts_synthesis() -> list[str]:
         f'curl -s -o /dev/null -w "%{{http_code}}|%{{size_download}}" --max-time 15 '
         f'-X POST "{tts_url}" '
         f'-H "xi-api-key: {api_key}" '
-        f'-H "Content-Type: application/json" '
+        f'-H "Content-Type": "application/json" '
         f'-d \'{payload}\'',
         timeout=20,
     )
@@ -468,7 +493,6 @@ def check_tts_synthesis() -> list[str]:
 # ---------------------------------------------------------------------------
 # Layer 5: Log anomaly scan
 # ---------------------------------------------------------------------------
-
 
 def check_log_anomalies() -> list[str]:
     """Layer 5: Scan recent backend logs for error patterns. Restart if threshold exceeded."""
@@ -514,7 +538,6 @@ def check_log_anomalies() -> list[str]:
 # ---------------------------------------------------------------------------
 # Layer 6: Worker registration
 # ---------------------------------------------------------------------------
-
 
 def check_worker_registration() -> list[str]:
     """Layer 6: Verify the LiveKit worker has registered since startup. Restart if missing."""
@@ -603,9 +626,78 @@ def check_worker_registration() -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Main
+# Layer 7: Auto-patch escalation
 # ---------------------------------------------------------------------------
 
+def invoke_auto_patch(issues: list[str]) -> None:
+    """Layer 7: Invoke auto-patch for critical issues that persist."""
+    if not issues:
+        return
+
+    if not os.path.exists(AUTO_PATCH_SCRIPT):
+        log(f"Layer 7: Auto-patch script not found at {AUTO_PATCH_SCRIPT}", "WARN")
+        return
+
+    issues_json = json.dumps(issues)
+    cmd = f"python3 {AUTO_PATCH_SCRIPT} --issues '{issues_json}'"
+    log(f"Layer 7: Invoking auto-patch for {len(issues)} critical issue(s)", "INFO")
+
+    code, output = run_command(cmd, timeout=120)
+    if code == 0:
+        log(f"Layer 7: Auto-patch completed successfully", "INFO")
+    else:
+        log(f"Layer 7: Auto-patch exited with code {code}: {output[:200]}", "ERROR")
+
+
+# ---------------------------------------------------------------------------
+# Layer 8: Fleet agent liveness
+# ---------------------------------------------------------------------------
+
+def check_fleet_agent_liveness() -> list[str]:
+    """Layer 8: Verify fleet agents have produced recent log output.
+
+    An agent that is 'active' but has not logged anything in the last
+    FLEET_AGENT_STALE_MINUTES is considered hung or crashed.
+
+    Note: Fleet agents are event-driven Discord bots. They only produce
+    log output when they receive messages. The stale threshold is set
+    high (60 min) to avoid false positives on idle bots.
+    """
+    issues = []
+    since = (datetime.now(timezone.utc) - timedelta(minutes=FLEET_AGENT_STALE_MINUTES)).strftime("%Y-%m-%d %H:%M:%S")
+
+    for service in sorted(FLEET_AGENT_SERVICES):
+        if not systemctl_is_active(service):
+            # Layer 1 already handles inactive services
+            continue
+
+        # Check if the agent has produced any log output recently
+        code, output = run_command(
+            f"sudo journalctl -u {service} --since '{since}' --no-pager -o cat 2>&1 | wc -l",
+            timeout=10,
+        )
+
+        if code != 0:
+            log(f"Layer 8: Could not check logs for {service}", "WARN")
+            continue
+
+        try:
+            line_count = int(output.strip())
+        except ValueError:
+            line_count = 0
+
+        if line_count == 0:
+            issues.append(f"{service} has no log output in last {FLEET_AGENT_STALE_MINUTES} min (possible hang)")
+            log(f"Layer 8: {service} is active but silent for {FLEET_AGENT_STALE_MINUTES}+ min — possible hang or crash", "CRITICAL")
+        else:
+            log(f"Layer 8: {service} OK ({line_count} log lines in last {FLEET_AGENT_STALE_MINUTES} min)", "INFO")
+
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
 def main() -> int:
     dry_run = "--dry-run" in sys.argv
@@ -662,6 +754,20 @@ def main() -> int:
         log("  [DRY RUN] Skipping worker registration check", "INFO")
     else:
         all_issues.extend(check_worker_registration())
+
+    # Layer 8: Fleet agent liveness (check before invoking auto-patch)
+    log("--- Layer 8: Fleet agent liveness ---", "INFO")
+    if dry_run:
+        for svc in sorted(FLEET_AGENT_SERVICES):
+            active = systemctl_is_active(svc)
+            log(f"  [DRY RUN] {svc}: {'active' if active else 'INACTIVE'}", "INFO")
+    else:
+        all_issues.extend(check_fleet_agent_liveness())
+
+    # Layer 7: Auto-patch escalation (only for critical issues)
+    if not dry_run and all_issues:
+        log("--- Layer 7: Auto-patch escalation ---", "INFO")
+        invoke_auto_patch(all_issues)
 
     # Summary
     log("=" * 60, "INFO")

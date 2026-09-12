@@ -1,0 +1,20 @@
+{
+  "session_id": "channel_1538494079254528070",
+  "channel_id": 1538494079254528070,
+  "thread_id": null,
+  "project_name": "default",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Admiral"
+    },
+    {
+      "role": "assistant",
+      "content": "Admiral Schubert here, Captain. All hands on deck. What are your orders?"
+    }
+  ],
+  "created_at": "2026-08-21T04:36:23.924070+00:00",
+  "updated_at": "2026-08-21T04:36:30.334681+00:00",
+  "message_count": 2,
+  "summary": null
+}

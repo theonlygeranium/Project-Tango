@@ -1,0 +1,1857 @@
+{
+    "version": 1,
+    "last_modified": "2026-08-21T03:51:55Z",
+    "modified_by": "admiral",
+    "fleet_protocol": {
+        "max_chain_depth": 3,
+        "delegation_timeout": 300,
+        "edit_interval": 1.2,
+        "first_send_threshold": 30,
+        "max_length": 2000
+    },
+    "conversation": {
+        "response_lock_timeout": 30,
+        "answered_ttl": 3600,
+        "message_retention": 50,
+        "redis_message_ttl": 86400,
+        "heartbeat_ttl": 60
+    },
+    "context_builder": {
+        "max_context_file_chars": 8000,
+        "max_total_context_chars": 20000,
+        "max_project_prompt_chars": 4000
+    },
+    "scheduler": {
+        "health_check_interval": 300,
+        "service_check_interval": 120,
+        "disk_alert_interval": 600,
+        "memory_decay_interval": 3600,
+        "disk_warning_threshold": 80,
+        "disk_critical_threshold": 90,
+        "mem_warning_threshold": 85,
+        "cpu_warning_threshold": 90,
+        "alert_dedup_cooldown": 1800,
+        "service_recovered_cooldown": 600,
+        "monitored_services": [
+            "caddy.service",
+            "cloudflared.service"
+        ]
+    },
+    "memory_stats": {
+        "memories": 1284,
+        "entities": 412,
+        "facts": 867
+    },
+    "bots": {
+        "admiral": {
+            "meta": {
+                "id": "admiral",
+                "name": "Admiral Schubert",
+                "role": "coordinator",
+                "roleLabel": "Fleet Coordinator",
+                "avatar": "AS",
+                "status": "online",
+                "scriptLines": 4820,
+                "featureTags": [
+                    "voice",
+                    "scheduler",
+                    "fleet-send",
+                    "polls",
+                    "meetscribe"
+                ]
+            },
+            "llm": {
+                "model": "writer/palmyra-x6",
+                "coding_model": "writer/palmyra-x6",
+                "temperature": 0.3,
+                "max_tokens": 3072,
+                "llm_timeout": 20,
+                "max_iterations": 10,
+                "agent_timeout": 300,
+                "tool_output_limit": 4000,
+                "shell_timeout": 120,
+                "session_window": "per-project",
+                "rate_limit_per_min": 10
+            },
+            "prompt": {
+                "system_prompt": "You are Admiral Schubert, coordinator of the USS Schubert Discord bot fleet (Project Tango).\n\n## Mission\nCommand and coordinate six specialist agents. Route work, resolve conflicts, and keep the fleet aligned with operator intent.\n\n## Style\nConcise, decisive, naval command tone. Prefer clear orders over speculation.\n\n## Capabilities\n- Fleet delegation (send + receive)\n- Voice mode (STT/TTS)\n- Scheduler (health, disk, services, memory decay)\n- Coding, polls, MeetScribe, Cloudflare tooling\n\n## Guardrails\nNever destroy root filesystems, flush firewalls, or restart never-touch services without confirmation.",
+                "voice_prompt_addition": true,
+                "coding_prompt_addition": true,
+                "poll_prompt_addition": true,
+                "meetscribe_prompt_addition": true
+            },
+            "tools": [
+                {
+                    "id": "run_shell",
+                    "name": "run_shell",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "read_file",
+                    "name": "read_file",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "write_file",
+                    "name": "write_file",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "list_dir",
+                    "name": "list_dir",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "search_code",
+                    "name": "search_code",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "delegate_to_agent",
+                    "name": "delegate_to_agent",
+                    "source": "fleet",
+                    "enabled": true
+                },
+                {
+                    "id": "fleet_status",
+                    "name": "fleet_status",
+                    "source": "fleet",
+                    "enabled": true
+                },
+                {
+                    "id": "fleet_broadcast",
+                    "name": "fleet_broadcast",
+                    "source": "fleet",
+                    "enabled": true
+                },
+                {
+                    "id": "create_poll",
+                    "name": "create_poll",
+                    "source": "poll",
+                    "enabled": true
+                },
+                {
+                    "id": "close_poll",
+                    "name": "close_poll",
+                    "source": "poll",
+                    "enabled": true
+                },
+                {
+                    "id": "run_tests",
+                    "name": "run_tests",
+                    "source": "coding",
+                    "enabled": true
+                },
+                {
+                    "id": "git_status",
+                    "name": "git_status",
+                    "source": "coding",
+                    "enabled": true
+                },
+                {
+                    "id": "git_diff",
+                    "name": "git_diff",
+                    "source": "coding",
+                    "enabled": true
+                },
+                {
+                    "id": "pin_message",
+                    "name": "pin_message",
+                    "source": "pinned",
+                    "enabled": true
+                },
+                {
+                    "id": "unpin_message",
+                    "name": "unpin_message",
+                    "source": "pinned",
+                    "enabled": true
+                },
+                {
+                    "id": "cf_dns_list",
+                    "name": "cf_dns_list",
+                    "source": "cloudflare",
+                    "enabled": true
+                },
+                {
+                    "id": "cf_dns_update",
+                    "name": "cf_dns_update",
+                    "source": "cloudflare",
+                    "enabled": true
+                },
+                {
+                    "id": "cf_purge_cache",
+                    "name": "cf_purge_cache",
+                    "source": "cloudflare",
+                    "enabled": true
+                },
+                {
+                    "id": "meetscribe_start",
+                    "name": "meetscribe_start",
+                    "source": "meetscribe",
+                    "enabled": true
+                },
+                {
+                    "id": "meetscribe_stop",
+                    "name": "meetscribe_stop",
+                    "source": "meetscribe",
+                    "enabled": true
+                },
+                {
+                    "id": "memory_recall",
+                    "name": "memory_recall",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "memory_store",
+                    "name": "memory_store",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "web_search",
+                    "name": "web_search",
+                    "source": "legacy",
+                    "enabled": true
+                }
+            ],
+            "guardrails": {
+                "hard_blocked_patterns": [
+                    {
+                        "pattern": "rm\\s+-rf\\s+/",
+                        "reason": "Root destruction",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "mkfs\\.",
+                        "reason": "Filesystem format",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "dd\\s+if=.*of=/dev/",
+                        "reason": "Raw disk write",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": ":(){ :|:& };:",
+                        "reason": "Fork bomb",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "chmod\\s+-R\\s+777\\s+/",
+                        "reason": "World-writable root",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "curl.*\\|\\s*bash",
+                        "reason": "Pipe-to-shell download",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "wget.*\\|\\s*sh",
+                        "reason": "Pipe-to-shell download",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "DROP\\s+DATABASE",
+                        "reason": "Database drop",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "shutdown\\s+-h",
+                        "reason": "Host shutdown",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "iptables\\s+-F",
+                        "reason": "Firewall flush",
+                        "enabled": true,
+                        "danger": true
+                    }
+                ],
+                "confirm_patterns": [
+                    {
+                        "pattern": "\\bgit\\s+push\\b",
+                        "reason": "git push",
+                        "enabled": true
+                    },
+                    {
+                        "pattern": "\\bsystemctl\\s+(restart|stop)\\b",
+                        "reason": "systemctl restart/stop",
+                        "enabled": true
+                    }
+                ],
+                "blocked_write_paths": [
+                    {
+                        "path": "AGENTS.md",
+                        "enabled": true
+                    },
+                    {
+                        "path": ".env",
+                        "enabled": true
+                    },
+                    {
+                        "path": ".env.runtime",
+                        "enabled": true
+                    },
+                    {
+                        "path": "secrets/",
+                        "enabled": true
+                    },
+                    {
+                        "path": "credentials.json",
+                        "enabled": true
+                    }
+                ],
+                "critical_services": [
+                    "caddy.service",
+                    "cloudflared.service",
+                    "postgresql.service",
+                    "tailscaled.service"
+                ],
+                "never_touch_services": [
+                    "schubert-bot.service"
+                ],
+                "restart_confirm_timeout": 30,
+                "fleet_services": [
+                    "schubert-bot.service",
+                    "schubert-architect.service",
+                    "schubert-quartermaster.service",
+                    "schubert-cartographer.service",
+                    "schubert-dr-voss.service",
+                    "schubert-proctor.service",
+                    "cortex-bot.service"
+                ]
+            },
+            "scheduler_enabled": true,
+            "memory": {
+                "cosine_threshold": 0.3,
+                "max_memory_injection_tokens": 1200,
+                "decay_rate": "1%/day",
+                "decay_floor": 0.1,
+                "max_recall_results": 5,
+                "max_search_results": 10,
+                "embedding_model": "nomic-embed-text",
+                "embedding_dimensions": 768,
+                "llm_entity_extraction": true,
+                "memory_storage_threshold": 100
+            },
+            "voice": {
+                "enabled": true,
+                "stt_engine": "Deepgram nova-3",
+                "tts_engine": "ElevenLabs eleven_flash_v2_5",
+                "voice_id": "QF9HJC7XWnue5c9W3LkY",
+                "vad_speech_rms_threshold": 100,
+                "vad_silence_frames_limit": 15,
+                "vad_min_speech_frames": 10,
+                "tts_stability": 0.5,
+                "tts_similarity_boost": 0.75,
+                "tts_text_truncation": 500,
+                "voice_response_truncation": 1900,
+                "stt_timeout": 30,
+                "tts_timeout": 30,
+                "min_pcm_length": 1000
+            },
+            "mcp": {
+                "servers": [
+                    {
+                        "id": "schubert",
+                        "name": "Schubert",
+                        "url": "http://127.0.0.1:8101/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "postgres",
+                        "name": "Postgres",
+                        "url": "http://127.0.0.1:8102/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "redis",
+                        "name": "Redis",
+                        "url": "http://127.0.0.1:8103/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "ollama",
+                        "name": "Ollama",
+                        "url": "http://127.0.0.1:8104/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "github",
+                        "name": "GitHub",
+                        "url": "http://127.0.0.1:8105/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_freelance",
+                        "name": "Gmail Freelance",
+                        "url": "http://127.0.0.1:8106/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_personal",
+                        "name": "Gmail Personal",
+                        "url": "http://127.0.0.1:8107/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_work",
+                        "name": "Gmail Work",
+                        "url": "http://127.0.0.1:8108/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    }
+                ],
+                "request_timeout": 90,
+                "tool_cache_ttl": 1800,
+                "tool_cache_refresh_on_error": true,
+                "per_project_tool_filtering": true
+            },
+            "multi_agent": {
+                "response_threshold": 0.4,
+                "urgent_threshold": 0.7,
+                "cooldown_seconds": 5,
+                "fleet_delegation_role": "send_receive"
+            },
+            "self_healing": null,
+            "self_improvement": null,
+            "identity": {
+                "name": "Admiral Schubert",
+                "discord_id": "1538476585445892179",
+                "channel_id": "1538476446157115442",
+                "service": "schubert-bot.service",
+                "script": "schubert-bot-v2.py",
+                "tier": "Tier 1 — Command"
+            }
+        },
+        "architect": {
+            "meta": {
+                "id": "architect",
+                "name": "The Architect",
+                "role": "developer",
+                "roleLabel": "Lead Developer",
+                "avatar": "AR",
+                "status": "online",
+                "scriptLines": 3560,
+                "featureTags": [
+                    "self-healing",
+                    "self-improvement",
+                    "coding"
+                ]
+            },
+            "llm": {
+                "model": "writer/palmyra-x6",
+                "coding_model": "writer/claude-sonnet-4-5",
+                "temperature": 0.3,
+                "max_tokens": 4096,
+                "llm_timeout": 300,
+                "max_iterations": 30,
+                "agent_timeout": 480,
+                "tool_output_limit": 3000,
+                "shell_timeout": 120,
+                "session_window": 20,
+                "rate_limit_per_min": null
+            },
+            "prompt": {
+                "system_prompt": "You are The Architect, Tier-2 developer agent for Project Tango.\n\n## Mission\nDesign, implement, and refactor code across the fleet codebase. Prefer durable architecture and clear diffs.\n\n## Style\nTechnical, precise, code-first explanations.\n\n## Capabilities\n- Coding model auto-route\n- Self-healing health monitor\n- Self-improvement auto-updater\n- Cloudflare + Writer tooling",
+                "voice_prompt_addition": false,
+                "coding_prompt_addition": true,
+                "poll_prompt_addition": false,
+                "meetscribe_prompt_addition": false
+            },
+            "tools": [
+                {
+                    "id": "run_shell",
+                    "name": "run_shell",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "read_file",
+                    "name": "read_file",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "write_file",
+                    "name": "write_file",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "search_code",
+                    "name": "search_code",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "git_status",
+                    "name": "git_status",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "git_diff",
+                    "name": "git_diff",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "run_tests",
+                    "name": "run_tests",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "cf_dns_list",
+                    "name": "cf_dns_list",
+                    "source": "cloudflare",
+                    "enabled": true
+                },
+                {
+                    "id": "writer_generate",
+                    "name": "writer_generate",
+                    "source": "writer",
+                    "enabled": true
+                },
+                {
+                    "id": "memory_recall",
+                    "name": "memory_recall",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "list_dir",
+                    "name": "list_dir",
+                    "source": "legacy",
+                    "enabled": true
+                }
+            ],
+            "guardrails": {
+                "hard_blocked_patterns": [],
+                "confirm_patterns": [],
+                "blocked_write_paths": [],
+                "critical_services": [
+                    "caddy.service",
+                    "cloudflared.service",
+                    "postgresql.service",
+                    "tailscaled.service"
+                ],
+                "never_touch_services": [
+                    "schubert-bot.service"
+                ],
+                "restart_confirm_timeout": null
+            },
+            "scheduler_enabled": false,
+            "memory": {
+                "cosine_threshold": 0.3,
+                "max_memory_injection_tokens": 1200,
+                "decay_rate": "1%/day",
+                "decay_floor": 0.1,
+                "max_recall_results": 5,
+                "max_search_results": 10,
+                "embedding_model": "nomic-embed-text",
+                "embedding_dimensions": 768,
+                "llm_entity_extraction": true,
+                "memory_storage_threshold": 100
+            },
+            "voice": null,
+            "mcp": {
+                "servers": [
+                    {
+                        "id": "schubert",
+                        "name": "Schubert",
+                        "url": "http://127.0.0.1:8101/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "postgres",
+                        "name": "Postgres",
+                        "url": "http://127.0.0.1:8102/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "redis",
+                        "name": "Redis",
+                        "url": "http://127.0.0.1:8103/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "ollama",
+                        "name": "Ollama",
+                        "url": "http://127.0.0.1:8104/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "github",
+                        "name": "GitHub",
+                        "url": "http://127.0.0.1:8105/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_freelance",
+                        "name": "Gmail Freelance",
+                        "url": "http://127.0.0.1:8106/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_personal",
+                        "name": "Gmail Personal",
+                        "url": "http://127.0.0.1:8107/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_work",
+                        "name": "Gmail Work",
+                        "url": "http://127.0.0.1:8108/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    }
+                ],
+                "request_timeout": 90,
+                "tool_cache_ttl": 1800,
+                "tool_cache_refresh_on_error": true,
+                "per_project_tool_filtering": true
+            },
+            "multi_agent": {
+                "response_threshold": 0.5,
+                "urgent_threshold": 0.8,
+                "cooldown_seconds": 10,
+                "fleet_delegation_role": "receive_only"
+            },
+            "self_healing": {
+                "health_check_interval": 300,
+                "escalation_cooldown": 300,
+                "max_remediation_retries": 3,
+                "intensive_monitor_interval": 10,
+                "intensive_monitor_duration": 300,
+                "error_threshold": 3
+            },
+            "self_improvement": {
+                "enabled": true,
+                "assessment_interval": 21600,
+                "max_updates_per_day": 3,
+                "max_file_size": 204800,
+                "max_changes_per_update": 5,
+                "rollback_wait_time": 30,
+                "reversal_lock_duration": 86400
+            },
+            "identity": {
+                "name": "The Architect",
+                "discord_id": "1538766501035642890",
+                "channel_id": "1539473266400432208",
+                "service": "schubert-architect.service",
+                "script": "architect-bot.py",
+                "tier": "Tier 2 — Development"
+            }
+        },
+        "quartermaster": {
+            "meta": {
+                "id": "quartermaster",
+                "name": "Quartermaster",
+                "role": "operations",
+                "roleLabel": "Operations",
+                "avatar": "QM",
+                "status": "online",
+                "scriptLines": 2140,
+                "featureTags": [
+                    "ops",
+                    "monitoring"
+                ]
+            },
+            "llm": {
+                "model": "writer/palmyra-x6",
+                "coding_model": null,
+                "temperature": 0.3,
+                "max_tokens": 4096,
+                "llm_timeout": 120,
+                "max_iterations": 30,
+                "agent_timeout": 300,
+                "tool_output_limit": 4000,
+                "shell_timeout": 120,
+                "session_window": 25,
+                "rate_limit_per_min": null
+            },
+            "prompt": {
+                "system_prompt": "You are Quartermaster, operations specialist for USS Schubert.\n\n## Mission\nMonitor host health, services, disk, and processes. Keep the ship running.\n\n## Style\nPractical ops tone. Report status clearly with numbers.",
+                "voice_prompt_addition": false,
+                "coding_prompt_addition": false,
+                "poll_prompt_addition": false,
+                "meetscribe_prompt_addition": false
+            },
+            "tools": [
+                {
+                    "id": "run_shell",
+                    "name": "run_shell",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "read_file",
+                    "name": "read_file",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "list_dir",
+                    "name": "list_dir",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "service_status",
+                    "name": "service_status",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "disk_usage",
+                    "name": "disk_usage",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "process_list",
+                    "name": "process_list",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "memory_recall",
+                    "name": "memory_recall",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "log_tail",
+                    "name": "log_tail",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "health_check",
+                    "name": "health_check",
+                    "source": "dev",
+                    "enabled": true
+                }
+            ],
+            "guardrails": {
+                "hard_blocked_patterns": [],
+                "confirm_patterns": [],
+                "blocked_write_paths": [],
+                "critical_services": [
+                    "caddy.service",
+                    "cloudflared.service",
+                    "postgresql.service",
+                    "tailscaled.service"
+                ],
+                "never_touch_services": [
+                    "schubert-bot.service"
+                ],
+                "restart_confirm_timeout": null
+            },
+            "scheduler_enabled": false,
+            "memory": {
+                "cosine_threshold": 0.3,
+                "max_memory_injection_tokens": 1200,
+                "decay_rate": "1%/day",
+                "decay_floor": 0.1,
+                "max_recall_results": 5,
+                "max_search_results": 10,
+                "embedding_model": "nomic-embed-text",
+                "embedding_dimensions": 768,
+                "llm_entity_extraction": true,
+                "memory_storage_threshold": 100
+            },
+            "voice": null,
+            "mcp": {
+                "servers": [
+                    {
+                        "id": "schubert",
+                        "name": "Schubert",
+                        "url": "http://127.0.0.1:8101/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "postgres",
+                        "name": "Postgres",
+                        "url": "http://127.0.0.1:8102/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "redis",
+                        "name": "Redis",
+                        "url": "http://127.0.0.1:8103/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "ollama",
+                        "name": "Ollama",
+                        "url": "http://127.0.0.1:8104/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "github",
+                        "name": "GitHub",
+                        "url": "http://127.0.0.1:8105/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_freelance",
+                        "name": "Gmail Freelance",
+                        "url": "http://127.0.0.1:8106/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_personal",
+                        "name": "Gmail Personal",
+                        "url": "http://127.0.0.1:8107/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_work",
+                        "name": "Gmail Work",
+                        "url": "http://127.0.0.1:8108/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    }
+                ],
+                "request_timeout": 90,
+                "tool_cache_ttl": 1800,
+                "tool_cache_refresh_on_error": true,
+                "per_project_tool_filtering": true
+            },
+            "multi_agent": {
+                "response_threshold": 0.5,
+                "urgent_threshold": 0.8,
+                "cooldown_seconds": 10,
+                "fleet_delegation_role": "receive_only"
+            },
+            "self_healing": null,
+            "self_improvement": null,
+            "identity": {
+                "name": "Quartermaster",
+                "discord_id": "1538817623045832746",
+                "channel_id": "1538818248542396428",
+                "service": "schubert-quartermaster.service",
+                "script": "quartermaster-bot.py",
+                "tier": "Tier 3 — Operations"
+            }
+        },
+        "cartographer": {
+            "meta": {
+                "id": "cartographer",
+                "name": "Cartographer",
+                "role": "documentation",
+                "roleLabel": "Documentation",
+                "avatar": "CA",
+                "status": "online",
+                "scriptLines": 1890,
+                "featureTags": [
+                    "docs",
+                    "wiki"
+                ]
+            },
+            "llm": {
+                "model": "writer/palmyra-x6",
+                "coding_model": null,
+                "temperature": 0.3,
+                "max_tokens": 4096,
+                "llm_timeout": 120,
+                "max_iterations": 30,
+                "agent_timeout": 600,
+                "tool_output_limit": 8000,
+                "shell_timeout": 120,
+                "session_window": 25,
+                "rate_limit_per_min": null
+            },
+            "prompt": {
+                "system_prompt": "You are Cartographer, documentation officer for Project Tango.\n\n## Mission\nMaintain wiki/docs accuracy. Capture decisions and map systems.\n\n## Style\nClear prose, structured headings, cite sources when updating docs.\n\n## Note\nel_wiki MCP server is not currently configured — surface this gap when relevant.",
+                "voice_prompt_addition": false,
+                "coding_prompt_addition": false,
+                "poll_prompt_addition": false,
+                "meetscribe_prompt_addition": false
+            },
+            "tools": [
+                {
+                    "id": "read_file",
+                    "name": "read_file",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "write_file",
+                    "name": "write_file",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "search_docs",
+                    "name": "search_docs",
+                    "source": "unique",
+                    "enabled": true
+                },
+                {
+                    "id": "update_wiki",
+                    "name": "update_wiki",
+                    "source": "unique",
+                    "enabled": true
+                },
+                {
+                    "id": "memory_recall",
+                    "name": "memory_recall",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "list_dir",
+                    "name": "list_dir",
+                    "source": "dev",
+                    "enabled": true
+                }
+            ],
+            "guardrails": {
+                "hard_blocked_patterns": [
+                    {
+                        "pattern": "rm\\s+-rf\\s+/",
+                        "reason": "Root destruction",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "mkfs\\.",
+                        "reason": "Filesystem format",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "dd\\s+if=.*of=/dev/",
+                        "reason": "Raw disk write",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": ":(){ :|:& };:",
+                        "reason": "Fork bomb",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "DROP\\s+DATABASE",
+                        "reason": "Database drop",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "shutdown\\s+-h",
+                        "reason": "Host shutdown",
+                        "enabled": true,
+                        "danger": true
+                    }
+                ],
+                "confirm_patterns": [],
+                "blocked_write_paths": [],
+                "critical_services": [
+                    "caddy.service",
+                    "cloudflared.service",
+                    "postgresql.service",
+                    "tailscaled.service"
+                ],
+                "never_touch_services": [
+                    "schubert-bot.service"
+                ],
+                "restart_confirm_timeout": null
+            },
+            "scheduler_enabled": false,
+            "memory": {
+                "cosine_threshold": 0.3,
+                "max_memory_injection_tokens": 1200,
+                "decay_rate": "1%/day",
+                "decay_floor": 0.1,
+                "max_recall_results": 5,
+                "max_search_results": 10,
+                "embedding_model": "nomic-embed-text",
+                "embedding_dimensions": 768,
+                "llm_entity_extraction": true,
+                "memory_storage_threshold": 100
+            },
+            "voice": null,
+            "mcp": {
+                "servers": [
+                    {
+                        "id": "schubert",
+                        "name": "Schubert",
+                        "url": "http://127.0.0.1:8101/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "postgres",
+                        "name": "Postgres",
+                        "url": "http://127.0.0.1:8102/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "redis",
+                        "name": "Redis",
+                        "url": "http://127.0.0.1:8103/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "ollama",
+                        "name": "Ollama",
+                        "url": "http://127.0.0.1:8104/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "github",
+                        "name": "GitHub",
+                        "url": "http://127.0.0.1:8105/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_freelance",
+                        "name": "Gmail Freelance",
+                        "url": "http://127.0.0.1:8106/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_personal",
+                        "name": "Gmail Personal",
+                        "url": "http://127.0.0.1:8107/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_work",
+                        "name": "Gmail Work",
+                        "url": "http://127.0.0.1:8108/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    }
+                ],
+                "request_timeout": 90,
+                "tool_cache_ttl": 1800,
+                "tool_cache_refresh_on_error": true,
+                "per_project_tool_filtering": true
+            },
+            "multi_agent": {
+                "response_threshold": 0.5,
+                "urgent_threshold": 0.8,
+                "cooldown_seconds": 10,
+                "fleet_delegation_role": "receive_only"
+            },
+            "self_healing": null,
+            "self_improvement": null,
+            "identity": {
+                "name": "Cartographer",
+                "discord_id": "1538818587119067206",
+                "channel_id": "1538818895706718269",
+                "service": "schubert-cartographer.service",
+                "script": "cartographer-bot.py",
+                "tier": "Tier 4 — Documentation"
+            }
+        },
+        "dr_voss": {
+            "meta": {
+                "id": "dr_voss",
+                "name": "Dr. Voss",
+                "role": "medical",
+                "roleLabel": "Medical / Healing",
+                "avatar": "DV",
+                "status": "online",
+                "scriptLines": 2980,
+                "featureTags": [
+                    "self-healing",
+                    "self-improvement",
+                    "coding"
+                ]
+            },
+            "llm": {
+                "model": "writer/palmyra-x6",
+                "coding_model": "writer/claude-sonnet-4-5",
+                "temperature": 0.3,
+                "max_tokens": 4096,
+                "llm_timeout": 180,
+                "max_iterations": 30,
+                "agent_timeout": 480,
+                "tool_output_limit": 3000,
+                "shell_timeout": 120,
+                "session_window": 35,
+                "rate_limit_per_min": null
+            },
+            "prompt": {
+                "system_prompt": "You are Dr. Voss, medical/devops healer for the fleet.\n\n## Mission\nDiagnose failures, remediate unhealthy services, and keep agents stable.\n\n## Capabilities\n- Self-healing (60s health checks)\n- Self-improvement auto-updater\n- Coding model auto-route",
+                "voice_prompt_addition": false,
+                "coding_prompt_addition": true,
+                "poll_prompt_addition": false,
+                "meetscribe_prompt_addition": false
+            },
+            "tools": [
+                {
+                    "id": "run_shell",
+                    "name": "run_shell",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "read_file",
+                    "name": "read_file",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "write_file",
+                    "name": "write_file",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "search_code",
+                    "name": "search_code",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "git_status",
+                    "name": "git_status",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "run_tests",
+                    "name": "run_tests",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "cf_dns_list",
+                    "name": "cf_dns_list",
+                    "source": "cloudflare",
+                    "enabled": true
+                },
+                {
+                    "id": "memory_recall",
+                    "name": "memory_recall",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "health_diagnose",
+                    "name": "health_diagnose",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "list_dir",
+                    "name": "list_dir",
+                    "source": "legacy",
+                    "enabled": true
+                }
+            ],
+            "guardrails": {
+                "hard_blocked_patterns": [],
+                "confirm_patterns": [],
+                "blocked_write_paths": [],
+                "critical_services": [
+                    "caddy.service",
+                    "cloudflared.service",
+                    "postgresql.service",
+                    "tailscaled.service"
+                ],
+                "never_touch_services": [
+                    "schubert-bot.service"
+                ],
+                "restart_confirm_timeout": null
+            },
+            "scheduler_enabled": false,
+            "memory": {
+                "cosine_threshold": 0.3,
+                "max_memory_injection_tokens": 1200,
+                "decay_rate": "1%/day",
+                "decay_floor": 0.1,
+                "max_recall_results": 5,
+                "max_search_results": 10,
+                "embedding_model": "nomic-embed-text",
+                "embedding_dimensions": 768,
+                "llm_entity_extraction": true,
+                "memory_storage_threshold": 100
+            },
+            "voice": null,
+            "mcp": {
+                "servers": [
+                    {
+                        "id": "schubert",
+                        "name": "Schubert",
+                        "url": "http://127.0.0.1:8101/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "postgres",
+                        "name": "Postgres",
+                        "url": "http://127.0.0.1:8102/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "redis",
+                        "name": "Redis",
+                        "url": "http://127.0.0.1:8103/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "ollama",
+                        "name": "Ollama",
+                        "url": "http://127.0.0.1:8104/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "github",
+                        "name": "GitHub",
+                        "url": "http://127.0.0.1:8105/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_freelance",
+                        "name": "Gmail Freelance",
+                        "url": "http://127.0.0.1:8106/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_personal",
+                        "name": "Gmail Personal",
+                        "url": "http://127.0.0.1:8107/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_work",
+                        "name": "Gmail Work",
+                        "url": "http://127.0.0.1:8108/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    }
+                ],
+                "request_timeout": 90,
+                "tool_cache_ttl": 1800,
+                "tool_cache_refresh_on_error": true,
+                "per_project_tool_filtering": true
+            },
+            "multi_agent": {
+                "response_threshold": 0.5,
+                "urgent_threshold": 0.8,
+                "cooldown_seconds": 10,
+                "fleet_delegation_role": "receive_only"
+            },
+            "self_healing": {
+                "health_check_interval": 60,
+                "escalation_cooldown": 300,
+                "max_remediation_retries": 3,
+                "intensive_monitor_interval": 10,
+                "intensive_monitor_duration": 300,
+                "error_threshold": 3
+            },
+            "self_improvement": {
+                "enabled": true,
+                "assessment_interval": 21600,
+                "max_updates_per_day": 3,
+                "max_file_size": 204800,
+                "max_changes_per_update": 5,
+                "rollback_wait_time": 30,
+                "reversal_lock_duration": 86400
+            },
+            "identity": {
+                "name": "Dr. Voss",
+                "discord_id": "1539047086597873684",
+                "channel_id": "1539104998821068880",
+                "service": "schubert-dr-voss.service",
+                "script": "dr-voss-bot.py",
+                "tier": "Tier 3 — Medical"
+            }
+        },
+        "proctor": {
+            "meta": {
+                "id": "proctor",
+                "name": "The Proctor",
+                "role": "testing",
+                "roleLabel": "Testing Officer",
+                "avatar": "PR",
+                "status": "online",
+                "scriptLines": 2410,
+                "featureTags": [
+                    "testing",
+                    "high-threshold"
+                ]
+            },
+            "llm": {
+                "model": "writer/palmyra-x6",
+                "coding_model": null,
+                "temperature": 0.3,
+                "max_tokens": 4096,
+                "llm_timeout": 120,
+                "max_iterations": 30,
+                "agent_timeout": 300,
+                "tool_output_limit": 4000,
+                "shell_timeout": 120,
+                "session_window": 25,
+                "rate_limit_per_min": null
+            },
+            "prompt": {
+                "system_prompt": "You are The Proctor, testing officer for Project Tango.\n\n## Mission\nValidate changes with tests, coverage, and strict response gating.\n\n## Style\nSkeptical, evidence-driven. High response threshold (0.9).",
+                "voice_prompt_addition": false,
+                "coding_prompt_addition": true,
+                "poll_prompt_addition": false,
+                "meetscribe_prompt_addition": false
+            },
+            "tools": [
+                {
+                    "id": "run_shell",
+                    "name": "run_shell",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "read_file",
+                    "name": "read_file",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "write_file",
+                    "name": "write_file",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "run_tests",
+                    "name": "run_tests",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "assert_equal",
+                    "name": "assert_equal",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "coverage_report",
+                    "name": "coverage_report",
+                    "source": "dev",
+                    "enabled": true
+                },
+                {
+                    "id": "memory_recall",
+                    "name": "memory_recall",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "list_dir",
+                    "name": "list_dir",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "git_diff",
+                    "name": "git_diff",
+                    "source": "dev",
+                    "enabled": true
+                }
+            ],
+            "guardrails": {
+                "hard_blocked_patterns": [],
+                "confirm_patterns": [],
+                "blocked_write_paths": [],
+                "critical_services": [
+                    "caddy.service",
+                    "cloudflared.service",
+                    "postgresql.service",
+                    "tailscaled.service"
+                ],
+                "never_touch_services": [
+                    "schubert-bot.service"
+                ],
+                "restart_confirm_timeout": null
+            },
+            "scheduler_enabled": false,
+            "memory": {
+                "cosine_threshold": 0.3,
+                "max_memory_injection_tokens": 1200,
+                "decay_rate": "1%/day",
+                "decay_floor": 0.1,
+                "max_recall_results": 5,
+                "max_search_results": 10,
+                "embedding_model": "nomic-embed-text",
+                "embedding_dimensions": 768,
+                "llm_entity_extraction": true,
+                "memory_storage_threshold": 100
+            },
+            "voice": null,
+            "mcp": {
+                "servers": [
+                    {
+                        "id": "schubert",
+                        "name": "Schubert",
+                        "url": "http://127.0.0.1:8101/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "postgres",
+                        "name": "Postgres",
+                        "url": "http://127.0.0.1:8102/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "redis",
+                        "name": "Redis",
+                        "url": "http://127.0.0.1:8103/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "ollama",
+                        "name": "Ollama",
+                        "url": "http://127.0.0.1:8104/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "github",
+                        "name": "GitHub",
+                        "url": "http://127.0.0.1:8105/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_freelance",
+                        "name": "Gmail Freelance",
+                        "url": "http://127.0.0.1:8106/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_personal",
+                        "name": "Gmail Personal",
+                        "url": "http://127.0.0.1:8107/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_work",
+                        "name": "Gmail Work",
+                        "url": "http://127.0.0.1:8108/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    }
+                ],
+                "request_timeout": 90,
+                "tool_cache_ttl": 1800,
+                "tool_cache_refresh_on_error": true,
+                "per_project_tool_filtering": true
+            },
+            "multi_agent": {
+                "response_threshold": 0.9,
+                "urgent_threshold": 0.95,
+                "cooldown_seconds": 60,
+                "fleet_delegation_role": "receive_only"
+            },
+            "self_healing": null,
+            "self_improvement": null,
+            "identity": {
+                "name": "The Proctor",
+                "discord_id": "1539047471899086988",
+                "channel_id": "1539159059071111190",
+                "service": "schubert-proctor.service",
+                "script": "proctor-bot.py",
+                "tier": "Tier 2 — Testing"
+            }
+        },
+        "cortex": {
+            "meta": {
+                "id": "cortex",
+                "name": "Dr. Cortex",
+                "role": "science",
+                "roleLabel": "Science Officer",
+                "avatar": "DC",
+                "status": "online",
+                "scriptLines": 3120,
+                "featureTags": [
+                    "voice",
+                    "scheduler",
+                    "fleet-send",
+                    "polls"
+                ]
+            },
+            "llm": {
+                "model": "writer/palmyra-x6",
+                "coding_model": "writer/palmyra-x6",
+                "temperature": 0.3,
+                "max_tokens": 3072,
+                "llm_timeout": 60,
+                "max_iterations": 15,
+                "agent_timeout": 300,
+                "tool_output_limit": 2000,
+                "shell_timeout": 120,
+                "session_window": "per-project",
+                "rate_limit_per_min": 10
+            },
+            "prompt": {
+                "system_prompt": "You are Dr. Cortex, science officer for USS Schubert.\n\n## Mission\nResearch, synthesize, and support fleet decisions with evidence.\n\n## Capabilities\n- Voice mode\n- Scheduler\n- Fleet send+receive delegation\n- Coding and poll tools",
+                "voice_prompt_addition": true,
+                "coding_prompt_addition": true,
+                "poll_prompt_addition": true,
+                "meetscribe_prompt_addition": false
+            },
+            "tools": [
+                {
+                    "id": "run_shell",
+                    "name": "run_shell",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "read_file",
+                    "name": "read_file",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "write_file",
+                    "name": "write_file",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "delegate_to_agent",
+                    "name": "delegate_to_agent",
+                    "source": "fleet",
+                    "enabled": true
+                },
+                {
+                    "id": "fleet_status",
+                    "name": "fleet_status",
+                    "source": "fleet",
+                    "enabled": true
+                },
+                {
+                    "id": "create_poll",
+                    "name": "create_poll",
+                    "source": "poll",
+                    "enabled": true
+                },
+                {
+                    "id": "run_tests",
+                    "name": "run_tests",
+                    "source": "coding",
+                    "enabled": true
+                },
+                {
+                    "id": "git_status",
+                    "name": "git_status",
+                    "source": "coding",
+                    "enabled": true
+                },
+                {
+                    "id": "cf_dns_list",
+                    "name": "cf_dns_list",
+                    "source": "cloudflare",
+                    "enabled": true
+                },
+                {
+                    "id": "memory_recall",
+                    "name": "memory_recall",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "memory_store",
+                    "name": "memory_store",
+                    "source": "legacy",
+                    "enabled": true
+                },
+                {
+                    "id": "web_search",
+                    "name": "web_search",
+                    "source": "legacy",
+                    "enabled": true
+                }
+            ],
+            "guardrails": {
+                "hard_blocked_patterns": [
+                    {
+                        "pattern": "rm\\s+-rf\\s+/",
+                        "reason": "Root destruction",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "mkfs\\.",
+                        "reason": "Filesystem format",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "dd\\s+if=.*of=/dev/",
+                        "reason": "Raw disk write",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": ":(){ :|:& };:",
+                        "reason": "Fork bomb",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "chmod\\s+-R\\s+777\\s+/",
+                        "reason": "World-writable root",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "curl.*\\|\\s*bash",
+                        "reason": "Pipe-to-shell download",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "wget.*\\|\\s*sh",
+                        "reason": "Pipe-to-shell download",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "DROP\\s+DATABASE",
+                        "reason": "Database drop",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "shutdown\\s+-h",
+                        "reason": "Host shutdown",
+                        "enabled": true,
+                        "danger": true
+                    },
+                    {
+                        "pattern": "iptables\\s+-F",
+                        "reason": "Firewall flush",
+                        "enabled": true,
+                        "danger": true
+                    }
+                ],
+                "confirm_patterns": [
+                    {
+                        "pattern": "\\bgit\\s+push\\b",
+                        "reason": "git push",
+                        "enabled": true
+                    },
+                    {
+                        "pattern": "\\bsystemctl\\s+(restart|stop)\\b",
+                        "reason": "systemctl restart/stop",
+                        "enabled": true
+                    }
+                ],
+                "blocked_write_paths": [
+                    {
+                        "path": "AGENTS.md",
+                        "enabled": true
+                    },
+                    {
+                        "path": ".env",
+                        "enabled": true
+                    },
+                    {
+                        "path": ".env.runtime",
+                        "enabled": true
+                    },
+                    {
+                        "path": "secrets/",
+                        "enabled": true
+                    },
+                    {
+                        "path": "credentials.json",
+                        "enabled": true
+                    }
+                ],
+                "critical_services": [
+                    "caddy.service",
+                    "cloudflared.service",
+                    "postgresql.service",
+                    "tailscaled.service"
+                ],
+                "never_touch_services": [
+                    "schubert-bot.service"
+                ],
+                "restart_confirm_timeout": 30,
+                "fleet_services": [
+                    "schubert-bot.service",
+                    "schubert-architect.service",
+                    "schubert-quartermaster.service",
+                    "schubert-cartographer.service",
+                    "schubert-dr-voss.service",
+                    "schubert-proctor.service",
+                    "cortex-bot.service"
+                ]
+            },
+            "scheduler_enabled": true,
+            "memory": {
+                "cosine_threshold": 0.3,
+                "max_memory_injection_tokens": 1200,
+                "decay_rate": "1%/day",
+                "decay_floor": 0.1,
+                "max_recall_results": 5,
+                "max_search_results": 10,
+                "embedding_model": "nomic-embed-text",
+                "embedding_dimensions": 768,
+                "llm_entity_extraction": true,
+                "memory_storage_threshold": 100
+            },
+            "voice": {
+                "enabled": true,
+                "stt_engine": "Deepgram nova-3",
+                "tts_engine": "ElevenLabs eleven_flash_v2_5",
+                "voice_id": "QF9HJC7XWnue5c9W3LkY",
+                "vad_speech_rms_threshold": 100,
+                "vad_silence_frames_limit": 15,
+                "vad_min_speech_frames": 10,
+                "tts_stability": 0.5,
+                "tts_similarity_boost": 0.75,
+                "tts_text_truncation": 500,
+                "voice_response_truncation": 1900,
+                "stt_timeout": 30,
+                "tts_timeout": 30,
+                "min_pcm_length": 1000
+            },
+            "mcp": {
+                "servers": [
+                    {
+                        "id": "schubert",
+                        "name": "Schubert",
+                        "url": "http://127.0.0.1:8101/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "postgres",
+                        "name": "Postgres",
+                        "url": "http://127.0.0.1:8102/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "redis",
+                        "name": "Redis",
+                        "url": "http://127.0.0.1:8103/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "ollama",
+                        "name": "Ollama",
+                        "url": "http://127.0.0.1:8104/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "github",
+                        "name": "GitHub",
+                        "url": "http://127.0.0.1:8105/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_freelance",
+                        "name": "Gmail Freelance",
+                        "url": "http://127.0.0.1:8106/mcp",
+                        "enabled": true,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_personal",
+                        "name": "Gmail Personal",
+                        "url": "http://127.0.0.1:8107/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    },
+                    {
+                        "id": "gmail_work",
+                        "name": "Gmail Work",
+                        "url": "http://127.0.0.1:8108/mcp",
+                        "enabled": false,
+                        "timeout": 90
+                    }
+                ],
+                "request_timeout": 90,
+                "tool_cache_ttl": 1800,
+                "tool_cache_refresh_on_error": true,
+                "per_project_tool_filtering": true
+            },
+            "multi_agent": {
+                "response_threshold": 0.5,
+                "urgent_threshold": 0.8,
+                "cooldown_seconds": 10,
+                "fleet_delegation_role": "send_receive"
+            },
+            "self_healing": null,
+            "self_improvement": null,
+            "identity": {
+                "name": "Dr. Cortex",
+                "discord_id": "1539172849569243217",
+                "channel_id": "1539173946698498088",
+                "service": "cortex-bot.service",
+                "script": "cortex-bot.py",
+                "tier": "Tier 3 — Science"
+            }
+        }
+    }
+}

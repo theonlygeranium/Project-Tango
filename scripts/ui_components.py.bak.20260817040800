@@ -1,0 +1,927 @@
+"""
+UI Components — Discord Interactive Views & Rich Embeds (Phase 4)
+===================================================================
+Provides Discord UI components for enhanced user experience:
+
+1. SetupWizardView — interactive button-based project/channel setup
+2. ConfirmationView — button-based confirmation replacing text prompts
+3. ProjectSelectView — dropdown for selecting projects
+4. RichEmbedBuilder — structured embeds for GitHub PRs, issues, commits, Gmail
+
+Usage:
+    from ui_components import SetupWizardView, ConfirmationView, RichEmbedBuilder
+    view = SetupWizardView(project_registry, guild)
+    await message.reply(embed=view.get_embed(), view=view)
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import re
+from datetime import datetime, timezone
+from typing import Optional, TYPE_CHECKING
+
+import discord
+from discord import ui
+
+if TYPE_CHECKING:
+    from project_registry import ProjectRegistry, ProjectConfig
+
+
+# ---------------------------------------------------------------------------
+# Embed colors (matching bot's color scheme)
+# ---------------------------------------------------------------------------
+
+COLOR_INFO = 0x3498DB       # Blue
+COLOR_SUCCESS = 0x2ECC71    # Green
+COLOR_WARNING = 0xF39C12    # Orange
+COLOR_ERROR = 0xE74C3C      # Red
+COLOR_GITHUB = 0x24292E     # Dark gray (GitHub brand)
+COLOR_GMAIL = 0xEA4335      # Red (Gmail brand)
+COLOR_SETUP = 0x9B59B6      # Purple
+COLOR_PHASE4 = 0x1ABC9C     # Teal
+
+
+# ---------------------------------------------------------------------------
+# ConfirmationView — button-based confirmation
+# ---------------------------------------------------------------------------
+
+class ConfirmationView(ui.View):
+    """
+    Interactive confirmation dialog with Approve/Deny buttons.
+
+    Replaces the text-based "reply yes to confirm" flow with
+    Discord buttons. Auto-expires after timeout_seconds.
+
+    Usage:
+        view = ConfirmationView(timeout_seconds=60)
+        await message.reply("Confirm restart?", view=view)
+        if await view.wait_for_result():
+            # approved
+    """
+
+    def __init__(self, timeout_seconds: int = 60, prompt: str = ""):
+        super().__init__(timeout=timeout_seconds)
+        self.result: Optional[bool] = None
+        self.prompt = prompt
+        self._event = asyncio.Event()
+
+    @ui.button(label="✅ Approve", style=discord.ButtonStyle.success, emoji="✅")
+    async def approve(self, interaction: discord.Interaction, button: ui.Button):
+        self.result = True
+        self._event.set()
+        self.clear_items()
+        await interaction.response.edit_message(
+            embed=discord.Embed(
+                title="✅ Approved",
+                description=self.prompt or "Action approved.",
+                color=COLOR_SUCCESS,
+                timestamp=datetime.now(timezone.utc),
+            ),
+            view=self,
+        )
+
+    @ui.button(label="❌ Deny", style=discord.ButtonStyle.danger, emoji="❌")
+    async def deny(self, interaction: discord.Interaction, button: ui.Button):
+        self.result = False
+        self._event.set()
+        self.clear_items()
+        await interaction.response.edit_message(
+            embed=discord.Embed(
+                title="❌ Denied",
+                description="Action cancelled.",
+                color=COLOR_ERROR,
+                timestamp=datetime.now(timezone.utc),
+            ),
+            view=self,
+        )
+
+    async def on_timeout(self):
+        if self.result is None:
+            self.result = False
+            self._event.set()
+
+    async def wait_for_result(self) -> bool:
+        """Wait for the user's response. Returns True if approved."""
+        await self._event.wait()
+        return self.result is True
+
+
+# ---------------------------------------------------------------------------
+# ProjectSelectView — dropdown for project selection
+# ---------------------------------------------------------------------------
+
+class ProjectSelectView(ui.View):
+    """
+    Dropdown menu for selecting a project.
+
+    Usage:
+        view = ProjectSelectView(projects)
+        await message.reply("Select a project:", view=view)
+        result = await view.wait_for_selection()
+    """
+
+    def __init__(self, projects: list, timeout_seconds: int = 120):
+        super().__init__(timeout=timeout_seconds)
+        self.selected: Optional[str] = None
+        self._event = asyncio.Event()
+
+        options = []
+        for p in projects:
+            channel_count = len(p.channel_bindings) if hasattr(p, "channel_bindings") else 0
+            desc = p.description[:100] if p.description else "No description"
+            options.append(discord.SelectOption(
+                label=p.name,
+                description=desc,
+                value=p.name,
+                emoji="📦",
+            ))
+
+        if not options:
+            options.append(discord.SelectOption(
+                label="No projects available",
+                description="Create a project first",
+                value="__none__",
+            ))
+
+        select = ui.Select(
+            placeholder="Choose a project...",
+            options=options,
+            min_values=1,
+            max_values=1,
+        )
+        select.callback = self._on_select
+        self.add_item(select)
+
+    async def _on_select(self, interaction: discord.Interaction):
+        select = self.children[0]
+        self.selected = select.values[0]
+        self._event.set()
+        if self.selected == "__none__":
+            await interaction.response.send_message("No projects available yet.", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"Selected: **{self.selected}**", ephemeral=True)
+
+    async def wait_for_selection(self) -> Optional[str]:
+        await self._event.wait()
+        return self.selected
+
+
+# ---------------------------------------------------------------------------
+# SetupWizardView — interactive project/channel setup
+# ---------------------------------------------------------------------------
+
+class SetupModal(ui.Modal, title="🚀 Create New Project"):
+    """Modal for creating a new project with full configuration."""
+
+    project_name = ui.TextInput(
+        label="Project Name",
+        placeholder="e.g., vinifera, tango-backend",
+        required=True,
+        max_length=50,
+    )
+    channel_name = ui.TextInput(
+        label="Discord Channel Name",
+        placeholder="e.g., vinifera, tango-backend",
+        required=True,
+        max_length=50,
+    )
+    workdir = ui.TextInput(
+        label="Working Directory",
+        placeholder="e.g., /opt/vinifera",
+        required=False,
+        max_length=200,
+    )
+    github_repo = ui.TextInput(
+        label="GitHub Repo (owner/repo)",
+        placeholder="e.g., theonlygeranium/vinifera",
+        required=False,
+        max_length=100,
+    )
+    mcp_servers = ui.TextInput(
+        label="Enabled MCP Servers (comma-separated)",
+        placeholder="e.g., github,gmail_freelance",
+        required=False,
+        max_length=200,
+    )
+
+    def __init__(self, setup_view: "SetupWizardView"):
+        super().__init__()
+        self.setup_view = setup_view
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        self.setup_view.modal_result = {
+            "project_name": self.project_name.value,
+            "channel_name": self.channel_name.value,
+            "workdir": self.workdir.value or "",
+            "github_repo": self.github_repo.value or "",
+            "mcp_servers": self.mcp_servers.value or "",
+        }
+        self.setup_view._modal_event.set()
+
+
+class SetupWizardView(ui.View):
+    """
+    Interactive setup wizard with buttons for common actions.
+
+    Buttons:
+    - 🚀 New Project — opens a modal form for full project creation
+    - 🔗 Bind Channel — binds current channel to an existing project (dropdown)
+    - 📋 List Projects — shows all projects as an embed
+    - ⚙️ Bot Status — shows MCP, memory, and session status
+    """
+
+    def __init__(self, project_registry, guild=None, channel=None, timeout_seconds: int = 300):
+        super().__init__(timeout=timeout_seconds)
+        self.project_registry = project_registry
+        self.guild = guild
+        self.channel = channel
+        self.modal_result: Optional[dict] = None
+        self._modal_event = asyncio.Event()
+        self.selected_project: Optional[str] = None
+        self._select_event = asyncio.Event()
+
+    @ui.button(label="🚀 New Project", style=discord.ButtonStyle.primary, row=0)
+    async def new_project(self, interaction: discord.Interaction, button: ui.Button):
+        modal = SetupModal(self)
+        self._modal_event.clear()
+        await interaction.response.send_modal(modal)
+        await self._modal_event.wait()
+        # The modal result is now available; the caller handles it
+        await interaction.followup.send(
+            f"✅ Project form submitted: **{self.modal_result.get('project_name', '')}**",
+            ephemeral=True,
+        )
+
+    @ui.button(label="🔗 Bind This Channel", style=discord.ButtonStyle.secondary, row=0)
+    async def bind_channel(self, interaction: discord.Interaction, button: ui.Button):
+        projects = self.project_registry.list_projects()
+        if not projects:
+            await interaction.response.send_message(
+                "No projects exist yet. Create one first with 🚀 New Project.",
+                ephemeral=True,
+            )
+            return
+
+        select_view = ProjectSelectView(projects)
+        await interaction.response.send_message(
+            "Select a project to bind this channel to:",
+            view=select_view,
+            ephemeral=True,
+        )
+        selected = await select_view.wait_for_selection()
+        if selected and selected != "__none__":
+            self.selected_project = selected
+            self._select_event.set()
+            await interaction.followup.send(
+                f"Ready to bind **{self.channel.name}** to project **{selected}**.",
+                ephemeral=True,
+            )
+
+    @ui.button(label="📋 List Projects", style=discord.ButtonStyle.secondary, row=1)
+    async def list_projects(self, interaction: discord.Interaction, button: ui.Button):
+        projects = self.project_registry.list_projects()
+        embed = _build_projects_embed(projects)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @ui.button(label="⚙️ Bot Status", style=discord.ButtonStyle.secondary, row=1)
+    async def bot_status(self, interaction: discord.Interaction, button: ui.Button):
+        embed = discord.Embed(
+            title="⚙️ Admiral Schubert V2 — Status",
+            color=COLOR_PHASE4,
+            timestamp=datetime.now(timezone.utc),
+        )
+        embed.add_field(
+            name="Bot",
+            value="✅ Online — Phase 4 UI Active",
+            inline=False,
+        )
+        projects = self.project_registry.list_projects()
+        embed.add_field(
+            name="Projects",
+            value=f"{len(projects)} registered",
+            inline=True,
+        )
+        embed.add_field(
+            name="Guild",
+            value=self.guild.name if self.guild else "Unknown",
+            inline=True,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    async def wait_for_modal(self) -> Optional[dict]:
+        """Wait for the new project modal to be submitted."""
+        await self._modal_event.wait()
+        return self.modal_result
+
+    async def wait_for_bind(self) -> Optional[str]:
+        """Wait for a project to be selected for binding."""
+        await self._select_event.wait()
+        return self.selected_project
+
+
+def get_setup_wizard_embed() -> discord.Embed:
+    """Build the embed for the setup wizard welcome message."""
+    embed = discord.Embed(
+        title="⚓ Admiral Schubert — Setup Wizard",
+        description=(
+            "Welcome, Captain! Use the buttons below to manage your projects and channels.\n\n"
+            "**🚀 New Project** — Create a new project with a Discord channel, working directory, "
+            "and optional GitHub repo mapping.\n"
+            "**🔗 Bind This Channel** — Bind the current channel to an existing project.\n"
+            "**📋 List Projects** — View all registered projects.\n"
+            "**⚙️ Bot Status** — Check the bot's current state."
+        ),
+        color=COLOR_SETUP,
+        timestamp=datetime.now(timezone.utc),
+    )
+    embed.set_footer(text="Phase 4 — Interactive UX | Buttons auto-expire after 5 minutes")
+    return embed
+
+
+def _build_projects_embed(projects: list) -> discord.Embed:
+    """Build an embed listing all projects."""
+    if not projects:
+        return discord.Embed(
+            title="📋 Projects",
+            description="No projects registered yet.",
+            color=COLOR_WARNING,
+            timestamp=datetime.now(timezone.utc),
+        )
+
+    embed = discord.Embed(
+        title=f"📋 Projects ({len(projects)})",
+        color=COLOR_INFO,
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    for p in projects:
+        channels = ", ".join(str(cid) for cid in p.channel_bindings) if p.channel_bindings else "none"
+        mcp = ", ".join(p.enabled_mcp_servers) if p.enabled_mcp_servers else "all"
+        embed.add_field(
+            name=f"📦 {p.name}",
+            value=(
+                f"**Workdir:** `{p.workdir or 'not set'}`\n"
+                f"**MCP:** {mcp}\n"
+                f"**Channels:** {channels}\n"
+                f"**Description:** {p.description[:100] if p.description else 'none'}"
+            ),
+            inline=False,
+        )
+
+    return embed
+
+
+# ---------------------------------------------------------------------------
+# RichEmbedBuilder — structured embeds for agent output
+# ---------------------------------------------------------------------------
+
+class RichEmbedBuilder:
+    """
+    Builds rich Discord embeds for structured agent output.
+
+    Detects content type from tool results and renders appropriate
+    embeds for GitHub PRs, issues, commits, Gmail messages, etc.
+    """
+
+    @staticmethod
+    def build_from_tool_result(
+        tool_name: str,
+        tool_args: dict,
+        result: str,
+    ) -> Optional[discord.Embed]:
+        """
+        Attempt to build a rich embed from a tool result.
+
+        Returns None if no rich embed is applicable (caller should
+        fall back to plain text).
+        """
+        if not result:
+            return None
+
+        # GitHub PR tools
+        if "pull" in tool_name or "pr" in tool_name:
+            return RichEmbedBuilder._build_github_pr_embed(tool_name, result)
+
+        # GitHub issue tools
+        if "issue" in tool_name:
+            return RichEmbedBuilder._build_github_issue_embed(tool_name, result)
+
+        # GitHub commit / code tools
+        if "commit" in tool_name:
+            return RichEmbedBuilder._build_github_commit_embed(tool_name, result)
+
+        # GitHub search results
+        if "search" in tool_name:
+            return RichEmbedBuilder._build_search_embed(tool_name, result)
+
+        # GitHub repo info
+        if "repo" in tool_name and "get" in tool_name:
+            return RichEmbedBuilder._build_repo_embed(result)
+
+        # Gmail tools
+        if "gmail" in tool_name or "mail" in tool_name:
+            return RichEmbedBuilder._build_gmail_embed(tool_name, result)
+
+        # Calendar tools
+        if "calendar" in tool_name or "event" in tool_name:
+            return RichEmbedBuilder._build_calendar_embed(result)
+
+        return None
+
+    @staticmethod
+    def _try_parse_json(result: str) -> Optional[dict]:
+        """Try to parse a tool result as JSON."""
+        try:
+            return json.loads(result)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    @staticmethod
+    def _build_github_pr_embed(tool_name: str, result: str) -> Optional[discord.Embed]:
+        """Build an embed for GitHub PR results."""
+        data = RichEmbedBuilder._try_parse_json(result)
+        if not data:
+            return None
+
+        # Single PR
+        if "number" in data and ("title" in data or "head" in data):
+            number = data.get("number", "?")
+            title = data.get("title", "Untitled PR")
+            state = data.get("state", "unknown")
+            url = data.get("html_url", "")
+            user = data.get("user", {})
+            author = user.get("login", "unknown") if isinstance(user, dict) else str(user)
+            body = data.get("body", "")[:500] if data.get("body") else "No description"
+            additions = data.get("additions", "?")
+            deletions = data.get("deletions", "?")
+            changed_files = data.get("changed_files", "?")
+
+            state_emoji = "🟢" if state == "open" else "🔴" if state == "closed" else "⚪"
+            embed = discord.Embed(
+                title=f"{state_emoji} PR #{number}: {title}",
+                url=url,
+                description=body,
+                color=COLOR_GITHUB,
+                timestamp=datetime.now(timezone.utc),
+            )
+            embed.add_field(name="Author", value=author, inline=True)
+            embed.add_field(name="State", value=state, inline=True)
+            embed.add_field(name="Files Changed", value=str(changed_files), inline=True)
+            embed.add_field(name="Additions", value=f"+{additions}", inline=True)
+            embed.add_field(name="Deletions", value=f"-{deletions}", inline=True)
+            embed.set_footer(text="GitHub Pull Request")
+            return embed
+
+        # List of PRs
+        if isinstance(data, list) and data:
+            embed = discord.Embed(
+                title=f"🔀 Pull Requests ({len(data)})",
+                color=COLOR_GITHUB,
+                timestamp=datetime.now(timezone.utc),
+            )
+            for pr in data[:10]:
+                number = pr.get("number", "?")
+                title = pr.get("title", "Untitled")[:80]
+                state = pr.get("state", "?")
+                state_emoji = "🟢" if state == "open" else "🔴"
+                embed.add_field(
+                    name=f"{state_emoji} #{number}",
+                    value=title,
+                    inline=False,
+                )
+            embed.set_footer(text="GitHub Pull Requests")
+            return embed
+
+        return None
+
+    @staticmethod
+    def _build_github_issue_embed(tool_name: str, result: str) -> Optional[discord.Embed]:
+        """Build an embed for GitHub issue results."""
+        data = RichEmbedBuilder._try_parse_json(result)
+        if not data:
+            return None
+
+        # Single issue
+        if "number" in data and "title" in data and "pull_request" not in data:
+            number = data.get("number", "?")
+            title = data.get("title", "Untitled Issue")
+            state = data.get("state", "unknown")
+            url = data.get("html_url", "")
+            user = data.get("user", {})
+            author = user.get("login", "unknown") if isinstance(user, dict) else str(user)
+            body = data.get("body", "")[:500] if data.get("body") else "No description"
+            labels = data.get("labels", [])
+            label_names = [l.get("name", "") for l in labels if isinstance(l, dict)][:5]
+
+            state_emoji = "🟢" if state == "open" else "🔴" if state == "closed" else "⚪"
+            embed = discord.Embed(
+                title=f"{state_emoji} Issue #{number}: {title}",
+                url=url,
+                description=body,
+                color=COLOR_GITHUB,
+                timestamp=datetime.now(timezone.utc),
+            )
+            embed.add_field(name="Author", value=author, inline=True)
+            embed.add_field(name="State", value=state, inline=True)
+            if label_names:
+                embed.add_field(name="Labels", value=", ".join(label_names), inline=True)
+            embed.set_footer(text="GitHub Issue")
+            return embed
+
+        # List of issues
+        if isinstance(data, list) and data:
+            embed = discord.Embed(
+                title=f"📌 Issues ({len(data)})",
+                color=COLOR_GITHUB,
+                timestamp=datetime.now(timezone.utc),
+            )
+            for issue in data[:10]:
+                number = issue.get("number", "?")
+                title = issue.get("title", "Untitled")[:80]
+                state = issue.get("state", "?")
+                state_emoji = "🟢" if state == "open" else "🔴"
+                embed.add_field(
+                    name=f"{state_emoji} #{number}",
+                    value=title,
+                    inline=False,
+                )
+            embed.set_footer(text="GitHub Issues")
+            return embed
+
+        return None
+
+    @staticmethod
+    def _build_github_commit_embed(tool_name: str, result: str) -> Optional[discord.Embed]:
+        """Build an embed for GitHub commit results."""
+        data = RichEmbedBuilder._try_parse_json(result)
+        if not data:
+            return None
+
+        # Single commit
+        sha = data.get("sha", "")
+        if not sha and "html_url" in data:
+            sha = data.get("html_url", "").split("/")[-1]
+
+        if sha:
+            commit_data = data.get("commit", data)
+            message = commit_data.get("message", "No message")[:300]
+            author = commit_data.get("author", {})
+            author_name = author.get("name", "unknown") if isinstance(author, dict) else str(author)
+            date = commit_data.get("author", {})
+            date_str = date.get("date", "")[:10] if isinstance(date, dict) else ""
+
+            embed = discord.Embed(
+                title=f"📝 Commit {sha[:7]}",
+                description=message,
+                color=COLOR_GITHUB,
+                timestamp=datetime.now(timezone.utc),
+            )
+            embed.add_field(name="Author", value=author_name, inline=True)
+            if date_str:
+                embed.add_field(name="Date", value=date_str, inline=True)
+            if data.get("html_url"):
+                embed.url = data["html_url"]
+            embed.set_footer(text="GitHub Commit")
+            return embed
+
+        # List of commits
+        if isinstance(data, list) and data:
+            embed = discord.Embed(
+                title=f"📝 Recent Commits ({len(data)})",
+                color=COLOR_GITHUB,
+                timestamp=datetime.now(timezone.utc),
+            )
+            for commit in data[:10]:
+                sha = commit.get("sha", "")[:7]
+                msg = commit.get("commit", {}).get("message", "No message")
+                first_line = msg.split("\n")[0][:80]
+                embed.add_field(
+                    name=sha,
+                    value=first_line,
+                    inline=False,
+                )
+            embed.set_footer(text="GitHub Commits")
+            return embed
+
+        return None
+
+    @staticmethod
+    def _build_search_embed(tool_name: str, result: str) -> Optional[discord.Embed]:
+        """Build an embed for search results."""
+        data = RichEmbedBuilder._try_parse_json(result)
+        if not data:
+            return None
+
+        items = data.get("items", data) if isinstance(data, dict) else data
+        if not isinstance(items, list) or not items:
+            return None
+
+        total = data.get("total_count", len(items)) if isinstance(data, dict) else len(items)
+        embed = discord.Embed(
+            title=f"🔍 Search Results ({total} found)",
+            color=COLOR_INFO,
+            timestamp=datetime.now(timezone.utc),
+        )
+
+        for item in items[:8]:
+            name = item.get("name", item.get("title", item.get("path", "Unknown")))
+            url = item.get("html_url", item.get("url", ""))
+            desc = item.get("description", item.get("snippet", ""))[:100]
+            embed.add_field(
+                name=name[:100],
+                value=f"{desc}\n[Link]({url})" if url else desc,
+                inline=False,
+            )
+
+        embed.set_footer(text=f"Search via {tool_name}")
+        return embed
+
+    @staticmethod
+    def _build_repo_embed(result: str) -> Optional[discord.Embed]:
+        """Build an embed for GitHub repo info."""
+        data = RichEmbedBuilder._try_parse_json(result)
+        if not data or "full_name" not in data:
+            return None
+
+        embed = discord.Embed(
+            title=f"📦 {data.get('full_name', 'Unknown Repo')}",
+            url=data.get("html_url", ""),
+            description=data.get("description", "No description")[:500],
+            color=COLOR_GITHUB,
+            timestamp=datetime.now(timezone.utc),
+        )
+        embed.add_field(name="⭐ Stars", value=str(data.get("stargazers_count", 0)), inline=True)
+        embed.add_field(name="🍴 Forks", value=str(data.get("forks_count", 0)), inline=True)
+        embed.add_field(name="👀 Watchers", value=str(data.get("watchers_count", 0)), inline=True)
+        embed.add_field(name="Language", value=data.get("language", "Unknown"), inline=True)
+        embed.add_field(name="Default Branch", value=data.get("default_branch", "main"), inline=True)
+        embed.add_field(name="License", value=data.get("license", {}).get("name", "None") if isinstance(data.get("license"), dict) else "None", inline=True)
+        embed.set_footer(text="GitHub Repository")
+        return embed
+
+    @staticmethod
+    def _build_gmail_embed(tool_name: str, result: str) -> Optional[discord.Embed]:
+        """Build an embed for Gmail results."""
+        data = RichEmbedBuilder._try_parse_json(result)
+        if not data:
+            return None
+
+        # Single email
+        if "subject" in data or "Subject" in data:
+            subject = data.get("subject", data.get("Subject", "No Subject"))
+            sender = data.get("from", data.get("sender", data.get("From", "Unknown")))
+            date = data.get("date", data.get("Date", ""))
+            snippet = data.get("snippet", data.get("body", ""))[:500]
+
+            embed = discord.Embed(
+                title=f"📧 {subject}",
+                description=snippet,
+                color=COLOR_GMAIL,
+                timestamp=datetime.now(timezone.utc),
+            )
+            embed.add_field(name="From", value=str(sender)[:200], inline=True)
+            if date:
+                embed.add_field(name="Date", value=str(date)[:50], inline=True)
+            embed.set_footer(text="Gmail")
+            return embed
+
+        # List of emails
+        if isinstance(data, list) and data:
+            embed = discord.Embed(
+                title=f"📧 Inbox ({len(data)} messages)",
+                color=COLOR_GMAIL,
+                timestamp=datetime.now(timezone.utc),
+            )
+            for msg in data[:10]:
+                subject = msg.get("subject", msg.get("Subject", "No Subject"))[:80]
+                sender = msg.get("from", msg.get("sender", msg.get("From", "Unknown")))[:50]
+                embed.add_field(
+                    name=subject,
+                    value=f"From: {sender}",
+                    inline=False,
+                )
+            embed.set_footer(text="Gmail Messages")
+            return embed
+
+        return None
+
+    @staticmethod
+    def _build_calendar_embed(result: str) -> Optional[discord.Embed]:
+        """Build an embed for Calendar results."""
+        data = RichEmbedBuilder._try_parse_json(result)
+        if not data:
+            return None
+
+        if isinstance(data, list) and data:
+            embed = discord.Embed(
+                title=f"📅 Upcoming Events ({len(data)})",
+                color=COLOR_INFO,
+                timestamp=datetime.now(timezone.utc),
+            )
+            for event in data[:10]:
+                summary = event.get("summary", event.get("title", "Untitled"))[:80]
+                start = event.get("start", {})
+                start_str = start.get("dateTime", start.get("date", ""))[:25] if isinstance(start, dict) else str(start)[:25]
+                embed.add_field(
+                    name=summary,
+                    value=f"Start: {start_str}",
+                    inline=False,
+                )
+            embed.set_footer(text="Google Calendar")
+            return embed
+
+        if "summary" in data or "start" in data:
+            summary = data.get("summary", data.get("title", "Untitled Event"))
+            start = data.get("start", {})
+            start_str = start.get("dateTime", start.get("date", ""))[:25] if isinstance(start, dict) else str(start)[:25]
+            location = data.get("location", "Not specified")
+
+            embed = discord.Embed(
+                title=f"📅 {summary}",
+                color=COLOR_INFO,
+                timestamp=datetime.now(timezone.utc),
+            )
+            embed.add_field(name="Start", value=start_str, inline=True)
+            embed.add_field(name="Location", value=location[:100], inline=True)
+            embed.set_footer(text="Google Calendar")
+            return embed
+
+        return None
+
+
+# ---------------------------------------------------------------------------
+# AgentProgressView — streaming progress display
+# ---------------------------------------------------------------------------
+
+class AgentProgressView:
+    """
+    Manages a Discord message that gets progressively edited to show
+    agent loop progress (thinking → tool calls → final response).
+
+    Usage:
+        progress = AgentProgressView(message)
+        await progress.start("Working on: ...")
+        await progress.update_thinking("Let me check the repo...")
+        await progress.add_tool_call("github", "get_file_contents")
+        await progress.finalize("Here's what I found: ...")
+    """
+
+    def __init__(self, message: discord.Message):
+        self.message = message
+        self.progress_msg: Optional[discord.Message] = None
+        self.tool_calls: list[str] = []
+        self.current_status = ""
+
+    async def start(self, initial_text: str):
+        """Create the initial progress message."""
+        embed = discord.Embed(
+            title="🤖 Agent Working",
+            description=initial_text[:1900],
+            color=COLOR_INFO,
+            timestamp=datetime.now(timezone.utc),
+        )
+        self.progress_msg = await self.message.reply(embed=embed)
+        self.current_status = initial_text
+
+    async def update_thinking(self, text: str):
+        """Update the thinking status."""
+        if not self.progress_msg:
+            return
+        self.current_status = text
+        embed = discord.Embed(
+            title="🤖 Agent Working",
+            description=text[:1900],
+            color=COLOR_INFO,
+            timestamp=datetime.now(timezone.utc),
+        )
+        if self.tool_calls:
+            tools_text = "\n".join(f"  • {tc}" for tc in self.tool_calls[-5:])
+            embed.add_field(name="🔧 Tool Calls", value=tools_text, inline=False)
+        try:
+            await self.progress_msg.edit(embed=embed)
+        except discord.HTTPException:
+            pass
+
+    async def add_tool_call(self, server: str, tool: str):
+        """Record a tool call and update the progress message."""
+        tool_str = f"[{server}] {tool}"
+        self.tool_calls.append(tool_str)
+        if not self.progress_msg:
+            return
+        embed = discord.Embed(
+            title="🤖 Agent Working",
+            description=self.current_status[:1900],
+            color=COLOR_INFO,
+            timestamp=datetime.now(timezone.utc),
+        )
+        tools_text = "\n".join(f"  • {tc}" for tc in self.tool_calls[-5:])
+        embed.add_field(name="🔧 Tool Calls", value=tools_text, inline=False)
+        try:
+            await self.progress_msg.edit(embed=embed)
+        except discord.HTTPException:
+            pass
+
+    async def finalize(self, response: str):
+        """Replace the progress message with the final response."""
+        if self.progress_msg:
+            try:
+                await self.progress_msg.delete()
+            except discord.HTTPException:
+                pass
+
+        # Send the final response (handle 2000 char limit)
+        if len(response) > 1900:
+            for i in range(0, len(response), 1900):
+                await self.message.reply(response[i:i + 1900])
+        else:
+            await self.message.reply(response)
+
+    async def finalize_with_embed(self, embed: discord.Embed, text: str = ""):
+        """Replace progress with a rich embed + optional text."""
+        if self.progress_msg:
+            try:
+                await self.progress_msg.delete()
+            except discord.HTTPException:
+                pass
+
+        if text:
+            if len(text) > 1900:
+                text = text[:1900] + "..."
+            await self.message.reply(text)
+        await self.message.reply(embed=embed)
+
+
+# ---------------------------------------------------------------------------
+# Help Embed — Phase 4 enhanced
+# ---------------------------------------------------------------------------
+
+def get_phase4_help_embed() -> discord.Embed:
+    """Build the enhanced help embed with Phase 4 features."""
+    embed = discord.Embed(
+        title="⚓ Admiral Schubert — Command Reference",
+        description=(
+            "I'm your AI-powered server assistant with MCP connectivity, "
+            "persistent memory, and interactive UI. Type naturally or use commands below."
+        ),
+        color=COLOR_PHASE4,
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    embed.add_field(
+        name="🚀 Interactive",
+        value=(
+            "`!setup` — Open the interactive setup wizard (buttons & forms)\n"
+            "`!help` — Show this help"
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="📊 Server Commands",
+        value=(
+            "`!status` — Server health snapshot\n"
+            "`!services` — All service statuses\n"
+            "`!logs <service>` — Recent logs\n"
+            "`!restart <service>` — Restart a service\n"
+            "`!disk` — Disk usage\n"
+            "`!mem` — Memory & swap\n"
+            "`!procs` — Top processes\n"
+            "`!net` — Network ports"
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="🔊 Voice",
+        value=(
+            "`!join` — Join your voice channel\n"
+            "`!leave` — Leave voice channel"
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="🧠 Memory & Projects",
+        value=(
+            "`!memory` — Memory queries (search/stats/entity/recent)\n"
+            "`!project` — Project management (create/bind/list/info/set/delete)\n"
+            "`!session` — Session management\n"
+            "`!mcp` — MCP server status"
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="💬 Natural Language",
+        value=(
+            "Just type naturally! I understand requests like:\n"
+            "• \"Create a channel for my GitHub repo\"\n"
+            "• \"What can you tell me about the vinifera project?\"\n"
+            "• \"Check the latest PRs on vinifera\"\n"
+            "• \"Search my Gmail for recent invoices\""
+        ),
+        inline=False,
+    )
+    embed.set_footer(
+        text="Phase 4 — Interactive UX | Buttons, Modals, Rich Embeds, Streaming"
+    )
+    return embed

@@ -6,7 +6,8 @@ import { DEFAULT_PERSONA_ID, type PersonaId } from '@/lib/personas';
 export default function useConnectionDetails(
   personaId: PersonaId = DEFAULT_PERSONA_ID,
   enabled = true,
-  llmModel?: LlmModelId
+  llmModel?: LlmModelId,
+  programName?: string
 ) {
   // Generate room connection details, including:
   //   - A random Room name
@@ -24,7 +25,11 @@ export default function useConnectionDetails(
     fetch('/api/connection-details', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ persona_id: personaId, llm_model: llmModel }),
+      body: JSON.stringify({
+        persona_id: personaId,
+        llm_model: llmModel,
+        ...(programName ? { program_name: programName } : {}),
+      }),
     })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Connection details failed with HTTP ${res.status}`);
@@ -43,7 +48,7 @@ export default function useConnectionDetails(
       .catch((error) => {
         console.error('Error fetching connection details:', error);
       });
-  }, [llmModel, personaId]);
+  }, [llmModel, personaId, programName]);
 
   // Clears the cached connection details without triggering a new fetch.
   // Use this on session end so a persona switch starts with a clean slate.

@@ -40,6 +40,8 @@ from discord import ui
 SCRIPT_DIR = "/opt/Project-Tango/scripts"
 sys.path.insert(0, SCRIPT_DIR)
 
+from singleton_lock import acquire_singleton
+
 from mcp_client import MCPClient, MCPServerConfig
 from cloudflare_api import execute_cloudflare_tool, get_cloudflare_tool_definition
 from memory_store import MemoryStore
@@ -51,7 +53,8 @@ from fleet_protocol import (
     format_response, track_chain, MAX_CHAIN_DEPTH, StreamingMessage,
 )
 from channel_onboarding import onboard_channel
-from discord_ux_utils import keep_typing, should_use_thread
+from discord_ux_utils import keep_typing, should_use_thread, safe_create_thread, session_channel_id
+from approval_buttons import AgentReplyView, PROCEED_TEXT, should_attach_proceed, progress_anchor
 
 # Multi-agent coordinator imports
 from conversation_coordinator import ConversationCoordinator, MultiAgentChannelManager
@@ -75,6 +78,7 @@ except Exception:
 _llm = _cfg.get("llm", {}) if isinstance(_cfg.get("llm", {}), dict) else {}
 _prompt = _cfg.get("prompt", {}) if isinstance(_cfg.get("prompt", {}), dict) else {}
 _self_healing = _cfg.get("self_healing", {}) if isinstance(_cfg.get("self_healing", {}), dict) else {}
+_self_improvement = _cfg.get("self_improvement", {}) if isinstance(_cfg.get("self_improvement", {}), dict) else {}
 
 # Slack integration
 from slack_notifier import get_slack_notifier
@@ -101,14 +105,26 @@ memory_store: Optional[MemoryStore] = None
 _channel_manager: Optional[MultiAgentChannelManager] = None
 _coordinator: Optional[ConversationCoordinator] = None
 
+# Reusable aiohttp session for LLM calls (reduces per-call connection overhead)
+_llm_http_session: Optional[aiohttp.ClientSession] = None
+
+async def get_llm_session() -> aiohttp.ClientSession:
+    global _llm_http_session
+    if _llm_http_session is None or _llm_http_session.closed:
+        _llm_http_session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=LLM_TIMEOUT),
+            connector=aiohttp.TCPConnector(limit=20, limit_per_host=20, keepalive_timeout=300, enable_cleanup_closed=True),
+        )
+    return _llm_http_session
+
 # Session history (in-memory, per-channel, with windowing)
 SESSION_HISTORY: dict[int, list[dict]] = {}
-SESSION_MAX_MESSAGES = _llm.get("session_window", 35)
+SESSION_MAX_MESSAGES = _llm.get("session_window", 4)
 
 # Multi-LLM routing — default model and available models
 # Dr. Voss auto-switches: Palmyra x6 for general tasks, Claude Sonnet 4.5 for coding
 DEFAULT_MODEL = _llm.get("model", "writer/palmyra-x6")
-CODING_MODEL = _llm.get("coding_model", "writer/claude-sonnet-4-5")
+CODING_MODEL = _llm.get("coding_model") or _llm.get("model") or "writer/palmyra-x6"
 current_model = DEFAULT_MODEL
 user_model_override = False  # Set True when user manually selects via !model; disables auto-switching
 
@@ -122,11 +138,11 @@ MODEL_CATEGORIES = {
         "writer/palmyra-creative",
     ],
     "Claude": [
-        "writer/claude-sonnet-4-5",
-        "writer/claude-sonnet-4",
-        "writer/claude-opus-4",
-        "writer/claude-3-5-sonnet",
-        "writer/claude-haiku-4-5",
+        "anthropic/claude-sonnet-4-5",
+        "anthropic/claude-sonnet-4",
+        "anthropic/claude-opus-4",
+        "anthropic/claude-3-5-sonnet",
+        "anthropic/claude-3-opus",
     ],
     "OpenAI": [
         "openai/gpt-4o",
@@ -149,9 +165,9 @@ MODEL_CATEGORIES = {
 
 LLM_TEMPERATURE = _llm.get("temperature", 0.3)
 LLM_MAX_TOKENS = _llm.get("max_tokens", 4096)
-LLM_TIMEOUT = _llm.get("llm_timeout", 180)
-MAX_ITERATIONS = _llm.get("max_iterations", 30)
-AGENT_TIMEOUT = _llm.get("agent_timeout", 480)
+LLM_TIMEOUT = _llm.get("llm_timeout", 45)
+MAX_ITERATIONS = _llm.get("max_iterations", 5)
+AGENT_TIMEOUT = _llm.get("agent_timeout", 360)
 
 # Colors
 COLOR_INFO = 0x5865F2
@@ -186,7 +202,7 @@ DR_VOSS_CHANNEL_CONFIG = {
 
 # Auto-thread thresholds (Enhancement 3)
 THREAD_RESPONSE_THRESHOLD = 8000  # auto-thread if response > 8000 chars
-THREAD_TOOL_CALL_THRESHOLD = 8    # auto-thread if >= 8 tool calls
+THREAD_TOOL_CALL_THRESHOLD = 6    # auto-thread if >= 6 tool calls
 
 # ---------------------------------------------------------------------------
 # Auto Model Routing — Palmyra x6 (default) → Claude Sonnet 4.5 (coding)
@@ -197,23 +213,25 @@ CODING_PATTERNS = [
     # Direct code actions
     "code", "function", "class", "method", "variable", "def ", "import ",
     "script", "deploy", "bug", "fix", "debug", "patch", "refactor",
-    "edit", "modify", "update", "rewrite", "implement", "write a",
+    "edit", "modify", "rewrite", "implement", "write a",
     # File/code artifacts
     ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".toml", ".sh",
     ".html", ".css", ".sql", ".env", "config", "syntax",
     # Dev concepts
-    "error", "traceback", "exception", "stack trace", "log",
+    "traceback", "exception", "stack trace", "error log",
     "regex", "api", "endpoint", "database", "query", "schema",
-    "service", "systemd", "restart", "deploy", "commit", "git",
+    "systemd", "restart", "deploy", "commit", "git",
     "test", "pytest", "unittest", "lint", "type error",
     "async", "await", "thread", "coroutine", "event loop",
     "docker", "container", "nginx", "caddy",
 ]
 
+_CODING_REGEX = re.compile('|'.join(re.escape(p) for p in CODING_PATTERNS))
+
 def is_coding_task(user_input: str) -> bool:
     """Detect whether a user request is coding-related and should use Claude."""
     text = user_input.lower()
-    return any(pattern in text for pattern in CODING_PATTERNS)
+    return bool(_CODING_REGEX.search(text))
 
 
 def select_model_for_task(user_input: str) -> str:
@@ -246,31 +264,31 @@ async def llm_chat(messages: list, tools: list | None = None, model: str | None 
     use_model = model or current_model
     call_start = time.time()
     try:
-        async with aiohttp.ClientSession() as session:
-            payload = {
-                "model": use_model,
-                "messages": messages,
-                "temperature": LLM_TEMPERATURE,
-                "max_tokens": LLM_MAX_TOKENS,
-            }
-            if tools:
-                payload["tools"] = tools
-                payload["tool_choice"] = "auto"
+        session = await get_llm_session()
+        payload = {
+            "model": use_model,
+            "messages": messages,
+            "temperature": LLM_TEMPERATURE,
+            "max_tokens": LLM_MAX_TOKENS,
+        }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
 
-            headers = {
-                "Authorization": f"Bearer {LITELLM_MASTER_KEY}",
-                "Content-Type": "application/json",
-            }
+        headers = {
+            "Authorization": f"Bearer {LITELLM_MASTER_KEY}",
+            "Content-Type": "application/json",
+        }
 
-            async with session.post(
-                f"{LITELLM_URL}/chat/completions",
-                json=payload,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=LLM_TIMEOUT),
-            ) as resp:
+        async with session.post(
+            f"{LITELLM_URL}/chat/completions",
+            json=payload,
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=LLM_TIMEOUT),
+        ) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
-                    log(f"LLM API error {resp.status}: {error_text[:500]}", "ERROR")
+                    log(f"LLM API error {resp.status} (model={use_model}): {error_text[:500]}", "ERROR")
                     if metrics:
                         metrics.record_llm_call(use_model, time.time() - call_start, False)
                     return {
@@ -291,7 +309,30 @@ async def llm_chat(messages: list, tools: list | None = None, model: str | None 
         log(f"LLM network error (retryable): {e}", "WARN")
         if metrics:
             metrics.record_llm_call(use_model, time.time() - call_start, False)
-        return {"error": f"Network error: {e}", "choices": [], "retryable": True}
+        # Retry once after brief delay for transient network errors
+        await asyncio.sleep(2)
+        try:
+            session = await get_llm_session()  # Refresh session — original may be stale
+            async with session.post(
+                f"{LITELLM_URL}/chat/completions",
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=LLM_TIMEOUT),
+            ) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    if metrics:
+                        metrics.record_llm_call(use_model, time.time() - call_start, False)
+                    return {"error": f"LLM API returned {resp.status}: {error_text[:200]}", "choices": []}
+                data = await resp.json()
+                if metrics:
+                    metrics.record_llm_call(use_model, time.time() - call_start, True)
+                return data
+        except Exception as retry_err:
+            log(f"LLM retry also failed: {retry_err}", "ERROR")
+            if metrics:
+                metrics.record_llm_call(use_model, time.time() - call_start, False)
+            return {"error": f"Network error: {e}", "choices": [], "retryable": False}
     except Exception as e:
         log(f"LLM call failed: {e}", "ERROR")
         if metrics:
@@ -309,27 +350,27 @@ async def llm_chat_stream(messages: list, tools: list | None = None,
     use_model = model or current_model
     call_start = time.time()
     try:
-        async with aiohttp.ClientSession() as session:
-            payload = {
-                "model": use_model,
-                "messages": messages,
-                "temperature": LLM_TEMPERATURE,
-                "max_tokens": LLM_MAX_TOKENS,
-                "stream": True,
-            }
-            if tools:
-                payload["tools"] = tools
-                payload["tool_choice"] = "auto"
-            headers = {
-                "Authorization": f"Bearer {LITELLM_MASTER_KEY}",
-                "Content-Type": "application/json",
-            }
-            async with session.post(
-                f"{LITELLM_URL}/chat/completions",
-                json=payload,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=LLM_TIMEOUT),
-            ) as resp:
+        session = await get_llm_session()
+        payload = {
+            "model": use_model,
+            "messages": messages,
+            "temperature": LLM_TEMPERATURE,
+            "max_tokens": LLM_MAX_TOKENS,
+            "stream": True,
+        }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        headers = {
+            "Authorization": f"Bearer {LITELLM_MASTER_KEY}",
+            "Content-Type": "application/json",
+        }
+        async with session.post(
+            f"{LITELLM_URL}/chat/completions",
+            json=payload,
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=LLM_TIMEOUT),
+        ) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
                     log(f"LLM stream error {resp.status}: {error_text[:500]}", "ERROR")
@@ -406,30 +447,42 @@ async def llm_chat_stream(messages: list, tools: list | None = None,
 # Web Search (Serper API)
 # ---------------------------------------------------------------------------
 
+_web_search_session: Optional[aiohttp.ClientSession] = None
+
+async def get_web_search_session() -> aiohttp.ClientSession:
+    """Dedicated session for web search with shorter timeout."""
+    global _web_search_session
+    if _web_search_session is None or _web_search_session.closed:
+        _web_search_session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=15),
+            connector=aiohttp.TCPConnector(limit=5, keepalive_timeout=30, enable_cleanup_closed=True),
+        )
+    return _web_search_session
+
 async def web_search(query: str, num_results: int = 5) -> str:
     """Search the web using Serper API and return formatted results."""
     if not SERPER_API_KEY:
         return "Web search unavailable — SERPER_API_KEY not configured."
 
     try:
-        async with aiohttp.ClientSession() as session:
-            payload = {
-                "q": query,
-                "num": num_results,
-            }
-            headers = {
-                "X-API-KEY": SERPER_API_KEY,
-                "Content-Type": "application/json",
-            }
-            async with session.post(
-                "https://google.serper.dev/search",
-                json=payload,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=15),
-            ) as resp:
-                if resp.status != 200:
-                    return f"Search error: HTTP {resp.status}"
-                data = await resp.json()
+        session = await get_web_search_session()
+        payload = {
+            "q": query,
+            "num": num_results,
+        }
+        headers = {
+            "X-API-KEY": SERPER_API_KEY,
+            "Content-Type": "application/json",
+        }
+        async with session.post(
+            "https://google.serper.dev/search",
+            json=payload,
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=15),
+        ) as resp:
+            if resp.status != 200:
+                return f"Search error: HTTP {resp.status}"
+            data = await resp.json()
 
         results = []
         organic = data.get("organic", [])
@@ -746,6 +799,7 @@ def get_dev_tools() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 _last_inputs: dict[int, str] = {}
+_last_user_messages: dict[int, discord.Message] = {}
 _running_tasks: dict[int, asyncio.Task] = {}
 
 
@@ -767,36 +821,52 @@ class ProgressView(discord.ui.View):
             await interaction.response.send_message("No active task.", ephemeral=True)
 
 
-class ResponseView(discord.ui.View):
-    """View with a Regenerate button attached to the final response."""
+class ResponseView(AgentReplyView):
+    """Proceed / Cancel / Regenerate on the final response."""
 
-    def __init__(self, channel_id: int):
-        super().__init__(timeout=300)
-        self.channel_id = channel_id
+    def __init__(self, channel_id: int, show_proceed: bool = True):
+        super().__init__(
+            channel_id,
+            ADMIN_USER_ID,
+            show_proceed=show_proceed,
+            on_proceed=_on_proceed_click,
+            on_regenerate=_on_regenerate_click,
+        )
 
-    @discord.ui.button(label="Regenerate", style=discord.ButtonStyle.secondary, emoji="🔁")
-    async def regenerate_button(self, interaction, button):
-        last_input = _last_inputs.get(self.channel_id)
-        if not last_input:
-            await interaction.response.send_message("No previous input.", ephemeral=True)
-            return
-        log(f"Regenerate pressed for channel {self.channel_id}", "INFO")
-        await interaction.response.send_message("🔁 Regenerating...", ephemeral=True)
-        button.disabled = True
-        try: await interaction.message.edit(view=self)
-        except Exception: pass
-        channel = bot.get_channel(self.channel_id)
-        if not channel: return
-        progress = AgentProgressView(interaction.message)
-        await progress.start(f"Regenerating: {last_input[:200]}")
-        try:
-            response = await run_agent_loop(interaction.message, last_input, mcp_client, progress)
-            await progress.finalize(response)
-        except asyncio.CancelledError:
-            await progress.finalize("⏹️ Task cancelled.")
-        except Exception as e:
-            log(f"Regenerate error: {e}", "ERROR")
-            await progress.finalize(f"Error: {str(e)[:500]}")
+
+async def _on_proceed_click(interaction: discord.Interaction) -> None:
+    channel_id = interaction.channel.id if interaction.channel else 0
+    source = _last_user_messages.get(channel_id) or interaction.message
+    log(f"Proceed pressed for channel {channel_id}", "INFO")
+    progress = AgentProgressView(progress_anchor(source, interaction))
+    await progress.start("Proceeding with the approved plan...")
+    try:
+        response = await run_agent_loop(source, PROCEED_TEXT, mcp_client, progress)
+        await progress.finalize(response)
+    except asyncio.CancelledError:
+        await progress.finalize("⏹️ Task cancelled.")
+    except Exception as e:
+        log(f"Proceed error: {e}", "ERROR")
+        await progress.finalize(f"Error: {str(e)[:500]}")
+
+
+async def _on_regenerate_click(interaction: discord.Interaction) -> None:
+    channel_id = interaction.channel.id if interaction.channel else 0
+    last_input = _last_inputs.get(channel_id)
+    if not last_input:
+        return
+    log(f"Regenerate pressed for channel {channel_id}", "INFO")
+    source = _last_user_messages.get(channel_id) or interaction.message
+    progress = AgentProgressView(progress_anchor(source, interaction))
+    await progress.start(f"Regenerating: {last_input[:200]}")
+    try:
+        response = await run_agent_loop(source, last_input, mcp_client, progress)
+        await progress.finalize(response)
+    except asyncio.CancelledError:
+        await progress.finalize("⏹️ Task cancelled.")
+    except Exception as e:
+        log(f"Regenerate error: {e}", "ERROR")
+        await progress.finalize(f"Error: {str(e)[:500]}")
 
 
 # ---------------------------------------------------------------------------
@@ -822,11 +892,25 @@ class AgentProgressView:
         self._typing_paused = False
         self._is_fleet_request = False
 
+    @property
+    def _channel(self):
+        """Resolve the Discord channel, handling both Message and Channel objects."""
+        return self.message.channel if hasattr(self.message, "channel") else self.message
+
+    async def _reply(self, *args, **kwargs):
+        """Send a reply, handling both Message and Channel/Thread objects."""
+        if hasattr(self.message, "reply"):
+            try:
+                return await self.message.reply(*args, **kwargs)
+            except AttributeError:
+                pass
+        return await self._channel.send(*args, **kwargs)
+
     async def start(self, initial_text: str):
         self._start_time = time.time()
         embed = self._build_embed(initial_text)
-        view = ProgressView(self.message.channel.id)
-        self.progress_msg = await self.message.reply(embed=embed, view=view)
+        view = ProgressView(self._channel.id)
+        self.progress_msg = await self._reply(embed=embed, view=view)
         self.current_status = initial_text
         self._typing_task = asyncio.create_task(self._typing_loop())
         self._spinner_task = asyncio.create_task(self._spinner_loop())
@@ -865,7 +949,7 @@ class AgentProgressView:
     async def _typing_loop(self):
         try:
             while True:
-                async with self.message.channel.typing():
+                async with self._channel.typing():
                     await asyncio.sleep(8)
         except asyncio.CancelledError:
             pass
@@ -929,7 +1013,10 @@ class AgentProgressView:
                 pass
         if self._streamed:
             return
-        view = ResponseView(self.message.channel.id)
+        view = ResponseView(
+            self.message.channel.id,
+            show_proceed=should_attach_proceed(response),
+        )
         if len(response) <= 1900:
             await self.message.reply(response, view=view)
         elif len(response) <= 4096:
@@ -952,13 +1039,11 @@ class AgentProgressView:
         if not self._is_fleet_request and not self._streamed:
             if len(response) > THREAD_RESPONSE_THRESHOLD or len(self.tool_calls) >= THREAD_TOOL_CALL_THRESHOLD:
                 try:
-                    thread_name = f"Discussion: {self.message.content[:80]}"
-                    thread = await self.message.create_thread(
-                        name=thread_name,
-                        auto_archive_duration=60,
-                    )
-                    log(f"Auto-thread created: {thread_name}", "INFO")
-                except discord.HTTPException as e:
+                    thread_name = f"Discussion: {(getattr(self.message, 'content', None) or '')[:80]}"
+                    thread = await safe_create_thread(self.message, thread_name, auto_archive_duration=60)
+                    if thread:
+                        log(f"Auto-thread created: {thread_name}", "INFO")
+                except Exception as e:
                     log(f"Auto-thread creation failed: {e}", "WARN")
 
 
@@ -1381,7 +1466,7 @@ async def run_agent_loop(
     messages = [{"role": "system", "content": system_prompt}]
 
     # Add session history (prior conversation in this channel)
-    session_history = get_session_history(message.channel.id)
+    session_history = get_session_history(session_channel_id(message.channel))
     messages.extend(session_history)
 
     messages.append({"role": "user", "content": user_input})
@@ -1458,18 +1543,19 @@ async def run_agent_loop(
                 # Attach Regenerate button to streamed response (non-fleet only)
                 if not _fleet_chain_id and stream_msg.was_started:
                     try:
-                        view = ResponseView(message.channel.id)
+                        view = ResponseView(
+                            message.channel.id,
+                            show_proceed=should_attach_proceed(content),
+                        )
                         await stream_msg._stream_msg.edit(view=view)
                     except Exception as e:
                         log(f"Could not attach Regenerate button to streamed response: {e}", "WARN")
                 # Auto-thread for long streamed responses (non-fleet only)
                 if not _fleet_chain_id and (len(content) > THREAD_RESPONSE_THRESHOLD or len(progress.tool_calls) >= THREAD_TOOL_CALL_THRESHOLD):
-                    try:
-                        thread_name = f"Discussion: {message.content[:80]}"
-                        thread = await message.create_thread(name=thread_name, auto_archive_duration=60)
+                    thread_name = f"Discussion: {(getattr(message, 'content', None) or '')[:80]}"
+                    thread = await safe_create_thread(message, thread_name, auto_archive_duration=60)
+                    if thread:
                         log(f"Auto-thread created: {thread_name}", "INFO")
-                    except discord.HTTPException as e:
-                        log(f"Auto-thread creation failed: {e}", "WARN")
                 # Store the conversation exchange in persistent memory
                 store_memory(f"User: {user_input[:500]}\nDr. Voss: {content[:500]}", event_type="conversation")
                 # Log the conversation as a change event for auditability
@@ -1482,8 +1568,8 @@ async def run_agent_loop(
                     outcome="completed",
                 )
                 # Add to session history
-                add_to_session_history(message.channel.id, "user", user_input)
-                add_to_session_history(message.channel.id, "assistant", content)
+                add_to_session_history(session_channel_id(message.channel), "user", user_input)
+                add_to_session_history(session_channel_id(message.channel), "assistant", content)
                 # If this was a FLEET delegation, send the response back to Schubert
                 if _fleet_chain_id:
                     try:
@@ -1672,47 +1758,44 @@ MAX_REMEDIATION_RETRIES = _self_healing.get("max_remediation_retries", 3)
 # Self-Improvement Configuration
 # ---------------------------------------------------------------------------
 
-# Paths — Dr. Voss optimizes BOTH itself and Admiral Schubert
-ARCHITECT_SCRIPT_PATH = "/opt/Project-Tango/scripts/architect-bot.py"
-SCHUBERT_SCRIPT_PATH = "/opt/Project-Tango/scripts/schubert-bot-v2.py"
-METRICS_FILE = "/opt/Project-Tango/scripts/.architect-metrics.json"
-UPDATE_HISTORY_FILE = "/opt/Project-Tango/scripts/.architect-updates.json"
-PENDING_UPDATE_MARKER = "/opt/Project-Tango/scripts/.architect-pending-update"
-UPDATE_BACKUP_DIR = "/opt/Project-Tango/scripts/.architect-backups"
-GOLDEN_BACKUP_DIR = "/opt/Project-Tango/scripts/.architect-golden-backups"
-SCHUBERT_BACKUP_DIR = "/opt/Project-Tango/scripts/.schubert-backups"
+# Paths — Dr. Voss assesses itself only. Proctor owns Admiral; Architect owns itself.
+VOSS_SCRIPT_PATH = "/opt/Project-Tango/scripts/dr-voss-bot.py"
+METRICS_FILE = "/opt/Project-Tango/scripts/.voss-metrics.json"
+UPDATE_HISTORY_FILE = "/opt/Project-Tango/scripts/.voss-updates.json"
+PENDING_UPDATE_MARKER = "/opt/Project-Tango/scripts/.voss-pending-update"
+UPDATE_BACKUP_DIR = "/opt/Project-Tango/scripts/.voss-backups"
+GOLDEN_BACKUP_DIR = "/opt/Project-Tango/scripts/.voss-golden-backups"
 
 # Optimization targets — which bots the auto-updater can modify
 OPTIMIZATION_TARGETS = {
-    "architect": {
-        "path": ARCHITECT_SCRIPT_PATH,
+    "dr_voss": {
+        "path": VOSS_SCRIPT_PATH,
         "backup_dir": UPDATE_BACKUP_DIR,
         "golden_dir": GOLDEN_BACKUP_DIR,
-        "service": "schubert-architect",
+        "service": "schubert-dr-voss",
         "health_indicator": "MCP:.*tools available",
         "can_restart_self": True,
-        "source_max_chars": 30000,  # truncation for LLM context
-    },
-    "schubert": {
-        "path": SCHUBERT_SCRIPT_PATH,
-        "backup_dir": SCHUBERT_BACKUP_DIR,
-        "golden_dir": SCHUBERT_BACKUP_DIR + "-golden",
-        "service": "schubert-bot",
-        "health_indicator": "MCP:.*tools available",  # schubert-bot also logs MCP tool count
-        "can_restart_self": False,  # architect can restart schubert, not itself
-        "source_max_chars": 30000,
+        "source_max_chars": 20000,
     },
 }
 
 # Cadence — assess every 6 hours, apply optimizations
-ASSESSMENT_INTERVAL = 6 * 60 * 60  # 6 hours in seconds
+ASSESSMENT_INTERVAL = int(_self_improvement.get("assessment_interval") or (6 * 60 * 60))
 ASSESSMENT_INTERVAL_SHORT = 60     # first few cycles run faster to bootstrap
 
-# Safety limits
-MAX_UPDATE_FILE_SIZE = 200 * 1024  # never write files > 200KB via auto-update
-MAX_AUTO_UPDATES_PER_DAY = 3       # cap self-modifications per day per target
-ROLLBACK_WAIT_TIME = 30            # seconds to wait after restart before health check
-MAX_CODE_CHANGES_PER_UPDATE = 5    # max distinct code changes in one update cycle
+# Safety limits — 512KB covers post-Nexus bot files (Architect 207KB, Proctor 229KB)
+MAX_UPDATE_FILE_SIZE = int(
+    _self_improvement.get("max_update_file_size")
+    or _self_improvement.get("max_file_size")
+    or (512 * 1024)
+)
+MAX_AUTO_UPDATES_PER_DAY = int(
+    _self_improvement.get("max_auto_updates_per_day")
+    or _self_improvement.get("max_updates_per_day")
+    or 3
+)
+ROLLBACK_WAIT_TIME = int(_self_improvement.get("rollback_wait_time") or 30)
+MAX_CODE_CHANGES_PER_UPDATE = int(_self_improvement.get("max_code_changes_per_update") or 5)
 
 # Post-update intensive monitoring — catch runtime crashes the watchdog misses
 INTENSIVE_MONITOR_INTERVAL = _self_healing.get("intensive_monitor_interval", 10)
@@ -1721,7 +1804,7 @@ INTENSIVE_MONITOR_ERROR_THRESHOLD = _self_healing.get("intensive_monitor_error_t
 
 # Change reversal detection — prevent oscillation
 REVERSAL_LOCK_DURATION = 24 * 60 * 60  # lock oscillating code sections for 24h
-LOCKED_SECTIONS_FILE = "/opt/Project-Tango/scripts/.architect-locked-sections.json"
+LOCKED_SECTIONS_FILE = "/opt/Project-Tango/scripts/.voss-locked-sections.json"
 
 # Patterns the auto-updater must NEVER modify — protected code sections
 PROTECTED_PATTERNS = [
@@ -1734,15 +1817,15 @@ PROTECTED_PATTERNS = [
     "def _check_pending_update",
     "def _detached_restart",
     "ADMIN_USER_ID",
-    "ARCHITECT_SCRIPT_PATH",
+    "VOSS_SCRIPT_PATH",
     "MAX_AUTO_UPDATES_PER_DAY",
     "PROTECTED_PATTERNS",
     "ASSESSMENT_INTERVAL",
     "auto_update_enabled",
 ]
 
-# Auto-update is ON by default — kill switch via !autoupdate off
-auto_update_enabled = True
+# Auto-update follows fleet-config self_improvement.enabled (kill switch: !autoupdate off)
+auto_update_enabled = bool(_self_improvement.get("enabled", True)) and bool(_self_improvement.get("auto_update_enabled", True))
 
 # Services to monitor — (service_name, is_critical)
 # Critical services escalate immediately if they can't be restarted
@@ -2396,22 +2479,12 @@ class HealthMonitor:
             if metrics:
                 metrics.record_escalation()
             
-            # Send Slack notification for health alerts
-            slack_notifier = get_slack_notifier(mcp_client)
-            try:
-                asyncio.create_task(slack_notifier.send_health_alert(
-                    title=title,
-                    message=f"{message}\n\n**Issue ID:** `{issue_id}`\n**Auto-remediation:** Exhausted",
-                    bot_name="Dr. Voss",
-                    is_critical=is_critical,
-                    metadata={
-                        "issue_id": issue_id,
-                        "severity": "critical" if is_critical else "warning",
-                        "remediation_status": "exhausted"
-                    }
-                ))
-            except Exception as slack_err:
-                log(f"Slack notification failed: {slack_err}", "WARN")
+            # Slack notification disabled — was sending messages as user to work channels
+            # slack_notifier = get_slack_notifier(mcp_client)
+            # try:
+            #     asyncio.create_task(slack_notifier.send_health_alert(...))
+            # except Exception as slack_err:
+            #     log(f"Slack notification failed: {slack_err}", "WARN")
         except Exception as e:
             log(f"Failed to send escalation: {e}", "ERROR")
 
@@ -2622,6 +2695,29 @@ metrics: Optional[MetricsCollector] = None
 #   - Update history: all changes are logged to JSON for auditability
 
 
+
+def _extract_assessment_text(response: dict | None) -> str:
+    """Pull proposal text out of a chat-completions payload."""
+    try:
+        from llm_response_utils import extract_llm_text
+        return extract_llm_text(response)
+    except Exception:
+        if not isinstance(response, dict):
+            return ""
+        choices = response.get("choices") or []
+        if not choices:
+            return ""
+        return ((choices[0] or {}).get("message") or {}).get("content") or ""
+
+
+def _describe_assessment_response(response: dict | None) -> str:
+    try:
+        from llm_response_utils import describe_llm_response
+        return describe_llm_response(response)
+    except Exception:
+        return str(type(response).__name__)
+
+
 class AutoUpdater:
     """Self-assessment and self-improvement engine for Dr. Voss."""
 
@@ -2740,6 +2836,12 @@ class AutoUpdater:
                 metrics_summary, recent_logs, current_source, target_name, source_max
             )
 
+            if proposals is None:
+                log(
+                    f"Assessment LLM failed for {target_name} — not treating as all-clear",
+                    "ERROR",
+                )
+                continue
             if not proposals:
                 log(f"No proposals for {target_name} this cycle", "INFO")
                 continue
@@ -2787,7 +2889,7 @@ class AutoUpdater:
                 metrics_summary,
             )
             # Start intensive monitoring if we restarted ourselves
-            if any_restarted and any(t == "architect" for t, _ in all_applied):
+            if any_restarted and any(OPTIMIZATION_TARGETS.get(t, {}).get("can_restart_self") for t, _ in all_applied):
                 await self._start_intensive_monitor()
         elif all_rejected > 0:
             await self._notify_assessment(
@@ -2799,8 +2901,9 @@ class AutoUpdater:
 
     async def _get_optimization_proposals(
         self, metrics_summary: dict, logs: str, source: str,
-        target_name: str = "architect", source_max_chars: int = 30000,
-    ) -> list[dict]:
+        target_name: str = "dr_voss", source_max_chars: int = 20000,
+        _retried: bool = False,
+    ) -> list[dict] | None:
         """Ask the LLM to analyze metrics and propose specific code optimizations."""
         # Truncate source to keep within token limits
         source_truncated = source[:source_max_chars]
@@ -2902,15 +3005,23 @@ Return ONLY the JSON array, no other text."""
             log(f"Optimization LLM call failed: {response.get('error', '?')}", "ERROR")
             return []
 
-        choices = response.get("choices", [])
-        if not choices:
-            log("No choices in optimization response", "WARN")
-            return []
-
-        content = choices[0].get("message", {}).get("content", "")
+        content = _extract_assessment_text(response)
         if not content:
-            log("Empty content in optimization response", "WARN")
-            return []
+            log(
+                f"Empty content in optimization response ({_describe_assessment_response(response)})",
+                "ERROR",
+            )
+            if not _retried and source_max_chars > 8000:
+                log(
+                    f"Retrying {target_name} assessment with truncated source "
+                    f"({source_max_chars // 2} chars)",
+                    "WARN",
+                )
+                return await self._get_optimization_proposals(
+                    metrics_summary, logs, source, target_name,
+                    source_max_chars // 2, _retried=True,
+                )
+            return None
 
         # Parse JSON from response — LLM may wrap in ```json blocks
         proposals = self._parse_proposals(content)
@@ -3028,7 +3139,7 @@ Return ONLY the JSON array, no other text."""
         old_code = proposal["old_code"]
         new_code = proposal["new_code"]
         description = proposal.get("description", "unknown")
-        target_path = target_config["path"] if target_config else ARCHITECT_SCRIPT_PATH
+        target_path = target_config["path"] if target_config else VOSS_SCRIPT_PATH
         backup_dir = target_config["backup_dir"] if target_config else UPDATE_BACKUP_DIR
 
         try:
@@ -3088,8 +3199,8 @@ Return ONLY the JSON array, no other text."""
         4. Checks health — if unhealthy, restores the latest backup
         5. Removes the marker
         """
-        service = target_config["service"] if target_config else "schubert-architect"
-        target_path = target_config["path"] if target_config else ARCHITECT_SCRIPT_PATH
+        service = target_config["service"] if target_config else "schubert-dr-voss"
+        target_path = target_config["path"] if target_config else VOSS_SCRIPT_PATH
         backup_dir = target_config["backup_dir"] if target_config else UPDATE_BACKUP_DIR
         health_indicator = target_config.get("health_indicator", "MCP:.*tools available") if target_config else "MCP:.*tools available"
         bot_prefix = "architect-bot" if target_name == "architect" else "schubert-bot-v2"
@@ -3433,7 +3544,7 @@ ls -t {backup_dir}/{backup_prefix}* 2>/dev/null | tail -n +11 | xargs rm -f 2>/d
             try:
                 # Check for errors in recent logs
                 _, logs = run_command(
-                    f"sudo journalctl -u schubert-architect --since '{check_interval + 2} seconds ago' --no-pager -o cat 2>&1",
+                    f"sudo journalctl -u schubert-dr-voss --since '{check_interval + 2} seconds ago' --no-pager -o cat 2>&1",
                     timeout=10,
                 )
                 if logs:
@@ -3446,7 +3557,7 @@ ls -t {backup_dir}/{backup_prefix}* 2>/dev/null | tail -n +11 | xargs rm -f 2>/d
                             log(f"Intensive monitor: found '{indicator}' in logs", "WARN")
 
                 # Check if service is still active
-                code, status = run_command("systemctl is-active schubert-architect")
+                code, status = run_command("systemctl is-active schubert-dr-voss")
                 if status.strip() != "active":
                     error_count += 2
                     log(f"Intensive monitor: service is {status.strip()}", "ERROR")
@@ -3471,9 +3582,14 @@ ls -t {backup_dir}/{backup_prefix}* 2>/dev/null | tail -n +11 | xargs rm -f 2>/d
     async def _auto_rollback(self):
         """Automatically rollback to the latest backup and restart."""
         try:
-            backup_dir = OPTIMIZATION_TARGETS["architect"]["backup_dir"]
-            target_path = ARCHITECT_SCRIPT_PATH
-            backup_prefix = "architect-bot.py.bak."
+            self_target = next(
+                (n for n, c in OPTIMIZATION_TARGETS.items() if c.get("can_restart_self")),
+                next(iter(OPTIMIZATION_TARGETS)),
+            )
+            cfg = OPTIMIZATION_TARGETS[self_target]
+            backup_dir = cfg["backup_dir"]
+            target_path = cfg["path"]
+            backup_prefix = os.path.basename(target_path) + ".bak."
 
             backups = sorted(
                 [f for f in os.listdir(backup_dir) if f.startswith(backup_prefix)],
@@ -3482,16 +3598,16 @@ ls -t {backup_dir}/{backup_prefix}* 2>/dev/null | tail -n +11 | xargs rm -f 2>/d
             if backups:
                 backup_path = os.path.join(backup_dir, backups[0])
                 shutil.copy2(backup_path, target_path)
-                run_command("sudo systemctl restart schubert-architect")
+                run_command(f"sudo systemctl restart {cfg.get('service', 'schubert-dr-voss')}")
                 log(f"Auto-rolled back to {backups[0]}", "INFO")
                 if metrics:
                     metrics.record_auto_update("auto_rollback", False)
             else:
                 # Try golden backup
-                golden = self._get_golden_backup_path("architect")
+                golden = self._get_golden_backup_path(self_target)
                 if golden:
                     shutil.copy2(golden, target_path)
-                    run_command("sudo systemctl restart schubert-architect")
+                    run_command(f"sudo systemctl restart {cfg.get('service', 'schubert-dr-voss')}")
                     log("Auto-rolled back to golden backup", "INFO")
                 else:
                     log("No backups available for auto-rollback!", "ERROR")
@@ -3565,6 +3681,7 @@ def get_mcp_configs() -> list[MCPServerConfig]:
         ("ollama", "http://127.0.0.1:8063/mcp", "MCP_OLLAMA_TOKEN"),
         ("github", "http://127.0.0.1:8091", "MCP_GITHUB_TOKEN"),
         ("gmail_freelance", "http://127.0.0.1:8071/mcp", "MCP_GMAIL_TOKEN"),
+        ("outline", "http://127.0.0.1:3101/mcp", "MCP_OUTLINE_TOKEN"),
     ]
     for name, url, token_env in servers:
         token = os.environ.get(token_env, "")
@@ -3640,7 +3757,8 @@ async def handle_multi_agent_message(message: discord.Message):
         return
     
     # Check cooldown
-    if not _coordinator.check_cooldown(message.channel.id, agent_profile.cooldown_seconds):
+    # @mention (score 1.0) skips cooldown so follow-ups are not dropped.
+    if score < 1.0 and not _coordinator.check_cooldown(message.channel.id, agent_profile.cooldown_seconds):
         log(f"Cooldown active for channel {message.channel.id}, skipping", "INFO")
         return
     
@@ -3813,32 +3931,39 @@ async def handle_single_agent_message(message: discord.Message):
         metrics.record_agent_request()
 
     _last_inputs[message.channel.id] = user_input
+    _last_user_messages[message.channel.id] = message
 
     # Thread isolation — decide whether to create a dedicated thread
-    use_thread = should_use_thread(user_input)
+    use_thread = should_use_thread(user_input) and not isinstance(message.channel, discord.Thread) and not message.author.bot
     response_channel = message.channel
     
     if use_thread and not _fleet_chain_id:  # Only create threads for non-FLEET requests
         thread_name = f"🔧 Task: {user_input[:80]}{'...' if len(user_input) > 80 else ''}"
         try:
-            thread = await message.create_thread(
-                name=thread_name,
-                auto_archive_duration=1440,  # 24 hours
+            thread = await safe_create_thread(
+                message, thread_name, auto_archive_duration=1440
             )
-            response_channel = thread
-            
-            # Notify in main channel (silent)
-            await message.reply(
-                f"📋 Started a thread for this task: {thread.jump_url}",
-                silent=True,
-            )
-            log(f"Created thread for task: {thread_name}", "INFO")
+            if thread:
+                response_channel = thread
+                try:
+                    await message.reply(
+                        f"📋 Started a thread for this task: {thread.jump_url}",
+                        silent=True,
+                    )
+                except Exception as e:
+                    log(f"Could not notify main channel of new thread: {e}", "WARN")
+                log(f"Created thread for task: {thread_name}", "INFO")
+            else:
+                response_channel = message.channel
         except Exception as e:
             log(f"Failed to create thread, using main channel: {e}", "WARN")
             response_channel = message.channel
 
+    _last_inputs[response_channel.id] = user_input
+    _last_user_messages[response_channel.id] = message
+
     # Start progress view in the response channel
-    progress = AgentProgressView(message if not use_thread else thread)
+    progress = AgentProgressView(response_channel)
     if _fleet_chain_id:
         progress._is_fleet_request = True
     await progress.start(f"Working on: {user_input[:200]}")
@@ -4047,7 +4172,14 @@ async def on_message(message: discord.Message):
                     agent_name="dr_voss",
                 )
         return  # Don't respond to own messages
-    
+
+    # --- Ignore other bots outside of multi-agent channels ---
+    # Bots should only interact in designated multi-agent channels.
+    # In their own channels or other bots' channels, ignore bot messages
+    # to prevent feedback loops.
+    if message.author.bot and not is_multi_agent_channel(message.channel.id):
+        return
+
     # Check if this is a multi-agent channel
     if _channel_manager and _channel_manager.is_multi_agent_channel(message.channel.id):
         await handle_multi_agent_message(message)
@@ -4160,7 +4292,7 @@ async def handle_command(message: discord.Message):
             result = handle_query_memory({"type": "recent"})
             await message.reply(result[:1900])
         elif args.startswith("clear"):
-            clear_session_history(message.channel.id)
+            clear_session_history(session_channel_id(message.channel))
             await message.reply("Session history cleared (persistent memories are retained).")
         elif args.startswith("stats"):
             result = handle_query_memory({"type": "stats"})
@@ -4398,7 +4530,11 @@ async def handle_command(message: discord.Message):
 # Main
 # ---------------------------------------------------------------------------
 
+_SINGLETON_LOCK = None
+
 def main():
+    global _SINGLETON_LOCK
+    _SINGLETON_LOCK = acquire_singleton("voss")
     if not BOT_TOKEN:
         print("ERROR: DR_VOSS_BOT_TOKEN not set in environment")
         sys.exit(1)

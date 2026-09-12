@@ -1,0 +1,16 @@
+{
+  "stratum-ai-news": {
+    "api_key": "fdda35441253a9aa7e15b9bdf7397145932b2b3f3f6a9ff9e97ee8531780c093",
+    "description": "Researches the latest AI industry news (past 2 weeks), synthesizes a dark-mode newspaper-style HTML report, and publishes it as a new or updated edition to Cloudflare Pages at ainews.edstratumlabs.ai.",
+    "name": "Stratum AI News \u2014 Research, Synthesize & Publish",
+    "playbook_id": "427906bd-60dd-4b4e-9c8e-84a6f719d1d7"
+  },
+  "discord-bot-designer": {
+    "api_key": "3272e822daf045d3372b162408ef32516b5a8bb9d26430616aa210499fb8c91b",
+    "description": "Design, build, deploy, and manage Discord bots on Schubert \u2014 create new bots, modify existing ones, update personalities, guardrails, and tools.",
+    "name": "Discord Bot Designer",
+    "playbook_id": "4cc35514-51da-4759-98f5-405219d3e51b",
+    "pre_trigger_question": "Discord Bot Designer is ready! What would you like to do?\n\nExamples:\n- Create a new bot called <name> that <purpose>\n- Modify <bot name> to <change>\n- Update personality of <bot name> to <description>\n- Update guardrails on <bot name> to <description>\n- Add a tool to <bot name> that <description>\n- Debug <bot name> with symptoms <description>",
+    "pre_trigger_variable": "task_description"
+  }
+}

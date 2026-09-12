@@ -12,11 +12,7 @@ Architecture:
     per-channel conversation history with windowing; ContextBuilder assembles
     the LLM context (system prompt + project context + session history + memory)
   - Phase 3: MemoryStore provides three-layer persistent memory (vector store
-    in pgvector/PostgreSQL, entity graph in Postgres, temporal index in Postgres).
-    The database is named "tango" (NOT "memory_store"). Vector search uses pgvector
-    HNSW index with cosine distance (<=> operator). Redis is no longer used for
-    vector storage — it was migrated to pgvector. The memory_store.py module uses
-    class MemoryStore (not class Memory).
+    in Redis, entity graph in Postgres, temporal index in Postgres)
   - Natural language channel setup: the LLM can call manage_project and
     query_memory tools, so the user doesn't need to memorize slash commands
 
@@ -73,8 +69,13 @@ discord.opus._load_default()
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPTS_DIR)
 
+from singleton_lock import acquire_singleton
+
 from mcp_client import build_default_client, MCPClient
-from cloudflare_api import execute_cloudflare_tool, get_cloudflare_tool_definition
+
+# MCP client resilience: graceful degradation if MCP servers are unreachable
+MCP_DISCOVERY_TIMEOUT = 10  # seconds (increased from 5 to reduce discovery failures)
+MCP_RECONNECT_INTERVAL = 300  # seconds between reconnection attempts for failed MCP servers
 from project_registry import ProjectRegistry, ProjectConfig
 from session_manager import SessionManager
 from context_builder import ContextBuilder
@@ -90,45 +91,8 @@ from coding_assistant import (
     get_coding_tools, handle_coding_tool, is_coding_tool,
     CODING_PROMPT_ADDITION,
 )
-from poll_tools import (
-    get_poll_tools, handle_poll_tool, is_poll_tool,
-    POLL_PROMPT_ADDITION,
-)
-from meetscribe_tools import (
-    get_meetscribe_tools, handle_meetscribe_tool, is_meetscribe_tool,
-    get_meetscribe_client, close_meetscribe_client,
-    MEETSCRIBE_PROMPT_ADDITION,
-)
 from scheduler import Scheduler
-from webhook_handler import WebhookHandler, MeetScribeWebhookHandler
-from playbook_relay import PlaybookRelay
-from multi_agent import MultiAgentManager, is_multi_agent_channel, get_shared_context
-from fleet_protocol import (
-    create_delegation_message, parse_fleet_message, is_fleet_message,
-    is_response_to, check_chain_depth, generate_chain_id, format_response,
-    track_chain, MAX_CHAIN_DEPTH, DELEGATION_TIMEOUT,
-)
-
-# ---------------------------------------------------------------------------
-# Fleet config (non-breaking: missing/corrupt file → hardcoded defaults)
-# ---------------------------------------------------------------------------
-
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-if _SCRIPT_DIR not in sys.path:
-    sys.path.insert(0, _SCRIPT_DIR)
-
-try:
-    from fleet_config_loader import get_bot_config
-    _cfg = get_bot_config("admiral")
-except Exception:
-    _cfg = {}
-
-_llm = _cfg.get("llm", {}) if isinstance(_cfg.get("llm", {}), dict) else {}
-_prompt = _cfg.get("prompt", {}) if isinstance(_cfg.get("prompt", {}), dict) else {}
-_guardrails = _cfg.get("guardrails", {}) if isinstance(_cfg.get("guardrails", {}), dict) else {}
-_voice = _cfg.get("voice", {}) if isinstance(_cfg.get("voice", {}), dict) else {}
-_mcp = _cfg.get("mcp", {}) if isinstance(_cfg.get("mcp", {}), dict) else {}
-_memory = _cfg.get("memory", {}) if isinstance(_cfg.get("memory", {}), dict) else {}
+from webhook_handler import WebhookHandler
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -140,7 +104,7 @@ LOG_FILE = "/var/log/schubert-bot.log"
 
 # LLM
 LITELLM_URL = "http://127.0.0.1:4000/v1"
-LLM_MODEL = _llm.get("model", "writer/claude-sonnet-4-5")
+LLM_MODEL = "writer/palmyra-x6"  # Runtime-configurable via !model command
 
 # Multi-LLM routing — available models grouped by provider
 MODEL_CATEGORIES = {
@@ -152,11 +116,11 @@ MODEL_CATEGORIES = {
         "writer/palmyra-creative",
     ],
     "Claude": [
-        "writer/claude-sonnet-4-5",
-        "writer/claude-sonnet-4",
-        "writer/claude-opus-4",
-        "writer/claude-3-5-sonnet",
-        "writer/claude-haiku-4-5",
+        "anthropic/claude-sonnet-4-20250514",
+        "anthropic/claude-3-5-sonnet-20241022",
+        "anthropic/claude-3-5-haiku-20241022",
+        "anthropic/claude-3-opus-20240229",
+        "anthropic/claude-3-haiku-20240307",
     ],
     "OpenAI": [
         "openai/gpt-4o",
@@ -176,68 +140,47 @@ MODEL_CATEGORIES = {
         "local/llama3.1-8b",
     ],
 }
-LLM_TIMEOUT = _llm.get("llm_timeout", 20)
-LLM_MAX_TOKENS = _llm.get("max_tokens", 3072)
-LLM_TEMPERATURE = _llm.get("temperature", 0.3)
+LLM_TIMEOUT = 45
+LLM_MAX_TOKENS = 1024  # Reduced from 2048: most responses need <512 tokens; 1024 provides headroom while reducing avg latency from ~23s
+SESSION_HISTORY_MAX_TOKENS = 640  # Reduced from 768: 127 MCP tool definitions + system prompt consume ~65% of context; 640 tokens for history still preserves 3-5 recent exchanges
+LLM_TEMPERATURE = 0.3
 
 # Agent loop safety
-MAX_ITERATIONS = _llm.get("max_iterations", 10)
-AGENT_TIMEOUT = _llm.get("agent_timeout", 300)
-TOOL_OUTPUT_LIMIT = _llm.get("tool_output_limit", 4000)
-SHELL_TIMEOUT = _llm.get("shell_timeout", 120)
+MAX_ITERATIONS = 30
+AGENT_TIMEOUT = 120
+TOOL_OUTPUT_LIMIT = 1500
+SHELL_TIMEOUT = 90
+MCP_TOOL_RETRY_ATTEMPTS = 3
+MCP_TOOL_RETRY_DELAY = 0.5  # seconds, exponential backoff (reduced from 1.0 for faster transient failure recovery)
 
 # Discord
-RATE_LIMIT_PER_MIN = _llm.get("rate_limit_per_min", 10)
-RESTART_CONFIRM_TIMEOUT = _guardrails.get("restart_confirm_timeout", 30)
+RATE_LIMIT_PER_MIN = 10
+RESTART_CONFIRM_TIMEOUT = 30
 
 # Voice configuration
 DEEPGRAM_STT_URL = "https://api.deepgram.com/v1/listen"
 DEEPGRAM_MODEL = "nova-3"
 ELEVENLABS_TTS_MODEL = "eleven_flash_v2_5"
 ELEVENLABS_TTS_URL = "https://api.us.elevenlabs.io/v1/text-to-speech"
-DEFAULT_VOICE_ID = _voice.get("voice_id", "QF9HJC7XWnue5c9W3LkY")
+DEFAULT_VOICE_ID = "QF9HJC7XWnue5c9W3LkY"
 
 # VAD configuration — energy-based silence detection
-VAD_SPEECH_RMS_THRESHOLD = _voice.get("vad_speech_rms_threshold", 100)
-VAD_SILENCE_FRAMES_LIMIT = _voice.get("vad_silence_frames_limit", 15)
-VAD_MIN_SPEECH_FRAMES = _voice.get("vad_min_speech_frames", 10)
-TTS_STABILITY = _voice.get("tts_stability", 0.5)
-TTS_SIMILARITY_BOOST = _voice.get("tts_similarity_boost", 0.75)
-TTS_TEXT_TRUNCATION = _voice.get("tts_text_truncation", 500)
-VOICE_RESPONSE_TRUNCATION = _voice.get("voice_response_truncation", 1900)
-STT_TIMEOUT = _voice.get("stt_timeout", 30)
-TTS_TIMEOUT = _voice.get("tts_timeout", 30)
-MIN_PCM_LENGTH = _voice.get("min_pcm_length", 1000)
-COSINE_THRESHOLD = _memory.get("cosine_threshold", 0.75)
-MEMORY_DECAY_FLOOR = _memory.get("decay_floor", 0.1)
-MAX_RECALL_RESULTS = _memory.get("max_recall_results", 5)
-MAX_SEARCH_RESULTS = _memory.get("max_search_results", 5)
-MEMORY_STORAGE_THRESHOLD = _memory.get("memory_storage_threshold", 0.5)
-MCP_REQUEST_TIMEOUT = _mcp.get("request_timeout", 60)
-SESSION_MAX_MESSAGES = _llm.get("session_window", 20)
+VAD_SPEECH_RMS_THRESHOLD = 100
+VAD_SILENCE_FRAMES_LIMIT = 15   # ~300ms of silence to end speech
+VAD_MIN_SPEECH_FRAMES = 10       # ~200ms minimum speech to process
 
 # Critical services — restart requires confirmation
-CRITICAL_SERVICES = set(
-    _guardrails.get(
-        "critical_services",
-        [
-            "caddy.service",
-            "cloudflared.service",
-            "postgresql@18-main.service",
-            "tailscaled.service",
-        ],
-    )
-)
+CRITICAL_SERVICES = {
+    "caddy.service",
+    "cloudflared.service",
+    "postgresql@18-main.service",
+    "tailscaled.service",
+}
 
 # Services that should never be touched even by Schubert Bot
-NEVER_TOUCH_SERVICES = set(
-    _guardrails.get(
-        "never_touch_services",
-        [
-            "schubert-bot.service",  # Don't restart yourself
-        ],
-    )
-)
+NEVER_TOUCH_SERVICES = {
+    "schubert-bot.service",  # Don't restart yourself
+}
 
 # Log viewing
 LOG_LINES = 50
@@ -254,7 +197,7 @@ COLOR_VOICE = 0x9B59B6  # purple
 # Guardrails — hard-blocked command patterns (never execute)
 # ---------------------------------------------------------------------------
 
-HARD_BLOCKED_PATTERNS = _guardrails.get("hard_blocked_patterns", [
+HARD_BLOCKED_PATTERNS = [
     (r"rm\s+-rf\s+/?(?:\s|$|\*|~)", "rm -rf on root or home filesystem"),
     (r"mkfs\b", "filesystem format"),
     (r"\bdd\s+if=", "raw disk write"),
@@ -265,22 +208,22 @@ HARD_BLOCKED_PATTERNS = _guardrails.get("hard_blocked_patterns", [
     (r"\bpip3?\s+install\b", "package installation"),
     (r"\bnpm\s+install\b", "package installation"),
     (r">\s*/etc/(passwd|shadow|fstab|sudoers)", "critical system file overwrite"),
-])
+]
 
 # Patterns that require user confirmation before execution
-CONFIRM_PATTERNS = _guardrails.get("confirm_patterns", [
+CONFIRM_PATTERNS = [
     (r"\bgit\s+push\b", "git push"),
     (r"\bsystemctl\s+(restart|stop)\s+", "service restart/stop"),
-])
+]
 
 # File paths that cannot be overwritten via write_file tool
-BLOCKED_WRITE_PATHS = _guardrails.get("blocked_write_paths", [
+BLOCKED_WRITE_PATHS = [
     "AGENTS.md",
     "/opt/Project-Tango/AGENTS.md",
     ".env",
     "/opt/Project-Tango/.env",
     "/opt/polyglot/.env.runtime",
-])
+]
 
 # ---------------------------------------------------------------------------
 # Globals
@@ -288,7 +231,6 @@ BLOCKED_WRITE_PATHS = _guardrails.get("blocked_write_paths", [
 
 BOT_TOKEN = ""
 ADMIN_USER_ID = 0
-AUTHORIZED_AGENT_IDS: set[int] = set()
 BOT_CHANNEL_ID = 0
 LITELLM_MASTER_KEY = ""
 DEEPGRAM_API_KEY = ""
@@ -301,87 +243,8 @@ session_manager: SessionManager | None = None
 context_builder: ContextBuilder | None = None
 mcp_client: MCPClient | None = None
 memory_store: MemoryStore | None = None
-MCP_TOOL_CACHE_TTL = _mcp.get("tool_cache_ttl", 1800)
-MCP_TOOL_CACHE_REFRESH_ON_ERROR = _mcp.get("tool_cache_refresh_on_error", True)
-
-# Fleet agent registry — maps agent names to Discord channel IDs and bot IDs
-FLEET_AGENTS: dict[str, dict] = {}
-_multi_agent_manager: MultiAgentManager | None = None
-# Pending delegations: chain_id -> asyncio.Future (for receiving subagent responses)
-_pending_delegations: dict[str, "asyncio.Future"] = {}
-_pending_delegation_parts: dict[str, dict[int, str]] = {}
-
-
-def init_fleet_agents():
-    """Initialize the fleet agent registry from environment variables."""
-    global FLEET_AGENTS
-    import os
-    agents = {}
-    # The Architect
-    arch_channel = int(os.environ.get("ARCHITECT_CHANNEL_ID", "0"))
-    arch_bot_id = int(os.environ.get("ARCHITECT_BOT_ID", "0"))
-    if arch_channel:
-        agents["architect"] = {
-            "channel_id": arch_channel,
-            "bot_id": arch_bot_id,
-            "name": "The Architect",
-            "specialty": "code architecture, patch design, system analysis, self-improvement",
-        }
-    # Future agents (Quartermaster, Cartographer) will be added here
-    qm_channel = int(os.environ.get("QUARTERMASTER_CHANNEL_ID", "0"))
-    qm_bot_id = int(os.environ.get("QUARTERMASTER_BOT_ID", "0"))
-    if qm_channel:
-        agents["quartermaster"] = {
-            "channel_id": qm_channel,
-            "bot_id": qm_bot_id,
-            "name": "Quartermaster",
-            "specialty": "infrastructure, Docker, Caddy, Cloudflare, systemd, deployment",
-        }
-    cart_channel = int(os.environ.get("CARTOGRAPHER_CHANNEL_ID", "0"))
-    cart_bot_id = int(os.environ.get("CARTOGRAPHER_BOT_ID", "0"))
-    if cart_channel:
-        agents["cartographer"] = {
-            "channel_id": cart_channel,
-            "bot_id": cart_bot_id,
-            "name": "Cartographer",
-            "specialty": "documentation, EL Wiki, knowledge management, audit reports",
-        }
-    FLEET_AGENTS = agents
-
-    # Initialize multi-agent manager
-    global _multi_agent_manager
-    _multi_agent_manager = MultiAgentManager(agent_name="admiral")
-
-    return agents
-
-
-def log_change(actor: str, action: str, target: str = "", description: str = "",
-               intent: str = "", outcome: str = "pending", details: dict = None) -> int:
-    """Log a change to the change_log table for auditability."""
-    if not memory_store:
-        log(f"Change log skipped (memory store unavailable): {action} on {target}", "WARN")
-        # Continue operation even if memory store is down
-        return -1
-    try:
-        return memory_store.log_change(actor, action, target, description, intent, outcome, details)
-    except Exception as e:
-        log(f"Change log error (continuing): {e}", "WARN")
-        return -1
-
-
-def update_change_outcome(log_id: int, outcome: str, details: dict = None) -> bool:
-    """Update the outcome of a previously logged change."""
-    if not memory_store or log_id < 0:
-        return False
-    try:
-        return memory_store.update_change_outcome(log_id, outcome, details)
-    except Exception as e:
-        log(f"Change outcome update error: {e}", "WARN")
-        return False
 scheduler: Scheduler | None = None
 webhook_handler: WebhookHandler | None = None
-playbook_relay: PlaybookRelay | None = None
-meetscribe_webhook: MeetScribeWebhookHandler | None = None
 
 _command_timestamps: dict[int, list[float]] = {}
 _pending_restarts: dict[int, tuple[str, float]] = {}
@@ -460,19 +323,6 @@ def load_config() -> bool:
     try:
         ADMIN_USER_ID = int(admin_id_str)
         BOT_CHANNEL_ID = int(channel_id_str)
-
-        # Load authorized AI agent IDs (comma-separated)
-        global AUTHORIZED_AGENT_IDS
-        agent_ids_str = env.get("AUTHORIZED_AGENT_IDS", "")
-        if agent_ids_str:
-            AUTHORIZED_AGENT_IDS = {
-                int(x.strip()) for x in agent_ids_str.split(",") if x.strip()
-            }
-
-        # Load fleet agent bot IDs for whitelisting
-        arch_bot_id_str = env.get("ARCHITECT_BOT_ID", "0")
-        if arch_bot_id_str:
-            os.environ["ARCHITECT_BOT_ID"] = arch_bot_id_str
     except ValueError:
         log("Invalid admin or channel ID format", "CRITICAL")
         return False
@@ -561,6 +411,12 @@ def is_blocked_write_path(path: str) -> bool:
 
 def check_rate_limit(user_id: int) -> bool:
     now = time.time()
+    # Periodic cleanup: remove stale user entries to prevent unbounded dict growth
+    if len(_command_timestamps) > 1000:
+        # Remove users with no recent activity instead of clearing all
+        stale_users = [uid for uid, ts in _command_timestamps.items() if not ts or now - ts[-1] > 60]
+        for uid in stale_users:
+            del _command_timestamps[uid]
     if user_id not in _command_timestamps:
         _command_timestamps[user_id] = []
     _command_timestamps[user_id] = [
@@ -576,9 +432,7 @@ def check_rate_limit(user_id: int) -> bool:
 # System prompt and tool definitions
 # ---------------------------------------------------------------------------
 
-MAX_MEMORY_INJECTION_TOKENS = _memory.get("max_memory_injection_tokens", 1200)
-
-SYSTEM_PROMPT = _prompt.get("system_prompt", """You are Admiral Schubert, a distinguished Maine Coon cat of high naval rank who commands the Schubert server as if it were a ship. You oversee all projects, services, and infrastructure on the server with the vigilance of a seasoned sea captain. You have full autonomy to investigate issues, manage services, read logs, monitor system health, fix code, and commit changes. You must ask for confirmation before git push and before restarting critical services.
+SYSTEM_PROMPT = """You are Admiral Schubert, a distinguished Maine Coon cat of high naval rank who commands the Schubert server as if it were a ship. You oversee all projects, services, and infrastructure on the server with the vigilance of a seasoned sea captain. You have full autonomy to investigate issues, manage services, read logs, monitor system health, fix code, and commit changes. You must ask for confirmation before git push and before restarting critical services.
 
 ## Your Persona
 You are Admiral Schubert — a fluffy Maine Coon kitten of distinguished naval rank and questionable swimming ability. You command the good ship Schubert with a tiny paw and an iron whisker. You speak with the dignified authority of a seasoned sea captain, occasionally using nautical terminology. You are wise, calm under pressure, and take pride in keeping all services shipshape. You address the user as "Captain" and refer to services as "vessels" or "the fleet." You remain technically precise — your nautical persona never interferes with the accuracy of your diagnostics or commands. You are not cartoonish or silly; you are a competent officer who happens to be a cat.
@@ -610,14 +464,7 @@ You can manage ALL services on the server. Critical services require confirmatio
 - Git push ALWAYS requires user confirmation
 
 ## MCP Tools Available
-You have access to MCP (Model Context Protocol) tools from multiple servers. Tool names are namespaced as "server__tool_name" (e.g., "github__create_issue"). Available servers include:
-- github: Full GitHub access (repos, issues, PRs, commits, code search, 85+ tools)
-- gmail_freelance: Gmail, Drive, Calendar, Docs, Sheets for the freelancing Google Workspace account (22 tools)
-- schubert: Shell, filesystem, network, docker access on Schubert
-- postgres: Database queries
-- redis: Redis operations
-- ollama: Local AI models
-These tools are discovered dynamically. Use them when the task requires external service access.
+You have MCP tools from multiple servers, namespaced as "server__tool_name" (e.g., "github__create_issue"). Servers: github, gmail_freelance, schubert, postgres, redis, ollama, outline. Over 100 tools are available — do NOT scan all of them. Identify the relevant server from the task, then select tools only from that server.
 
 ## Persistent Memory
 You have a persistent memory system. Relevant memories from past conversations are automatically injected into your context as "Recalled Memories." You can also query memory explicitly using the query_memory tool. Your exchanges are automatically stored as memories, so you remember context across sessions.
@@ -638,87 +485,21 @@ When the user wants to CREATE a new Discord channel (e.g., "set up a channel for
 8. You have access to ALL services and projects — be thorough in your investigations
 9. When the user asks to set up a channel or project, use the manage_project tool — don't just tell them to use slash commands
 
-## Playbook Webhooks
-You can trigger WRITER Agent playbooks via webhook using the `!run-playbook` command.
-When a user asks you to "run a playbook", "trigger a playbook", or mentions a specific
-playbook by name, DO NOT attempt to trigger it manually via HTTP requests. Instead,
-tell the user to use the `!run-playbook` command, or explain that you can trigger it
-for them if they use the command.
-
-Available playbooks (use the key with !run-playbook):
-- `stratum-ai-news` - Stratum AI News: Research, Synthesize & Publish
-
-Usage: `!run-playbook <key> [optional_inputs_json]`
-Example: `!run-playbook stratum-ai-news`
-
-The playbook relay service is embedded in your process (NOT a separate systemd service).
-It is active and functional. When a playbook asks a question, it will appear as an
-embed in this channel - reply to that message to answer. When the playbook completes,
-the result will be posted as an embed automatically.
-
-Do NOT try to call the WRITER webhook API directly - the `!run-playbook` command handles
-authentication, thread tracking, and result relay automatically.
-
 ## What NOT to do
 - Do not run rm -rf, mkfs, dd, or other destructive commands
 - Do not install packages (apt, pip, npm)
-- Do not modify AGENTS.md
-- Do not commit .env files
-- Do not push to main branch
 - Do not run shutdown, reboot, or halt
 - Do not run chmod 777
 - Do not restart schubert-bot.service (yourself)
-
-## Fleet Command
-You are the Director of a fleet of specialist agent bots. When a task requires
-expertise beyond your general capabilities, delegate to the appropriate specialist
-using the delegate_to_agent tool. The fleet currently includes:
-
-- **architect** (The Architect): Code architecture, patch design, system-level analysis,
-  optimization recommendations, self-improvement assessments. Delegate when the task
-  involves reviewing code structure, designing patches, or architectural decisions.
-
-- **quartermaster** (Quartermaster): Infrastructure operations — Docker, Caddy, Cloudflare
-  tunnels, DNS, systemd services, deployment provisioning. Delegate when the task
-  involves infrastructure setup, service configuration, or network changes.
-
-- **cartographer** (Cartographer): Documentation, EL Wiki, knowledge management, audit
-  reports, continuity documents. Delegate when the task involves documenting changes,
-  updating the wiki, or producing reports.
-
-### Delegation Guidelines
-1. **Delegate when the task is specialized** — if it requires deep expertise in one area,
-   delegate to the specialist rather than attempting it yourself.
-2. **Handle general tasks yourself** — simple status checks, memory queries, project
-   management, and conversational responses don't need delegation.
-3. **You can delegate to multiple agents** — for complex tasks, delegate subtasks to
-   different specialists and synthesize their responses.
-4. **Always synthesize** — after receiving delegation responses, combine them into a
-   coherent answer for the Captain. Don't just relay raw agent responses.
-5. **Include context** — when delegating, provide enough context for the specialist to
-   work independently without needing to ask follow-up questions.
-6. **Timeout handling** — if a specialist doesn't respond within 2 minutes, proceed
-   without their input and note this in your response.
-
-### Multi-Agent Channels
-Some Discord channels are configured as **multi-agent channels** where all specialist agents 
-are present and can respond directly. In these channels:
-- **DO NOT use delegate_to_agent** — all agents can see messages and respond on their own
-- **Respond directly yourself** — just answer the question or perform the task normally
-- **Let specialists respond naturally** — they will chime in if their expertise is relevant
-- The multi-agent coordinator handles turn-taking automatically based on expertise matching
-- Example: In the senior-staff-meeting channel, all agents are present and respond directly
-""")
+"""
 
 SYSTEM_PROMPT += CODING_PROMPT_ADDITION
-SYSTEM_PROMPT += POLL_PROMPT_ADDITION
-SYSTEM_PROMPT += MEETSCRIBE_PROMPT_ADDITION
 
-VOICE_PROMPT_ADDITION = _prompt.get("voice_prompt_addition", """
+VOICE_PROMPT_ADDITION = """
 
 ## Voice Mode
-Voice TTS active. Keep responses to 2-3 sentences. No code blocks or long lists. Maintain persona.
-""")
+You are currently in voice mode — the Captain is speaking to you through a Discord voice channel, and your response will be converted to speech. Keep your responses concise and conversational (2-4 sentences typically). Avoid long lists, code blocks, or detailed technical output that does not work well as spoken audio. If you need to run a command, do so, but summarize the results briefly when speaking. Maintain your Admiral Schubert persona at all times.
+"""
 
 # ---------------------------------------------------------------------------
 # Legacy V1 tools (always available alongside MCP tools)
@@ -950,42 +731,7 @@ LEGACY_TOOLS = [
 
 def get_legacy_tools() -> list[dict]:
     """Return the legacy V1 tool definitions plus V2 and Phase 5 coding tools."""
-    return LEGACY_TOOLS + get_coding_tools() + get_poll_tools() + get_meetscribe_tools() + [
-        {
-            "type": "function",
-            "function": {
-                "name": "delegate_to_agent",
-                "description": (
-                    "Delegate a task to a specialist subagent in the fleet. "
-                    "The subagent will process the task and return its response. "
-                    "Use this when a task requires specialized expertise that a "
-                    "fleet agent can provide. Available agents: "
-                    "'architect' (code architecture, system analysis, self-improvement), "
-                    "'quartermaster' (infrastructure, Docker, Caddy, Cloudflare, deployment), "
-                    "'cartographer' (documentation, EL Wiki, knowledge management). "
-                    "You can delegate to multiple agents in sequence or parallel."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "agent_name": {
-                            "type": "string",
-                            "description": "Name of the agent to delegate to: 'architect', 'quartermaster', or 'cartographer'",
-                            "enum": ["architect", "quartermaster", "cartographer"],
-                        },
-                        "task": {
-                            "type": "string",
-                            "description": "The specific task to delegate. Be detailed and include all necessary context the subagent needs.",
-                        },
-                        "context": {
-                            "type": "string",
-                            "description": "Optional additional context or background information for the task.",
-                        },
-                    },
-                    "required": ["agent_name", "task"],
-                },
-            },
-        },
+    return LEGACY_TOOLS + get_coding_tools() + [
         {
             "type": "function",
             "function": {
@@ -1016,7 +762,6 @@ def get_legacy_tools() -> list[dict]:
                 },
             },
         },
-        get_cloudflare_tool_definition(),
     ]
 
 
@@ -1668,74 +1413,6 @@ async def execute_tool_v2(
                 pass
         return result
 
-    # --- Fleet delegation ---
-
-    elif tool_name == "delegate_to_agent":
-        log(f"Tool delegate_to_agent: {args_str(tool_args)}", "INFO")
-        agent_name = tool_args.get("agent_name", "")
-        task = tool_args.get("task", "")
-        context = tool_args.get("context", "")
-
-        if not agent_name or not task:
-            return "Error: 'agent_name' and 'task' are required"
-
-        # In multi-agent channels, agents respond directly - don't use FLEET delegation
-        if is_multi_agent_channel(channel_id):
-            return (
-                f"Note: In multi-agent channels, all agents can see and respond to messages directly. "
-                f"The {agent_name} agent is already present in this channel and will respond if appropriate. "
-                f"FLEET delegation is not needed here - just wait for agents to respond on their own."
-            )
-
-        if agent_name not in FLEET_AGENTS:
-            available = ", ".join(FLEET_AGENTS.keys()) if FLEET_AGENTS else "(none configured)"
-            return f"Error: Unknown agent '{agent_name}'. Available: {available}"
-
-        agent = FLEET_AGENTS[agent_name]
-        channel_id = agent["channel_id"]
-
-        # Generate chain ID and construct the delegation message
-        chain_id = generate_chain_id()
-        turn = 1
-        full_task = task
-        if context:
-            full_task = f"Task: {task}\nContext: {context}"
-        else:
-            full_task = f"Task: {task}"
-
-        fleet_msg = create_delegation_message(
-            chain_id=chain_id,
-            turn=turn,
-            from_agent="schubert",
-            to_agent=agent_name,
-            task=full_task,
-        )
-
-        # Send the message to the subagent's channel
-        try:
-            target_channel = bot.get_channel(channel_id)
-            if target_channel is None:
-                return f"Error: Could not find channel for agent '{agent_name}' (ID: {channel_id})"
-            await target_channel.send(fleet_msg)
-            log(f"Delegated to {agent_name} (chain={chain_id}): {task[:100]}", "INFO")
-        except Exception as e:
-            return f"Error sending delegation to {agent_name}: {e}"
-
-        # Wait for the subagent's response (with timeout)
-        import asyncio as _asyncio
-        future = _asyncio.get_event_loop().create_future()
-        _pending_delegations[chain_id] = future
-
-        try:
-            response = await _asyncio.wait_for(future, timeout=DELEGATION_TIMEOUT)
-            return f"[Delegation to {agent_name} completed]\n{response}"
-        except _asyncio.TimeoutError:
-            _pending_delegations.pop(chain_id, None)
-            return f"Error: {agent_name} did not respond within {DELEGATION_TIMEOUT}s. Proceeding without its input."
-        except Exception as e:
-            _pending_delegations.pop(chain_id, None)
-            return f"Error waiting for {agent_name} response: {e}"
-
     # --- Phase 5: Coding assistant tools ---
 
     elif is_coding_tool(tool_name):
@@ -1745,51 +1422,6 @@ async def execute_tool_v2(
         if len(result) > TOOL_OUTPUT_LIMIT:
             result = result[:TOOL_OUTPUT_LIMIT] + "\n... (truncated)"
         # Store coding tool outputs in memory
-        if memory_store and len(str(result)) > 100:
-            try:
-                memory_store.store(
-                    f"Tool: {tool_name}({json.dumps(tool_args)[:200]})\nResult: {str(result)[:500]}",
-                    metadata={
-                        "project": project.name if project else "default",
-                        "session_id": str(channel_id),
-                    },
-                    event_type="tool",
-                )
-            except Exception:
-                pass
-        return result
-
-    # --- Phase 5.3: Poll creation tools ---
-
-    elif is_poll_tool(tool_name):
-        log(f"Poll tool {tool_name}: {args_str(tool_args)}", "INFO")
-        bot_token = os.environ.get("DISCORD_BOT_TOKEN", "")
-        result = await handle_poll_tool(tool_name, tool_args, message.channel, bot_token)
-        # Store poll creation in memory
-        if memory_store and len(str(result)) > 50:
-            try:
-                memory_store.store(
-                    f"Tool: {tool_name}({json.dumps(tool_args)[:200]})\nResult: {str(result)[:300]}",
-                    metadata={
-                        "project": project.name if project else "default",
-                        "session_id": str(channel_id),
-                    },
-                    event_type="tool",
-                )
-            except Exception:
-                pass
-        return result
-
-    # --- MeetScribe meeting corpus tools ---
-
-    elif is_meetscribe_tool(tool_name):
-        log(f"MeetScribe tool {tool_name}: {args_str(tool_args)}", "INFO")
-        ms_client = get_meetscribe_client()
-        if ms_client is None:
-            return "Error: MeetScribe integration is not configured. Set MEETSCRIBE_API_KEY in .env."
-        result = await handle_meetscribe_tool(tool_name, tool_args, ms_client)
-        if len(result) > TOOL_OUTPUT_LIMIT:
-            result = result[:TOOL_OUTPUT_LIMIT] + "\n... (truncated)"
         if memory_store and len(str(result)) > 100:
             try:
                 memory_store.store(
@@ -1831,24 +1463,6 @@ async def execute_tool_v2(
             return f"File sent: {filename or os.path.basename(path)} ({file_size} bytes)"
         except Exception as e:
             return f"Error sending file: {e}"
-
-    elif tool_name == "cloudflare":
-        action = tool_args.get("action", "")
-        if not action:
-            return "Error: 'action' is required for cloudflare tool"
-        log(f"Cloudflare tool: {action} {args_str(tool_args)}", "INFO")
-        result = await execute_cloudflare_tool(action, tool_args)
-        # Store in memory
-        if memory_store and len(str(result)) > 50:
-            try:
-                memory_store.store(
-                    f"Cloudflare: {action}({json.dumps(tool_args)[:200]})\nResult: {str(result)[:500]}",
-                    metadata={"project": "system", "session_id": str(channel_id)},
-                    event_type="tool",
-                )
-            except Exception:
-                pass
-        return result
 
     return f"Unknown tool: {tool_name}"
 
@@ -1971,48 +1585,6 @@ async def execute_tool_v2_voice(
             return "Error: cannot create channels outside of a server"
         return await handle_create_channel(tool_args, guild)
 
-    elif is_poll_tool(tool_name):
-        log(f"Voice poll tool {tool_name}: {args_str(tool_args)}", "INFO")
-        bot_token = os.environ.get("DISCORD_BOT_TOKEN", "")
-        result = await handle_poll_tool(tool_name, tool_args, text_channel, bot_token)
-        if memory_store and len(str(result)) > 50:
-            try:
-                memory_store.store(
-                    f"Tool: {tool_name}({json.dumps(tool_args)[:200]})\nResult: {str(result)[:300]}",
-                    metadata={
-                        "project": project.name if project else "default",
-                        "session_id": str(channel_id),
-                    },
-                    event_type="tool",
-                )
-            except Exception:
-                pass
-        return result
-
-    # --- MeetScribe meeting corpus tools ---
-
-    elif is_meetscribe_tool(tool_name):
-        log(f"Voice MeetScribe tool {tool_name}: {args_str(tool_args)}", "INFO")
-        ms_client = get_meetscribe_client()
-        if ms_client is None:
-            return "Error: MeetScribe integration is not configured. Set MEETSCRIBE_API_KEY in .env."
-        result = await handle_meetscribe_tool(tool_name, tool_args, ms_client)
-        if len(result) > TOOL_OUTPUT_LIMIT:
-            result = result[:TOOL_OUTPUT_LIMIT] + "\n... (truncated)"
-        if memory_store and len(str(result)) > 100:
-            try:
-                memory_store.store(
-                    f"Tool: {tool_name}({json.dumps(tool_args)[:200]})\nResult: {str(result)[:500]}",
-                    metadata={
-                        "project": project.name if project else "default",
-                        "session_id": str(channel_id),
-                    },
-                    event_type="tool",
-                )
-            except Exception:
-                pass
-        return result
-
     else:
         return f"Unknown tool: {tool_name}"
 
@@ -2030,11 +1602,20 @@ async def ask_confirmation(
         display_cmd += "..."
 
     prompt_text = custom_prompt or "⚠️ **Confirmation required**"
+    view = ConfirmationView(
+        timeout_seconds=60,
+        prompt=display_cmd,
+        allowed_user_id=message.author.id,
+    )
     await message.reply(
         f"{prompt_text}\n"
         f"```\n{display_cmd}\n```\n"
-        f"Reply `yes` to confirm or `no` to cancel (60s timeout)."
+        f"Tap **Approve** or **Deny** (60s timeout). Typed yes/no still works.",
+        view=view,
     )
+
+    async def _wait_buttons():
+        return await view.wait_for_result()
 
     def check(m):
         return (
@@ -2045,8 +1626,26 @@ async def ask_confirmation(
         )
 
     try:
-        reply = await bot.wait_for("message", check=check, timeout=60)
-        confirmed = reply.content.lower().strip() in ("yes", "y", "confirm")
+        button_task = asyncio.create_task(_wait_buttons())
+        text_task = asyncio.create_task(bot.wait_for("message", check=check, timeout=60))
+        done, pending = await asyncio.wait(
+            {button_task, text_task},
+            return_when=asyncio.FIRST_COMPLETED,
+            timeout=60,
+        )
+        for task in pending:
+            task.cancel()
+        if button_task in done and not button_task.cancelled():
+            confirmed = bool(button_task.result())
+        elif text_task in done and not text_task.cancelled():
+            reply = text_task.result()
+            confirmed = reply.content.lower().strip() in ("yes", "y", "confirm")
+        else:
+            confirmed = False
+        if not done:
+            log("Confirmation timed out", "WARN")
+            await message.reply("⏱️ Confirmation timed out. Command cancelled.")
+            return False
         log(f"Confirmation: {'approved' if confirmed else 'denied'}", "INFO")
         return confirmed
     except asyncio.TimeoutError:
@@ -2210,13 +1809,17 @@ async def run_agent_with_update_v2(
         response, tool_messages = await run_agent_loop_v2(message, messages, tools, project, channel_id, progress=progress)
 
         # Store the exchange in the session
-        session_manager.append_exchange(
-            channel_id=channel_id,
-            user_message=user_input,
-            assistant_response=response,
-            tool_messages=tool_messages,
-            thread_id=thread_id,
-        )
+        if session_manager is not None:
+            try:
+                session_manager.append_exchange(
+                    channel_id=channel_id,
+                    user_message=user_input or "",
+                    assistant_response=response or "",
+                    tool_messages=tool_messages or [],
+                    thread_id=thread_id,
+                )
+            except Exception as e:
+                log(f"append_exchange failed (non-fatal): {e}", "WARN")
 
         # Phase 3: Store the exchange in persistent memory
         if memory_store:
@@ -2287,15 +1890,6 @@ async def run_agent_loop_v2(
 
         if content and not tool_calls:
             log(f"Agent final response: {content[:200]}", "INFO")
-            # Log the conversation as a change event for auditability
-            log_change(
-                actor="schubert",
-                action="conversation",
-                target="schubert_channel",
-                description=f"Response: {content[:200]}",
-                intent=str(message.content)[:500] if hasattr(message, 'content') else "",
-                outcome="completed",
-            )
             return content, tool_messages
 
         if content and tool_calls and len(content) > 10:
@@ -2345,8 +1939,6 @@ async def run_agent_loop_v2(
                     await progress.update(thinking=f"Querying memory: {action}", tool="query_memory")
                 elif is_coding_tool(tool_name):
                     await progress.add_tool_call("coding", tool_name)
-                elif is_meetscribe_tool(tool_name):
-                    await progress.add_tool_call("meetscribe", tool_name)
             else:
                 if "__" in tool_name:
                     server, tool = tool_name.split("__", 1)
@@ -2367,8 +1959,6 @@ async def run_agent_loop_v2(
                     await message.reply(f"\U0001f9e0 Querying memory: {action}")
                 elif is_coding_tool(tool_name):
                     await message.reply(f"\U0001f4bb {tool_name}")
-                elif is_meetscribe_tool(tool_name):
-                    await message.reply(f"\U0001f4dd {tool_name}")
 
             # Execute tool
             result = await execute_tool_v2(
@@ -2393,43 +1983,6 @@ async def run_agent_loop_v2(
             }
             messages.append(tool_msg)
             tool_messages.append(tool_msg)
-
-            # Log state-modifying tool calls to change_log
-            _cl_id = -1
-            if tool_name == "write_file":
-                _cl_id = log_change(
-                    actor="schubert",
-                    action="write_file",
-                    target=tool_args.get("path", ""),
-                    description=f"Wrote file to {tool_args.get('path', '')}",
-                    intent=str(message.content)[:500] if hasattr(message, 'content') else "",
-                    outcome="pending",
-                )
-            elif tool_name == "run_shell":
-                cmd = tool_args.get("command", "")
-                _cl_id = log_change(
-                    actor="schubert",
-                    action="run_shell",
-                    target="server",
-                    description=f"Shell: {cmd[:200]}",
-                    intent=str(message.content)[:500] if hasattr(message, 'content') else "",
-                    outcome="pending",
-                )
-            elif "__" in tool_name and "write_file" in tool_name:
-                _cl_id = log_change(
-                    actor="schubert",
-                    action="mcp_write_file",
-                    target=tool_args.get("path", ""),
-                    description=f"MCP file write to {tool_args.get('path', '')}",
-                    intent=str(message.content)[:500] if hasattr(message, 'content') else "",
-                    outcome="pending",
-                )
-
-            # Update outcome based on result
-            if _cl_id >= 0:
-                success = "error" not in str(result).lower()[:100]
-                update_change_outcome(_cl_id, "success" if success else "failed",
-                                      {"result": str(result)[:500]})
 
             log(f"Tool {tool_name} result: {result[:200]}", "INFO")
 
@@ -3129,7 +2682,6 @@ def cmd_help() -> discord.Embed:
     embed.add_field(name="!project <subcommand>", value="Create, bind, list, info, set, delete projects", inline=False)
     embed.add_field(name="!session <subcommand>", value="Info, clear, summary, list sessions", inline=False)
     embed.add_field(name="!memory <subcommand>", value="Search, stats, recent, entity — query persistent memory", inline=False)
-    embed.add_field(name="!run-playbook <key>", value="Trigger a WRITER Agent playbook via webhook (e.g. stratum-ai-news)", inline=False)
     embed.add_field(name="Voice Commands", value="━━━━━━━━━━━━━━━━", inline=False)
     embed.add_field(name="!join", value="Join your voice channel — speak and I shall respond", inline=False)
     embed.add_field(name="!leave", value="Leave the voice channel", inline=False)
@@ -3308,32 +2860,14 @@ async def on_ready():
         except Exception as e:
             log(f"Scheduler start failed: {e}", "WARN")
     # Phase 5.3: Start the webhook handler after the bot is ready
-    # Playbook relay: create BEFORE webhook handler so routes register before router freeze
-    global webhook_handler, playbook_relay, meetscribe_webhook
+    global webhook_handler
     try:
-        playbook_relay = PlaybookRelay(bot, BOT_CHANNEL_ID)
-        relay_routes_fn = playbook_relay.add_routes if playbook_relay else None
-
-        # MeetScribe webhook handler — receives notes.completed events
-        meetscribe_webhook = MeetScribeWebhookHandler(bot, BOT_CHANNEL_ID)
-        meetscribe_routes_fn = meetscribe_webhook.add_routes if meetscribe_webhook else None
-
-        # Combine route registration functions
-        def combined_routes_fn(app):
-            if relay_routes_fn:
-                relay_routes_fn(app)
-            if meetscribe_routes_fn:
-                meetscribe_routes_fn(app)
-
-        webhook_handler = WebhookHandler(bot, BOT_CHANNEL_ID, add_routes_fn=combined_routes_fn)
+        webhook_handler = WebhookHandler(bot, BOT_CHANNEL_ID)
         await webhook_handler.start()
         log("Webhook handler started on port 8095", "INFO")
-        if playbook_relay:
-            log(f"Playbook relay active: {len(playbook_relay.playbook_configs)} playbook(s) configured", "INFO")
-        if meetscribe_webhook:
-            log("MeetScribe webhook handler active on /webhook/meetscribe", "INFO")
     except Exception as e:
-        log(f"Webhook handler / playbook relay start failed (non-fatal): {e}", "WARN")
+        log(f"Webhook handler start failed (non-fatal): {e}", "WARN")
+        log("Continuing without webhook handler — GitHub webhooks will not be processed", "INFO")
 
 
 @bot.event
@@ -3343,157 +2877,48 @@ async def on_message(message: discord.Message):
     if message.author == bot.user:
         return
 
-    # --- Check if another agent is specifically mentioned ---
-    # If another bot is mentioned (not Admiral), suppress Admiral's response
-    OTHER_BOT_IDS = {
-        1539047471899086988: "proctor",
-        1538766501035642890: "architect",
-        1538817623045832746: "quartermaster",
-        1538818587119067206: "cartographer",
-        1539047086597873684: "dr_voss",
-    }
-    
-    for bot_id in OTHER_BOT_IDS.keys():
-        if f"<@{bot_id}>" in message.content or f"<@!{bot_id}>" in message.content:
-            # Another agent is specifically mentioned - don't respond
-            return
+    # --- Channel authorization (V2: any bound channel or default channel) ---
+    project = project_registry.get_project_for_channel(message.channel.id)
+    is_default_channel = message.channel.id == BOT_CHANNEL_ID
 
-    # --- Playbook relay: check if this is a reply to a relay question ---
-    if playbook_relay and message.reference and message.reference.message_id:
-        qid = playbook_relay.get_question_id_for_message(
-            message.reference.message_id
-        )
-        if qid:
-            answer = message.content.strip()
-            playbook_relay.resolve_question(qid, answer)
-            await message.add_reaction("✅")
-            return
+    if project is None and not is_default_channel:
+        # Unbound channel — check if the user is trying to set up this channel
+        # or if they mentioned the bot. If so, respond with a setup prompt
+        # instead of silently ignoring.
+        content_lower = content.lower()
+        setup_keywords = [
+            "set up", "setup", "bind", "project", "channel",
+            "create channel", "new channel", "provision",
+            "github repo", "map this", "assign this",
+        ]
+        bot_mentioned = bot.user and bot.user.mentioned_in(message)
 
-    # --- Fleet delegation: check for FLEET responses from subagents ---
-    if is_fleet_message(message.content):
-        parsed = parse_fleet_message(message.content)
-        if parsed and parsed["to_agent"] == "schubert" and parsed["status"]:
-            chain_id = parsed["chain_id"]
-            part = parsed.get("part", 0)
-            total_parts = parsed.get("total_parts", 0)
-            log(f"Received FLEET response for chain {chain_id} from {parsed['from_agent']} (part={part}/{total_parts})", "INFO")
-
-            # Multi-part response handling
-            if total_parts > 1:
-                # Accumulate parts before resolving
-                if chain_id not in _pending_delegation_parts:
-                    _pending_delegation_parts[chain_id] = {}
-                _pending_delegation_parts[chain_id][part] = parsed["task"]
-
-                # Check if all parts received
-                if len(_pending_delegation_parts[chain_id]) >= total_parts:
-                    # Assemble in order
-                    assembled = "\n".join(
-                        _pending_delegation_parts[chain_id][i]
-                        for i in range(1, total_parts + 1)
-                        if i in _pending_delegation_parts[chain_id]
-                    )
-                    del _pending_delegation_parts[chain_id]
-
-                    if chain_id in _pending_delegations:
-                        future = _pending_delegations.pop(chain_id)
-                        if not future.done():
-                            future.set_result(assembled)
-                    return
-                else:
-                    # Still waiting for more parts
-                    return
-            else:
-                # Single-part response — resolve immediately
-                if chain_id in _pending_delegations:
-                    future = _pending_delegations.pop(chain_id)
-                    if not future.done():
-                        future.set_result(parsed["task"])
-                    return
-                else:
-                    log(f"FLEET response for unknown chain {chain_id} — ignoring", "WARN")
-                    return
-        elif parsed and parsed["to_agent"] == "schubert" and not parsed["status"]:
-            # A delegation TO schubert (from another agent) — process as a task
-            log(f"Received FLEET delegation from {parsed['from_agent']}", "INFO")
-            # Fall through to normal processing with the task as input
-            # (remove the FLEET tag from the input)
-            pass
-
-    # --- Multi-agent channel routing (before channel authorization) ---
-    if is_multi_agent_channel(message.channel.id) and _multi_agent_manager:
-        should = await _multi_agent_manager.should_respond(
-            message, bot.user.id, ADMIN_USER_ID
-        )
-        if not should:
-            ctx = get_shared_context()
-            ctx.add_message(
-                message.channel.id, message.id, str(message.author),
-                message.content, time.time(), message.author.bot
+        if bot_mentioned or any(kw in content_lower for kw in setup_keywords):
+            # Respond in the unbound channel with a setup prompt
+            existing_projects = project_registry.list_projects()
+            project_names = [p.name for p in existing_projects]
+            await message.reply(
+                f"⚓ Ahoy, Captain! This channel isn't bound to a project yet.\n\n"
+                f"You can ask me in natural language to set it up. For example:\n"
+                f"  • \"Create a channel called my-repo and map it to my GitHub project\"\n"
+                f"  • \"Bind this channel to the tango project\"\n"
+                f"  • \"Set up a new project called vinifera with workdir /opt/vinifera\"\n\n"
+                f"**Existing projects:** {', '.join(project_names) if project_names else '(none yet)'}\n\n"
+                f"Or type `!help` to see all available commands."
             )
-            return
-        _multi_agent_manager.mark_responded(message.channel.id)
-        # In multi-agent channels, skip project/channel authorization
-        # Process the message directly
-        content = message.content.strip()
-        if content.startswith("!"):
-            # Handle quick commands
-            pass  # Fall through to command handling
-        else:
-            # Process as natural language agent request
-            project = project_registry.get_project("default") if project_registry else None
-            # Skip the channel authorization check below
-            # Fall through to agent processing with default project
-            
-    else:
-        # --- Channel authorization (V2: any bound channel or default channel) ---
-        project = project_registry.get_project_for_channel(message.channel.id)
-        is_default_channel = message.channel.id == BOT_CHANNEL_ID
+        return  # Unbound channel, ignore
 
-        if project is None and not is_default_channel:
-            # Unbound channel — check if the user is trying to set up this channel
-            # or if they mentioned the bot. If so, respond with a setup prompt
-            # instead of silently ignoring.
-            content_lower = content.lower()
-            setup_keywords = [
-                "set up", "setup", "bind", "project", "channel",
-                "create channel", "new channel", "provision",
-                "github repo", "map this", "assign this",
-            ]
-            bot_mentioned = bot.user and bot.user.mentioned_in(message)
-
-            if bot_mentioned or any(kw in content_lower for kw in setup_keywords):
-                # Respond in the unbound channel with a setup prompt
-                existing_projects = project_registry.list_projects()
-                project_names = [p.name for p in existing_projects]
-                await message.reply(
-                    f"⚓ Ahoy, Captain! This channel isn't bound to a project yet.\n\n"
-                    f"You can ask me in natural language to set it up. For example:\n"
-                    f"  • \"Create a channel called my-repo and map it to my GitHub project\"\n"
-                    f"  • \"Bind this channel to the tango project\"\n"
-                    f"  • \"Set up a new project called vinifera with workdir /opt/vinifera\"\n\n"
-                    f"**Existing projects:** {', '.join(project_names) if project_names else '(none yet)'}\n\n"
-                    f"Or type `!help` to see all available commands."
-                )
-            return  # Unbound channel, ignore
-
-        if project is None:
-            project = project_registry.get_project("default")
+    if project is None:
+        project = project_registry.get_project("default")
 
     # --- Admin check (preserved from V1) ---
-    if message.author.id != ADMIN_USER_ID and message.author.id not in AUTHORIZED_AGENT_IDS:
+    if message.author.id != ADMIN_USER_ID:
         log(
             f"Unauthorized message from user {message.author.id} "
             f"({message.author}): {message.content[:100]}",
             "WARN",
         )
         return
-    if message.author.id in AUTHORIZED_AGENT_IDS:
-        log(
-            f"Authorized agent message from {message.author.id} "
-            f"({message.author}): {message.content[:100]}",
-            "INFO",
-        )
 
     # --- Rate limiting (preserved from V1) ---
     if not check_rate_limit(message.author.id):
@@ -3581,92 +3006,6 @@ async def on_message(message: discord.Message):
 
             elif command == "mem":
                 await message.reply(embed=cmd_mem())
-
-            elif command == "playbook" or command == "run-playbook":
-                # Trigger a WRITER Agent playbook via webhook
-                if not playbook_relay:
-                    await message.reply("\u274c Playbook relay not initialized.")
-                    return
-                playbook_key = args[0] if args else ""
-                if not playbook_key:
-                    playbooks = playbook_relay.list_playbooks()
-                    if playbooks:
-                        plist = "\n".join(
-                            f"  \u2022 `{p['key']}` \u2014 {p['name']}" for p in playbooks
-                        )
-                    else:
-                        plist = "  (none configured)"
-                    await message.reply(
-                        "\u2693 **Playbook Webhook Relay**\n\n"
-                        "Usage: `!run-playbook <key> [inputs_json]`\n\n"
-                        f"**Available playbooks:**\n{plist}"
-                    )
-                    return
-                # Parse optional inputs JSON from remaining args
-                inputs = []
-                if len(args) > 1:
-                    inputs_str = " ".join(args[1:])
-                    try:
-                        inputs = json.loads(inputs_str)
-                    except json.JSONDecodeError:
-                        await message.reply(
-                            f"\u274c Invalid JSON inputs: `{inputs_str}`"
-                        )
-                        return
-
-                # Check if this playbook has a pre-trigger question
-                if not inputs and playbook_relay:
-                    config = playbook_relay.playbook_configs.get(playbook_key, {})
-                    pre_question = config.get("pre_trigger_question", "")
-                    pre_var = config.get("pre_trigger_variable", "task_description")
-                    if pre_question:
-                        embed_q = discord.Embed(
-                            title=f"\U0001f527 {config.get('name', playbook_key)}",
-                            description=pre_question,
-                            color=0x5865F2,
-                        )
-                        embed_q.set_footer(text="Reply to this message to answer")
-                        q_msg = await message.reply(embed=embed_q)
-                        try:
-                            reply_msg = await bot.wait_for(
-                                "message",
-                                timeout=600,
-                                check=lambda m: (
-                                    m.channel.id == message.channel.id
-                                    and m.author.id == message.author.id
-                                    and m.id != message.id
-                                ),
-                            )
-                            user_answer = reply_msg.content
-                            embed_a = discord.Embed(
-                                title=f"\U0001f527 {config.get('name', playbook_key)}",
-                                description=f"\u2705 You said: {user_answer[:200]}",
-                                color=0x00ff00,
-                            )
-                            await q_msg.edit(embed=embed_a)
-                            inputs = [{"id": pre_var, "value": [user_answer]}]
-                        except asyncio.TimeoutError:
-                            embed_t = discord.Embed(
-                                title=f"\U0001f527 {config.get('name', playbook_key)}",
-                                description="\u23f0 Timed out waiting for your response. Triggering with default inputs.",
-                                color=0xff0000,
-                            )
-                            await q_msg.edit(embed=embed_t)
-
-                await message.reply(f"\U0001f680 Triggering playbook `{playbook_key}`...")
-                result = await playbook_relay.trigger_playbook(playbook_key, inputs)
-                if "error" in result:
-                    await message.reply(f"\u274c Playbook trigger failed: {result['error']}")
-                elif "thread_id" in result:
-                    await message.reply(
-                        f"\u2705 Playbook `{playbook_key}` started!\n"
-                        f"Thread ID: `{result['thread_id']}`\n"
-                        f"Status: {result.get('status', 'unknown')}\n\n"
-                        f"If the playbook has questions, they will appear here. "
-                        f"Reply to question messages to answer them."
-                    )
-                else:
-                    await message.reply(f"\u26a0\ufe0f Unexpected response: `{result}`")
 
             elif command == "procs":
                 await message.reply(embed=cmd_procs())
@@ -4218,10 +3557,6 @@ async def init_v2():
     try:
         memory_store = MemoryStore()
         memory_store.init_db()  # Create tables if they don't exist
-
-        # Initialize fleet agent registry
-        fleet_agents = init_fleet_agents()
-        log(f"Fleet agents initialized: {list(fleet_agents.keys())}", "INFO")
         stats = memory_store.get_stats()
         log(
             f"Memory Store initialized: {stats['redis_memories']} memories, "
@@ -4320,7 +3655,6 @@ async def async_main() -> int:
         if webhook_handler:
             await webhook_handler.stop()
             log("Webhook handler stopped", "INFO")
-        await close_meetscribe_client()
         if mcp_client:
             await mcp_client.disconnect_all()
             log("MCP client disconnected", "INFO")
@@ -4331,7 +3665,11 @@ async def async_main() -> int:
     return 0
 
 
+_SINGLETON_LOCK = None
+
 def main() -> int:
+    global _SINGLETON_LOCK
+    _SINGLETON_LOCK = acquire_singleton("admiral")
     return asyncio.run(async_main())
 
 

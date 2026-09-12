@@ -61,7 +61,7 @@ FORBIDDEN_SERVICES = {
     "tailscaled.service",
 }
 
-SAFE_SERVICES = {BACKEND_SERVICE, WEB_SERVICE, LITELLM_SERVICE, TTS_SERVICE}
+SAFE_SERVICES = {BACKEND_SERVICE, WEB_SERVICE, LITELLM_SERVICE, TTS_SERVICE}  # LiteLLM requires double-type confirmation via !restart
 
 # ElevenLabs API
 ELEVENLABS_SUBSCRIPTION_URL = "https://api.us.elevenlabs.io/v1/user/subscription"
