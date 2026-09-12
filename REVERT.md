@@ -148,7 +148,9 @@ git push origin main --force
 | Flux (`flux-general-en`) for English | Native EOT detection, lowest latency |
 | Eager EOT per-persona thresholds | Cuts hundreds of ms from response time; disabled for therapy/meditation/Tagalog (ADR-011) |
 | Nova-3 `language="tl"` for Tita Baby & Mama Lulu | Flux Multilingual does not support Tagalog; Nova-3 monolingual `tl` provides correct orthography |
-| `use_tts_aligned_transcript=False` | Prevents `_SegmentSynchronizerImpl` race condition mid-speech pauses with ElevenLabs |
+| `use_tts_aligned_transcript=False` | Do not feed ElevenLabs word timings into the transcription node (ADR-004) |
+| `sync_transcription=False` | Do not construct RoomIO `_SegmentSynchronizerImpl`; required to prevent late-session cutouts (ADR-012) |
+| `max_tool_steps=8` | Tool-heavy wiki/docs/MCP turns finish before `tool_choice='none'` (ADR-012) |
 | Audio TurnDetector (`inference.TurnDetector()`) | Replaces STT-based turn detection; eliminates VAD/STT race conditions |
 | Cloudflare tunnel direct to `localhost:3006`/`localhost:8030` | Bypasses Caddy to prevent Error 522 and duplicate CORS headers |
 | Agent dispatch via POST `/api/dispatch` after `room.connect()` | Prevents agent timeout before user clicks Start |

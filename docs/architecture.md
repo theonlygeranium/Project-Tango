@@ -72,7 +72,9 @@ TTS routing
         │     Reference voice: /opt/Project-Tango/tts-voices/jeremiah_reference.wav
         │     Runtime reference: short source-sample clip plus matched transcript
         └── All other personas → ElevenLabs Flash v2.5 (api.us.elevenlabs.io)
-        │  use_tts_aligned_transcript=False  (prevents race condition pauses)
+        │  use_tts_aligned_transcript=False
+        │  RoomIO sync_transcription=False  (disables SegmentSynchronizer)
+        │  max_tool_steps=8  (wiki/docs/MCP chains)
         │  Audio stream
         ▼
 LiveKit Cloud  (audio track back to browser)
@@ -270,7 +272,9 @@ See `docs/decisions/` for full ADRs.
 | LiveKit Agents SDK (not Pipecat) | Native WebRTC, active development | ADR-001 |
 | Flux STT for English | Native EOT detection, lowest latency | ADR-002 |
 | Nova-3 `tl` for Tagalog | Flux Multilingual doesn't support Tagalog | ADR-003 |
-| `use_tts_aligned_transcript=False` | Prevents mid-speech pause race condition | ADR-004 |
+| `use_tts_aligned_transcript=False` | Do not feed ElevenLabs word timings into the transcription node | ADR-004 |
+| `sync_transcription=False` | Do not construct `_SegmentSynchronizerImpl`; captions still publish, unsynced | ADR-012 |
+| `max_tool_steps=8` | Tool-heavy Chris/wiki/docs/MCP turns finish before `tool_choice='none'` | ADR-012 |
 | Cloudflare tunnel direct to localhost | Bypasses Caddy, prevents Error 522 | ADR-005 |
 | POST /api/dispatch after room.connect() | Prevents agent timeout on empty rooms | ADR-006 |
 | LiteLLM proxy for all LLM calls | Centralized credentials, model switching | ADR-007 |

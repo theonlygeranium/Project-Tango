@@ -9,6 +9,22 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ## [Unreleased]
 
+### Fixed
+- **Late-session voice cutouts / SegmentSynchronizer races** (2026-09-12)
+  - Production Chris session `62a4ab7c-3200-402b-8870-dc983b1fc4e9` logged 21×
+    `_SegmentSynchronizerImpl.on_playback_started called after start_fut is set`
+    even though `use_tts_aligned_transcript=False` (ADR-004) was already set.
+    That flag does not disable RoomIO's playback-paced caption sync. Sessions
+    now start with `TextOutputOptions(sync_transcription=False)` so
+    `TranscriptSynchronizer` is never constructed. Captions still publish.
+  - Raised `max_tool_steps` from LiveKit's default 3 to 8
+    (`TANGO_MAX_TOOL_STEPS`) so wiki/docs/MCP chains can finish before the SDK
+    forces `tool_choice='none'` (the ignored-`read_doc` / long-silence path).
+  - Explicitly set `preemptive_generation.preemptive_tts=False` so speculative
+    LLM work cannot start speaking before `on_user_turn_completed` mutates
+    context (transcription start, Control Mode, vision).
+  - See ADR-012. Requires `tango-backend` restart after deploy.
+
 ### Added
 - **Fleet Bot Testing skill and runbook** (2026-08-19)
   - Created `.cursor/skills/fleet-bot-testing/SKILL.md` — Cursor skill that

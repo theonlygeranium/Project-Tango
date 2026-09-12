@@ -68,7 +68,10 @@ This project uses **`livekit-agents`**. Never install or import `pipecat-ai` or 
 
 ### 3.4 TTS Configuration
 
-- Use `use_tts_aligned_transcript=False` in `AgentSession` — prevents mid-speech pauses from `_SegmentSynchronizerImpl` race conditions.
+- Use `use_tts_aligned_transcript=False` in `AgentSession` — do not feed ElevenLabs word timings into the transcription node.
+- Pass `room_options=RoomOptions(text_output=TextOutputOptions(sync_transcription=False))` to `session.start()` — this is what actually disables `TranscriptSynchronizer` / `_SegmentSynchronizerImpl`. ADR-004's aligned-transcript flag alone does **not** prevent mid-speech pauses; the synchronizer is constructed whenever RoomIO paces captions with audio (LiveKit default).
+- Set `max_tool_steps` above LiveKit's default of 3 (Tango default 8, override with `TANGO_MAX_TOOL_STEPS`) so wiki/docs/MCP chains can finish before `tool_choice='none'`.
+- Keep `preemptive_generation.preemptive_tts=False` so speculative LLM work cannot start speaking before `on_user_turn_completed` finishes mutating context/tools.
 - `turn_detection="stt"` must be nested in the `turn_handling` dict (LiveKit Agents v2.0 API requirement).
 
 ### 3.5 Agent Dispatch
