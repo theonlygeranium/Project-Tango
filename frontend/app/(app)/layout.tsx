@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { DeployBadge } from '@/components/DeployBadge';
 import { AccountMenu } from '@/components/auth/AccountMenu';
 import { getCurrentUser } from '@/lib/server/backend';
-import { DeployBadge } from '@/components/DeployBadge';
 
 interface AppLayoutProps {
   children: React.ReactNode;
