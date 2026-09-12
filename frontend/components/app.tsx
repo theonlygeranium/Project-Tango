@@ -154,8 +154,8 @@ export function App({
       if (reconnectAttempts.current < 3) {
         reconnectAttempts.current += 1;
         toastAlert({
-          title: "Connection interrupted. Reconnecting...",
-          description: "Attempt " + reconnectAttempts.current + " of 3",
+          title: 'Connection interrupted. Reconnecting...',
+          description: 'Attempt ' + reconnectAttempts.current + ' of 3',
         });
         refreshConnectionDetails();
       } else {
@@ -165,8 +165,8 @@ export function App({
         clearConnectionDetails();
         reconnectAttempts.current = 0;
         toastAlert({
-          title: "Connection lost.",
-          description: "Please tap Start to reconnect.",
+          title: 'Connection lost.',
+          description: 'Please tap Start to reconnect.',
         });
       }
     };

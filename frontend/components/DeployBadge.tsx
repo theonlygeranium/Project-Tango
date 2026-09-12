@@ -61,12 +61,10 @@ export function DeployBadge() {
         Deployed {formatTimestamp(info.timestamp)}
       </button>
       {open && info.note && (
-        <div className="bg-background/95 text-foreground mt-1 max-w-xs rounded-md border border-border/40 p-3 shadow-lg backdrop-blur-md">
+        <div className="bg-background/95 text-foreground border-border/40 mt-1 max-w-xs rounded-md border p-3 shadow-lg backdrop-blur-md">
           <p className="text-xs leading-relaxed">{info.note}</p>
           {info.version && (
-            <p className="text-muted-foreground mt-1.5 font-mono text-[10px]">
-              v{info.version}
-            </p>
+            <p className="text-muted-foreground mt-1.5 font-mono text-[10px]">v{info.version}</p>
           )}
         </div>
       )}
