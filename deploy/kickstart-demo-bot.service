@@ -1,0 +1,19 @@
+[Unit]
+Description=Kickstart Demo Bot - Discord to Slack Bridge
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/Project-Tango
+Environment="PYTHONUNBUFFERED=1"
+EnvironmentFile=/opt/Project-Tango/.env
+ExecStart=/opt/Project-Tango/backend/venv/bin/python3 /opt/Project-Tango/scripts/kickstart-demo-bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kickstart-demo-bot
+
+[Install]
+WantedBy=multi-user.target

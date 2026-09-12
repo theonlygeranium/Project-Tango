@@ -1,0 +1,19 @@
+[Unit]
+Description=The Architect — Schubert Development & Admin Bot
+After=network-online.target postgresql.service docker.service schubert-bot.service
+Wants=network-online.target postgresql.service docker.service
+
+[Service]
+Type=simple
+ExecStart=/opt/Project-Tango/backend/venv/bin/python /opt/Project-Tango/scripts/architect-bot.py
+WorkingDirectory=/opt/Project-Tango
+User=root
+Group=root
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+EnvironmentFile=/opt/Project-Tango/.env
+
+[Install]
+WantedBy=multi-user.target

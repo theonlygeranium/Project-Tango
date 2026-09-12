@@ -40,6 +40,8 @@ from discord import ui
 SCRIPT_DIR = "/opt/Project-Tango/scripts"
 sys.path.insert(0, SCRIPT_DIR)
 
+from singleton_lock import acquire_singleton
+
 from mcp_client import MCPClient, MCPServerConfig
 from cloudflare_api import execute_cloudflare_tool, get_cloudflare_tool_definition
 from memory_store import MemoryStore
@@ -55,7 +57,8 @@ from channel_onboarding import onboard_channel
 from proctor_test_framework import (
     initialize_test_framework, ProctorTestRunner, TestPriority
 )
-from discord_ux_utils import keep_typing, should_use_thread
+from discord_ux_utils import keep_typing, should_use_thread, safe_create_thread, session_channel_id
+from approval_buttons import AgentReplyView, PROCEED_TEXT, should_attach_proceed, progress_anchor
 
 # Multi-agent coordinator imports
 from conversation_coordinator import ConversationCoordinator, MultiAgentChannelManager
@@ -77,11 +80,13 @@ except Exception:
     _cfg = {}
 
 _llm = _cfg.get("llm", {}) if isinstance(_cfg.get("llm", {}), dict) else {}
+_self_improvement = _cfg.get("self_improvement", {}) if isinstance(_cfg.get("self_improvement", {}), dict) else {}
 
 # Proctor observer module
 from proctor_observer import (
     PerformanceTracker, HUMAN_OPERATOR_ID, AGENT_BOT_IDS, AGENT_CHANNEL_IDS,
     DELEGATION_CHANNEL_ID, ANALYSIS_CHANNEL_ID,
+    ErrorDetails, parse_error_from_message, parse_error_from_journal,
 )
 
 # Slack integration
@@ -122,7 +127,7 @@ SESSION_MAX_MESSAGES = _llm.get("session_window", 35)
 # Multi-LLM routing — default model and available models
 # The Proctor auto-switches: Palmyra x6 for general tasks, Claude Sonnet 4.5 for coding
 DEFAULT_MODEL = _llm.get("model", "writer/palmyra-x6")
-CODING_MODEL = _llm.get("coding_model", "writer/claude-sonnet-4-5")
+CODING_MODEL = _llm.get("coding_model") or _llm.get("model") or "writer/palmyra-x6"
 current_model = DEFAULT_MODEL
 user_model_override = False  # Set True when user manually selects via !model; disables auto-switching
 
@@ -136,11 +141,11 @@ MODEL_CATEGORIES = {
         "writer/palmyra-creative",
     ],
     "Claude": [
-        "writer/claude-sonnet-4-5",
-        "writer/claude-sonnet-4",
-        "writer/claude-opus-4",
-        "writer/claude-3-5-sonnet",
-        "writer/claude-haiku-4-5",
+        "anthropic/claude-sonnet-4-5",
+        "anthropic/claude-sonnet-4",
+        "anthropic/claude-opus-4",
+        "anthropic/claude-3.5-sonnet",
+        "anthropic/claude-3-opus",
     ],
     "OpenAI": [
         "openai/gpt-4o",
@@ -162,7 +167,7 @@ MODEL_CATEGORIES = {
 }
 
 LLM_TEMPERATURE = _llm.get("temperature", 0.3)
-LLM_MAX_TOKENS = _llm.get("max_tokens", 4096)
+LLM_MAX_TOKENS = _llm.get("max_tokens", 8192)
 LLM_TIMEOUT = _llm.get("llm_timeout", 180)
 MAX_ITERATIONS = _llm.get("max_iterations", 30)
 AGENT_TIMEOUT = _llm.get("agent_timeout", 480)
@@ -215,12 +220,12 @@ CODING_PATTERNS = [
     # File/code artifacts
     ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".toml", ".sh",
     ".html", ".css", ".sql", ".env", "config", "syntax",
-    # Dev concepts
-    "error", "traceback", "exception", "stack trace", "log",
-    "regex", "api", "endpoint", "database", "query", "schema",
-    "service", "systemd", "restart", "deploy", "commit", "git",
-    "test", "pytest", "unittest", "lint", "type error",
-    "async", "await", "thread", "coroutine", "event loop",
+    # Dev concepts (specific enough to avoid false positives in monitoring tasks)
+    "traceback", "exception", "stack trace",
+    "regex", "endpoint", "schema",
+    "systemd", "restart", "deploy", "commit", "git",
+    "pytest", "unittest", "lint", "type error",
+    "async", "await", "coroutine", "event loop",
     "docker", "container", "nginx", "caddy",
 ]
 
@@ -878,6 +883,7 @@ def get_dev_tools() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 _last_inputs: dict[int, str] = {}
+_last_user_messages: dict[int, discord.Message] = {}
 _running_tasks: dict[int, asyncio.Task] = {}
 
 
@@ -899,36 +905,52 @@ class ProgressView(discord.ui.View):
             await interaction.response.send_message("No active task.", ephemeral=True)
 
 
-class ResponseView(discord.ui.View):
-    """View with a Regenerate button attached to the final response."""
+class ResponseView(AgentReplyView):
+    """Proceed / Cancel / Regenerate on the final response."""
 
-    def __init__(self, channel_id: int):
-        super().__init__(timeout=300)
-        self.channel_id = channel_id
+    def __init__(self, channel_id: int, show_proceed: bool = True):
+        super().__init__(
+            channel_id,
+            ADMIN_USER_ID,
+            show_proceed=show_proceed,
+            on_proceed=_on_proceed_click,
+            on_regenerate=_on_regenerate_click,
+        )
 
-    @discord.ui.button(label="Regenerate", style=discord.ButtonStyle.secondary, emoji="🔁")
-    async def regenerate_button(self, interaction, button):
-        last_input = _last_inputs.get(self.channel_id)
-        if not last_input:
-            await interaction.response.send_message("No previous input.", ephemeral=True)
-            return
-        log(f"Regenerate pressed for channel {self.channel_id}", "INFO")
-        await interaction.response.send_message("🔁 Regenerating...", ephemeral=True)
-        button.disabled = True
-        try: await interaction.message.edit(view=self)
-        except Exception: pass
-        channel = bot.get_channel(self.channel_id)
-        if not channel: return
-        progress = AgentProgressView(interaction.message)
-        await progress.start(f"Regenerating: {last_input[:200]}")
-        try:
-            response = await run_agent_loop(interaction.message, last_input, mcp_client, progress)
-            await progress.finalize(response)
-        except asyncio.CancelledError:
-            await progress.finalize("⏹️ Task cancelled.")
-        except Exception as e:
-            log(f"Regenerate error: {e}", "ERROR")
-            await progress.finalize(f"Error: {str(e)[:500]}")
+
+async def _on_proceed_click(interaction: discord.Interaction) -> None:
+    channel_id = interaction.channel.id if interaction.channel else 0
+    source = _last_user_messages.get(channel_id) or interaction.message
+    log(f"Proceed pressed for channel {channel_id}", "INFO")
+    progress = AgentProgressView(progress_anchor(source, interaction))
+    await progress.start("Proceeding with the approved plan...")
+    try:
+        response = await run_agent_loop(source, PROCEED_TEXT, mcp_client, progress)
+        await progress.finalize(response)
+    except asyncio.CancelledError:
+        await progress.finalize("⏹️ Task cancelled.")
+    except Exception as e:
+        log(f"Proceed error: {e}", "ERROR")
+        await progress.finalize(f"Error: {str(e)[:500]}")
+
+
+async def _on_regenerate_click(interaction: discord.Interaction) -> None:
+    channel_id = interaction.channel.id if interaction.channel else 0
+    last_input = _last_inputs.get(channel_id)
+    if not last_input:
+        return
+    log(f"Regenerate pressed for channel {channel_id}", "INFO")
+    source = _last_user_messages.get(channel_id) or interaction.message
+    progress = AgentProgressView(progress_anchor(source, interaction))
+    await progress.start(f"Regenerating: {last_input[:200]}")
+    try:
+        response = await run_agent_loop(source, last_input, mcp_client, progress)
+        await progress.finalize(response)
+    except asyncio.CancelledError:
+        await progress.finalize("⏹️ Task cancelled.")
+    except Exception as e:
+        log(f"Regenerate error: {e}", "ERROR")
+        await progress.finalize(f"Error: {str(e)[:500]}")
 
 
 # ---------------------------------------------------------------------------
@@ -954,11 +976,25 @@ class AgentProgressView:
         self._typing_paused = False
         self._is_fleet_request = False
 
+    @property
+    def _channel(self):
+        """Resolve the Discord channel, handling both Message and Channel objects."""
+        return self.message.channel if hasattr(self.message, "channel") else self.message
+
+    async def _reply(self, *args, **kwargs):
+        """Send a reply, handling both Message and Channel/Thread objects."""
+        if hasattr(self.message, "reply"):
+            try:
+                return await self.message.reply(*args, **kwargs)
+            except AttributeError:
+                pass
+        return await self._channel.send(*args, **kwargs)
+
     async def start(self, initial_text: str):
         self._start_time = time.time()
         embed = self._build_embed(initial_text)
-        view = ProgressView(self.message.channel.id)
-        self.progress_msg = await self.message.reply(embed=embed, view=view)
+        view = ProgressView(self._channel.id)
+        self.progress_msg = await self._reply(embed=embed, view=view)
         self.current_status = initial_text
         self._typing_task = asyncio.create_task(self._typing_loop())
         self._spinner_task = asyncio.create_task(self._spinner_loop())
@@ -997,7 +1033,7 @@ class AgentProgressView:
     async def _typing_loop(self):
         try:
             while True:
-                async with self.message.channel.typing():
+                async with self._channel.typing():
                     await asyncio.sleep(8)
         except asyncio.CancelledError:
             pass
@@ -1061,7 +1097,10 @@ class AgentProgressView:
                 pass
         if self._streamed:
             return
-        view = ResponseView(self.message.channel.id)
+        view = ResponseView(
+            self.message.channel.id,
+            show_proceed=should_attach_proceed(response),
+        )
         if len(response) <= 1900:
             await self.message.reply(response, view=view)
         elif len(response) <= 4096:
@@ -1084,13 +1123,11 @@ class AgentProgressView:
         if not self._is_fleet_request and not self._streamed:
             if len(response) > THREAD_RESPONSE_THRESHOLD or len(self.tool_calls) >= THREAD_TOOL_CALL_THRESHOLD:
                 try:
-                    thread_name = f"Discussion: {self.message.content[:80]}"
-                    thread = await self.message.create_thread(
-                        name=thread_name,
-                        auto_archive_duration=60,
-                    )
-                    log(f"Auto-thread created: {thread_name}", "INFO")
-                except discord.HTTPException as e:
+                    thread_name = f"Discussion: {(getattr(self.message, 'content', None) or '')[:80]}"
+                    thread = await safe_create_thread(self.message, thread_name, auto_archive_duration=60)
+                    if thread:
+                        log(f"Auto-thread created: {thread_name}", "INFO")
+                except Exception as e:
                     log(f"Auto-thread creation failed: {e}", "WARN")
 
 
@@ -1463,7 +1500,7 @@ def store_memory(text: str, event_type: str = "conversation") -> None:
     try:
         memory_store.store(
             text,
-            metadata={"project": "architect", "session_id": "architect_channel"},
+            metadata={"project": "proctor", "session_id": "proctor_channel"},
             event_type=event_type,
         )
     except Exception as e:
@@ -1601,7 +1638,7 @@ async def run_agent_loop(
     messages = [{"role": "system", "content": system_prompt}]
 
     # Add session history (prior conversation in this channel)
-    session_history = get_session_history(message.channel.id)
+    session_history = get_session_history(session_channel_id(message.channel))
     messages.extend(session_history)
 
     messages.append({"role": "user", "content": user_input})
@@ -1678,18 +1715,19 @@ async def run_agent_loop(
                 # Attach Regenerate button to streamed response (non-fleet only)
                 if not _fleet_chain_id and stream_msg.was_started:
                     try:
-                        view = ResponseView(message.channel.id)
+                        view = ResponseView(
+                            message.channel.id,
+                            show_proceed=should_attach_proceed(content),
+                        )
                         await stream_msg._stream_msg.edit(view=view)
                     except Exception as e:
                         log(f"Could not attach Regenerate button to streamed response: {e}", "WARN")
                 # Auto-thread for long streamed responses (non-fleet only)
                 if not _fleet_chain_id and (len(content) > THREAD_RESPONSE_THRESHOLD or len(progress.tool_calls) >= THREAD_TOOL_CALL_THRESHOLD):
-                    try:
-                        thread_name = f"Discussion: {message.content[:80]}"
-                        thread = await message.create_thread(name=thread_name, auto_archive_duration=60)
+                    thread_name = f"Discussion: {(getattr(message, 'content', None) or '')[:80]}"
+                    thread = await safe_create_thread(message, thread_name, auto_archive_duration=60)
+                    if thread:
                         log(f"Auto-thread created: {thread_name}", "INFO")
-                    except discord.HTTPException as e:
-                        log(f"Auto-thread creation failed: {e}", "WARN")
                 # Store the conversation exchange in persistent memory
                 store_memory(f"User: {user_input[:500]}\nProctor: {content[:500]}", event_type="conversation")
                 # Log the conversation as a change event for auditability
@@ -1702,8 +1740,8 @@ async def run_agent_loop(
                     outcome="completed",
                 )
                 # Add to session history
-                add_to_session_history(message.channel.id, "user", user_input)
-                add_to_session_history(message.channel.id, "assistant", content)
+                add_to_session_history(session_channel_id(message.channel), "user", user_input)
+                add_to_session_history(session_channel_id(message.channel), "assistant", content)
                 # If this was a FLEET delegation, send the response back to Schubert
                 if _fleet_chain_id:
                     try:
@@ -1889,50 +1927,88 @@ HEALTH_ESCALATION_COOLDOWN = 300  # seconds before re-escalating the same issue
 MAX_REMEDIATION_RETRIES = 3      # max auto-fix attempts before escalating
 
 # ---------------------------------------------------------------------------
+# Auto-Error Remediation Configuration
+# ---------------------------------------------------------------------------
+
+JOURNAL_ERROR_MONITOR_INTERVAL = 60   # seconds between journalctl error scans
+JOURNAL_ERROR_DEDUP_WINDOW = 300      # seconds to dedup the same error signature
+AUTO_REMEDIATION_MAX_PER_HOUR = 3     # max auto-remediation delegations per hour
+AUTO_REMEDIATION_COOLDOWN = 1800      # seconds before re-delegating the same error signature (30 min)
+NEVER_TOUCH_PATHS = {"AGENTS.md", ".env", "/opt/Project-Tango/AGENTS.md", "/opt/Project-Tango/.env"}
+
+# Bot services to monitor for errors
+MONITORED_BOT_SERVICES = [
+    "schubert-bot.service",
+    "schubert-architect.service",
+    "schubert-proctor.service",
+    "schubert-dr-voss.service",
+    "schubert-quartermaster.service",
+    "schubert-cartographer.service",
+]
+
+# Error patterns to look for in journalctl
+JOURNAL_ERROR_PATTERNS = [
+    "Traceback", "ValueError", "AttributeError", "TypeError",
+    "KeyError", "ImportError", "SyntaxError", "NameError",
+    "IndexError", "RuntimeError", "Exception",
+]
+
+# ---------------------------------------------------------------------------
 # Self-Improvement Configuration
 # ---------------------------------------------------------------------------
 
-# Paths — The Proctor optimizes BOTH itself and Admiral Schubert
-ARCHITECT_SCRIPT_PATH = "/opt/Project-Tango/scripts/architect-bot.py"
+# Paths — The Proctor assesses itself and Admiral Schubert.
+# Architect and Dr. Voss run their own AutoUpdaters; do not race them.
+PROCTOR_SCRIPT_PATH = "/opt/Project-Tango/scripts/proctor-bot.py"
 SCHUBERT_SCRIPT_PATH = "/opt/Project-Tango/scripts/schubert-bot-v2.py"
-METRICS_FILE = "/opt/Project-Tango/scripts/.architect-metrics.json"
-UPDATE_HISTORY_FILE = "/opt/Project-Tango/scripts/.architect-updates.json"
-PENDING_UPDATE_MARKER = "/opt/Project-Tango/scripts/.architect-pending-update"
-UPDATE_BACKUP_DIR = "/opt/Project-Tango/scripts/.architect-backups"
-GOLDEN_BACKUP_DIR = "/opt/Project-Tango/scripts/.architect-golden-backups"
+METRICS_FILE = "/opt/Project-Tango/scripts/.proctor-metrics.json"
+UPDATE_HISTORY_FILE = "/opt/Project-Tango/scripts/.proctor-updates.json"
+PENDING_UPDATE_MARKER = "/opt/Project-Tango/scripts/.proctor-pending-update"
+UPDATE_BACKUP_DIR = "/opt/Project-Tango/scripts/.proctor-backups"
+GOLDEN_BACKUP_DIR = "/opt/Project-Tango/scripts/.proctor-golden-backups"
 SCHUBERT_BACKUP_DIR = "/opt/Project-Tango/scripts/.schubert-backups"
+WEEKLY_STATE_FILE = "/opt/Project-Tango/scripts/.proctor-weekly-analysis.json"
+WEEKLY_INTERVAL = 7 * 24 * 60 * 60
 
 # Optimization targets — which bots the auto-updater can modify
 OPTIMIZATION_TARGETS = {
-    "architect": {
-        "path": ARCHITECT_SCRIPT_PATH,
+    "proctor": {
+        "path": PROCTOR_SCRIPT_PATH,
         "backup_dir": UPDATE_BACKUP_DIR,
         "golden_dir": GOLDEN_BACKUP_DIR,
-        "service": "schubert-architect",
+        "service": "schubert-proctor",
         "health_indicator": "MCP:.*tools available",
         "can_restart_self": True,
-        "source_max_chars": 30000,  # truncation for LLM context
+        "source_max_chars": 20000,
     },
     "schubert": {
         "path": SCHUBERT_SCRIPT_PATH,
         "backup_dir": SCHUBERT_BACKUP_DIR,
         "golden_dir": SCHUBERT_BACKUP_DIR + "-golden",
         "service": "schubert-bot",
-        "health_indicator": "MCP:.*tools available",  # schubert-bot also logs MCP tool count
-        "can_restart_self": False,  # architect can restart schubert, not itself
-        "source_max_chars": 30000,
+        "health_indicator": "MCP:.*tools available",
+        "can_restart_self": False,
+        "source_max_chars": 20000,
     },
 }
 
 # Cadence — assess every 6 hours, apply optimizations
-ASSESSMENT_INTERVAL = 6 * 60 * 60  # 6 hours in seconds
+ASSESSMENT_INTERVAL = int(_self_improvement.get("assessment_interval") or (6 * 60 * 60))
 ASSESSMENT_INTERVAL_SHORT = 60     # first few cycles run faster to bootstrap
 
-# Safety limits
-MAX_UPDATE_FILE_SIZE = 200 * 1024  # never write files > 200KB via auto-update
-MAX_AUTO_UPDATES_PER_DAY = 3       # cap self-modifications per day per target
-ROLLBACK_WAIT_TIME = 30            # seconds to wait after restart before health check
-MAX_CODE_CHANGES_PER_UPDATE = 5    # max distinct code changes in one update cycle
+# Safety limits — 512KB covers post-Nexus bot files (Architect 207KB, Proctor 229KB)
+MAX_UPDATE_FILE_SIZE = int(
+    _self_improvement.get("max_update_file_size")
+    or _self_improvement.get("max_file_size")
+    or (512 * 1024)
+)
+MAX_AUTO_UPDATES_PER_DAY = int(
+    _self_improvement.get("max_auto_updates_per_day")
+    or _self_improvement.get("max_updates_per_day")
+    or 3
+)
+ROLLBACK_WAIT_TIME = int(_self_improvement.get("rollback_wait_time") or 30)
+MAX_CODE_CHANGES_PER_UPDATE = int(_self_improvement.get("max_code_changes_per_update") or 5)
 
 # Post-update intensive monitoring — catch runtime crashes the watchdog misses
 INTENSIVE_MONITOR_INTERVAL = 10   # seconds between checks during intensive mode
@@ -1941,7 +2017,7 @@ INTENSIVE_MONITOR_ERROR_THRESHOLD = 3  # errors in intensive window → auto-rol
 
 # Change reversal detection — prevent oscillation
 REVERSAL_LOCK_DURATION = 24 * 60 * 60  # lock oscillating code sections for 24h
-LOCKED_SECTIONS_FILE = "/opt/Project-Tango/scripts/.architect-locked-sections.json"
+LOCKED_SECTIONS_FILE = "/opt/Project-Tango/scripts/.proctor-locked-sections.json"
 
 # Patterns the auto-updater must NEVER modify — protected code sections
 PROTECTED_PATTERNS = [
@@ -1954,15 +2030,15 @@ PROTECTED_PATTERNS = [
     "def _check_pending_update",
     "def _detached_restart",
     "ADMIN_USER_ID",
-    "ARCHITECT_SCRIPT_PATH",
+    "PROCTOR_SCRIPT_PATH",
     "MAX_AUTO_UPDATES_PER_DAY",
     "PROTECTED_PATTERNS",
     "ASSESSMENT_INTERVAL",
     "auto_update_enabled",
 ]
 
-# Auto-update is ON by default — kill switch via !autoupdate off
-auto_update_enabled = True
+# Auto-update follows fleet-config self_improvement.enabled (kill switch: !autoupdate off)
+auto_update_enabled = bool(_self_improvement.get("enabled", True)) and bool(_self_improvement.get("auto_update_enabled", True))
 
 # Services to monitor — (service_name, is_critical)
 # Critical services escalate immediately if they can't be restarted
@@ -1993,6 +2069,7 @@ class HealthMonitor:
         self.bot = bot_client
         self.mcp = mcp
         self._task: Optional[asyncio.Task] = None
+        self._journal_task: Optional[asyncio.Task] = None
         self._running = False
         self._last_check: Optional[float] = None
 
@@ -2003,6 +2080,11 @@ class HealthMonitor:
         # Track MCP tool count history
         self._last_mcp_tool_count = 0
 
+        # Auto-remediation tracking
+        # key: error_signature (file:line:error_type), value: {"first_seen": float, "last_delegated": float, "count": int}
+        self._remediation_history: dict[str, dict] = {}
+        self._remediation_timestamps: list[float] = []  # timestamps of delegations for rate limiting
+
     # -- Lifecycle --------------------------------------------------------
 
     async def start(self):
@@ -2011,7 +2093,8 @@ class HealthMonitor:
             return
         self._running = True
         self._task = asyncio.create_task(self._monitor_loop())
-        log("Health monitor started — checking every 60s", "INFO")
+        self._journal_task = asyncio.create_task(self._journal_error_monitor_loop())
+        log("Health monitor started — checking every 60s, journal error monitor every 60s", "INFO")
 
     async def stop(self):
         """Stop the background health monitoring loop."""
@@ -2023,6 +2106,13 @@ class HealthMonitor:
             except asyncio.CancelledError:
                 pass
             self._task = None
+        if self._journal_task:
+            self._journal_task.cancel()
+            try:
+                await self._journal_task
+            except asyncio.CancelledError:
+                pass
+            self._journal_task = None
         log("Health monitor stopped", "INFO")
 
     async def _monitor_loop(self):
@@ -2040,6 +2130,131 @@ class HealthMonitor:
 
             # Wait for next cycle
             await asyncio.sleep(HEALTH_CHECK_INTERVAL)
+
+    # -- Journal Error Monitor ---------------------------------------------
+
+    async def _journal_error_monitor_loop(self):
+        """Continuously scan bot service logs for Python errors and delegate fixes."""
+        await asyncio.sleep(30)  # Wait after startup
+
+        while self._running:
+            try:
+                await self._scan_bot_logs_for_errors()
+            except Exception as e:
+                log(f"Journal error monitor error: {e}", "ERROR")
+                import traceback
+                log(f"TRACEBACK: {traceback.format_exc()}", "ERROR")
+
+            await asyncio.sleep(JOURNAL_ERROR_MONITOR_INTERVAL)
+
+    async def _scan_bot_logs_for_errors(self):
+        """Scan journalctl for each monitored bot service and detect new errors."""
+        for service in MONITORED_BOT_SERVICES:
+            try:
+                _, logs = run_command(
+                    f"sudo journalctl -u {service} --since '{JOURNAL_ERROR_MONITOR_INTERVAL + 5} seconds ago' --no-pager -o cat 2>&1",
+                    timeout=10,
+                )
+                if not logs:
+                    continue
+
+                # Check for error patterns
+                for pattern in JOURNAL_ERROR_PATTERNS:
+                    if pattern not in logs:
+                        continue
+
+                    # Found an error — try to parse structured details
+                    error_details = parse_error_from_journal(logs, service)
+
+                    if error_details and error_details.is_actionable:
+                        # Check guardrails before delegating
+                        if self._can_delegate_remediation(error_details):
+                            await self._delegate_error_fix(error_details, service)
+                        else:
+                            log(f"Journal error monitor: {error_details.signature} suppressed (cooldown or rate limit)", "DEBUG")
+                    else:
+                        # Non-actionable error (no file/line info) — log only
+                        log(f"Journal error monitor: found '{pattern}' in {service} but could not parse traceback", "WARN")
+
+            except Exception as e:
+                log(f"Journal error monitor: failed to scan {service}: {e}", "WARN")
+
+    def _can_delegate_remediation(self, error: ErrorDetails) -> bool:
+        """Check if we can delegate this error for auto-remediation (guardrails)."""
+        now = time.time()
+        sig = error.signature
+
+        # Check cooldown for same error signature
+        history = self._remediation_history.get(sig)
+        if history:
+            if now - history.get("last_delegated", 0) < AUTO_REMEDIATION_COOLDOWN:
+                return False
+
+        # Check rate limit (max N delegations per hour)
+        self._remediation_timestamps = [ts for ts in self._remediation_timestamps if now - ts < 3600]
+        if len(self._remediation_timestamps) >= AUTO_REMEDIATION_MAX_PER_HOUR:
+            return False
+
+        # Check if the source file is in the never-touch list
+        if error.source_file in NEVER_TOUCH_PATHS:
+            return False
+
+        return True
+
+    async def _delegate_error_fix(self, error: ErrorDetails, service: str):
+        """Delegate an error to the Architect for auto-remediation via FLEET."""
+        now = time.time()
+        sig = error.signature
+
+        # Record this delegation
+        self._remediation_history[sig] = {
+            "first_seen": self._remediation_history.get(sig, {}).get("first_seen", now),
+            "last_delegated": now,
+            "count": self._remediation_history.get(sig, {}).get("count", 0) + 1,
+        }
+        self._remediation_timestamps.append(now)
+
+        # Build the FLEET delegation message
+        delegation_msg = (
+            f"**AUTO-REMEDIATION REQUEST — RUNTIME ERROR DETECTED**\n\n"
+            f"**Error Type:** {error.error_type}\n"
+            f"**Error Message:** {error.error_message}\n"
+            f"**Source File:** {error.source_file}\n"
+            f"**Source Line:** {error.source_line}\n"
+            f"**Source Function:** {error.source_function}\n"
+            f"**Service:** {service}\n\n"
+            f"**Traceback:**\n```\n{error.traceback_text[:1200]}\n```\n\n"
+            f"**Task:** Read the source file `{error.source_file}` around line {error.source_line}, "
+            f"diagnose the root cause of the `{error.error_type}`, and apply a fix. "
+            f"Then deploy the fix and restart {service}.\n\n"
+            f"**Guardrails:** Do NOT modify AGENTS.md or .env files. "
+            f"Test that the fix resolves the error without breaking existing functionality."
+        )
+
+        # Send to the delegation channel
+        channel = self.bot.get_channel(DELEGATION_CHANNEL_ID)
+        if channel:
+            # Split if too long for Discord
+            if len(delegation_msg) <= 1900:
+                await channel.send(delegation_msg)
+            else:
+                for chunk in _split_on_boundaries(delegation_msg, 1900):
+                    await channel.send(chunk)
+
+            log(f"Auto-remediation delegated: {sig} for {service}", "INFO")
+
+            # Also notify the main Proctor channel
+            main_channel = self.bot.get_channel(CHANNEL_ID)
+            if main_channel:
+                await main_channel.send(
+                    f"🔧 **Auto-remediation triggered**\n"
+                    f"Error: `{error.error_type}: {error.error_message}`\n"
+                    f"Source: `{error.source_file}:{error.source_line}` in `{error.source_function}`\n"
+                    f"Service: `{service}`\n"
+                    f"Delegated to The Architect for fix."
+                )
+        else:
+            log(f"Auto-remediation: could not find delegation channel {DELEGATION_CHANNEL_ID}", "ERROR")
 
     # -- Health Checks ----------------------------------------------------
 
@@ -2825,6 +3040,29 @@ metrics: Optional[MetricsCollector] = None
 #   - Update history: all changes are logged to JSON for auditability
 
 
+
+def _extract_assessment_text(response: dict | None) -> str:
+    """Pull proposal text out of a chat-completions payload."""
+    try:
+        from llm_response_utils import extract_llm_text
+        return extract_llm_text(response)
+    except Exception:
+        if not isinstance(response, dict):
+            return ""
+        choices = response.get("choices") or []
+        if not choices:
+            return ""
+        return ((choices[0] or {}).get("message") or {}).get("content") or ""
+
+
+def _describe_assessment_response(response: dict | None) -> str:
+    try:
+        from llm_response_utils import describe_llm_response
+        return describe_llm_response(response)
+    except Exception:
+        return str(type(response).__name__)
+
+
 class AutoUpdater:
     """Self-assessment and self-improvement engine for The Proctor."""
 
@@ -2943,6 +3181,12 @@ class AutoUpdater:
                 metrics_summary, recent_logs, current_source, target_name, source_max
             )
 
+            if proposals is None:
+                log(
+                    f"Assessment LLM failed for {target_name} — not treating as all-clear",
+                    "ERROR",
+                )
+                continue
             if not proposals:
                 log(f"No proposals for {target_name} this cycle", "INFO")
                 continue
@@ -2990,7 +3234,7 @@ class AutoUpdater:
                 metrics_summary,
             )
             # Start intensive monitoring if we restarted ourselves
-            if any_restarted and any(t == "architect" for t, _ in all_applied):
+            if any_restarted and any(OPTIMIZATION_TARGETS.get(t, {}).get("can_restart_self") for t, _ in all_applied):
                 await self._start_intensive_monitor()
         elif all_rejected > 0:
             await self._notify_assessment(
@@ -3002,8 +3246,9 @@ class AutoUpdater:
 
     async def _get_optimization_proposals(
         self, metrics_summary: dict, logs: str, source: str,
-        target_name: str = "architect", source_max_chars: int = 30000,
-    ) -> list[dict]:
+        target_name: str = "proctor", source_max_chars: int = 20000,
+        _retried: bool = False,
+    ) -> list[dict] | None:
         """Ask the LLM to analyze metrics and propose specific code optimizations."""
         # Truncate source to keep within token limits
         source_truncated = source[:source_max_chars]
@@ -3105,15 +3350,23 @@ Return ONLY the JSON array, no other text."""
             log(f"Optimization LLM call failed: {response.get('error', '?')}", "ERROR")
             return []
 
-        choices = response.get("choices", [])
-        if not choices:
-            log("No choices in optimization response", "WARN")
-            return []
-
-        content = choices[0].get("message", {}).get("content", "")
+        content = _extract_assessment_text(response)
         if not content:
-            log("Empty content in optimization response", "WARN")
-            return []
+            log(
+                f"Empty content in optimization response ({_describe_assessment_response(response)})",
+                "ERROR",
+            )
+            if not _retried and source_max_chars > 8000:
+                log(
+                    f"Retrying {target_name} assessment with truncated source "
+                    f"({source_max_chars // 2} chars)",
+                    "WARN",
+                )
+                return await self._get_optimization_proposals(
+                    metrics_summary, logs, source, target_name,
+                    source_max_chars // 2, _retried=True,
+                )
+            return None
 
         # Parse JSON from response — LLM may wrap in ```json blocks
         proposals = self._parse_proposals(content)
@@ -3231,7 +3484,7 @@ Return ONLY the JSON array, no other text."""
         old_code = proposal["old_code"]
         new_code = proposal["new_code"]
         description = proposal.get("description", "unknown")
-        target_path = target_config["path"] if target_config else ARCHITECT_SCRIPT_PATH
+        target_path = target_config["path"] if target_config else PROCTOR_SCRIPT_PATH
         backup_dir = target_config["backup_dir"] if target_config else UPDATE_BACKUP_DIR
 
         try:
@@ -3291,8 +3544,8 @@ Return ONLY the JSON array, no other text."""
         4. Checks health — if unhealthy, restores the latest backup
         5. Removes the marker
         """
-        service = target_config["service"] if target_config else "schubert-architect"
-        target_path = target_config["path"] if target_config else ARCHITECT_SCRIPT_PATH
+        service = target_config["service"] if target_config else "schubert-proctor"
+        target_path = target_config["path"] if target_config else PROCTOR_SCRIPT_PATH
         backup_dir = target_config["backup_dir"] if target_config else UPDATE_BACKUP_DIR
         health_indicator = target_config.get("health_indicator", "MCP:.*tools available") if target_config else "MCP:.*tools available"
         bot_prefix = "architect-bot" if target_name == "architect" else "schubert-bot-v2"
@@ -3636,7 +3889,7 @@ ls -t {backup_dir}/{backup_prefix}* 2>/dev/null | tail -n +11 | xargs rm -f 2>/d
             try:
                 # Check for errors in recent logs
                 _, logs = run_command(
-                    f"sudo journalctl -u schubert-architect --since '{check_interval + 2} seconds ago' --no-pager -o cat 2>&1",
+                    f"sudo journalctl -u schubert-proctor --since '{check_interval + 2} seconds ago' --no-pager -o cat 2>&1",
                     timeout=10,
                 )
                 if logs:
@@ -3649,7 +3902,7 @@ ls -t {backup_dir}/{backup_prefix}* 2>/dev/null | tail -n +11 | xargs rm -f 2>/d
                             log(f"Intensive monitor: found '{indicator}' in logs", "WARN")
 
                 # Check if service is still active
-                code, status = run_command("systemctl is-active schubert-architect")
+                code, status = run_command("systemctl is-active schubert-proctor")
                 if status.strip() != "active":
                     error_count += 2
                     log(f"Intensive monitor: service is {status.strip()}", "ERROR")
@@ -3674,9 +3927,14 @@ ls -t {backup_dir}/{backup_prefix}* 2>/dev/null | tail -n +11 | xargs rm -f 2>/d
     async def _auto_rollback(self):
         """Automatically rollback to the latest backup and restart."""
         try:
-            backup_dir = OPTIMIZATION_TARGETS["architect"]["backup_dir"]
-            target_path = ARCHITECT_SCRIPT_PATH
-            backup_prefix = "architect-bot.py.bak."
+            self_target = next(
+                (n for n, c in OPTIMIZATION_TARGETS.items() if c.get("can_restart_self")),
+                next(iter(OPTIMIZATION_TARGETS)),
+            )
+            cfg = OPTIMIZATION_TARGETS[self_target]
+            backup_dir = cfg["backup_dir"]
+            target_path = cfg["path"]
+            backup_prefix = os.path.basename(target_path) + ".bak."
 
             backups = sorted(
                 [f for f in os.listdir(backup_dir) if f.startswith(backup_prefix)],
@@ -3685,16 +3943,16 @@ ls -t {backup_dir}/{backup_prefix}* 2>/dev/null | tail -n +11 | xargs rm -f 2>/d
             if backups:
                 backup_path = os.path.join(backup_dir, backups[0])
                 shutil.copy2(backup_path, target_path)
-                run_command("sudo systemctl restart schubert-architect")
+                run_command(f"sudo systemctl restart {cfg.get('service', 'schubert-proctor')}")
                 log(f"Auto-rolled back to {backups[0]}", "INFO")
                 if metrics:
                     metrics.record_auto_update("auto_rollback", False)
             else:
                 # Try golden backup
-                golden = self._get_golden_backup_path("architect")
+                golden = self._get_golden_backup_path(self_target)
                 if golden:
                     shutil.copy2(golden, target_path)
-                    run_command("sudo systemctl restart schubert-architect")
+                    run_command(f"sudo systemctl restart {cfg.get('service', 'schubert-proctor')}")
                     log("Auto-rolled back to golden backup", "INFO")
                 else:
                     log("No backups available for auto-rollback!", "ERROR")
@@ -3768,6 +4026,7 @@ def get_mcp_configs() -> list[MCPServerConfig]:
         ("ollama", "http://127.0.0.1:8063/mcp", "MCP_OLLAMA_TOKEN"),
         ("github", "http://127.0.0.1:8091", "MCP_GITHUB_TOKEN"),
         ("gmail_freelance", "http://127.0.0.1:8071/mcp", "MCP_GMAIL_TOKEN"),
+        ("outline", "http://127.0.0.1:3101/mcp", "MCP_OUTLINE_TOKEN"),
     ]
     for name, url, token_env in servers:
         token = os.environ.get(token_env, "")
@@ -3843,7 +4102,8 @@ async def handle_multi_agent_message(message: discord.Message):
         return
     
     # Check cooldown
-    if not _coordinator.check_cooldown(message.channel.id, agent_profile.cooldown_seconds):
+    # @mention (score 1.0) skips cooldown so follow-ups are not dropped.
+    if score < 1.0 and not _coordinator.check_cooldown(message.channel.id, agent_profile.cooldown_seconds):
         log(f"Cooldown active for channel {message.channel.id}, skipping", "INFO")
         return
     
@@ -4017,32 +4277,39 @@ async def handle_single_agent_message(message: discord.Message):
         metrics.record_agent_request()
 
     _last_inputs[message.channel.id] = user_input
+    _last_user_messages[message.channel.id] = message
 
     # Thread isolation — decide whether to create a dedicated thread
-    use_thread = should_use_thread(user_input)
+    use_thread = should_use_thread(user_input) and not isinstance(message.channel, discord.Thread) and not message.author.bot
     response_channel = message.channel
     
     if use_thread and not _fleet_chain_id:  # Only create threads for non-FLEET requests
         thread_name = f"🔧 Task: {user_input[:80]}{'...' if len(user_input) > 80 else ''}"
         try:
-            thread = await message.create_thread(
-                name=thread_name,
-                auto_archive_duration=1440,  # 24 hours
+            thread = await safe_create_thread(
+                message, thread_name, auto_archive_duration=1440
             )
-            response_channel = thread
-            
-            # Notify in main channel (silent)
-            await message.reply(
-                f"📋 Started a thread for this task: {thread.jump_url}",
-                silent=True,
-            )
-            log(f"Created thread for task: {thread_name}", "INFO")
+            if thread:
+                response_channel = thread
+                try:
+                    await message.reply(
+                        f"📋 Started a thread for this task: {thread.jump_url}",
+                        silent=True,
+                    )
+                except Exception as e:
+                    log(f"Could not notify main channel of new thread: {e}", "WARN")
+                log(f"Created thread for task: {thread_name}", "INFO")
+            else:
+                response_channel = message.channel
         except Exception as e:
             log(f"Failed to create thread, using main channel: {e}", "WARN")
             response_channel = message.channel
 
+    _last_inputs[response_channel.id] = user_input
+    _last_user_messages[response_channel.id] = message
+
     # Start progress view in the response channel
-    progress = AgentProgressView(message if not use_thread else thread)
+    progress = AgentProgressView(response_channel)
     if _fleet_chain_id:
         progress._is_fleet_request = True
     await progress.start(f"Working on: {user_input[:200]}")
@@ -4065,8 +4332,11 @@ async def handle_single_agent_message(message: discord.Message):
     except Exception as e:
         log(f"Agent error: {e}", "ERROR")
         import traceback
-        log(f"TRACEBACK: {traceback.format_exc()}", "ERROR")
-        await progress.finalize(f"❌ Error: {str(e)[:500]}")
+        tb = traceback.format_exc()
+        log(f"TRACEBACK: {tb}", "ERROR")
+        tb_lines = tb.strip().split('\n')
+        compact_tb = '\n'.join(tb_lines[-7:]) if len(tb_lines) > 7 else tb
+        await progress.finalize(f"❌ Error: {str(e)[:200]}\n```\n{compact_tb[:1500]}\n```")
     finally:
         _running_tasks.pop(message.channel.id, None)
 
@@ -4115,37 +4385,49 @@ async def _daily_report_loop():
                         for chunk in _split_on_boundaries(report, 1900):
                             await channel.send(chunk)
                     log("Daily performance report posted to proctor-analysis", "INFO")
-                    
-                    # Send Slack notification with report summary
-                    slack_notifier = get_slack_notifier(mcp_client)
-                    try:
-                        # Extract summary from report (first 500 chars or until first major section)
-                        summary = report[:500] + "..." if len(report) > 500 else report
-                        asyncio.create_task(slack_notifier.send_performance_report(
-                            title="📊 Daily Performance Report",
-                            message=f"The Proctor has generated the daily performance report:\n\n{summary}\n\n"
-                                    f"*Full report posted to Discord #proctor-analysis*",
-                            bot_name="The Proctor",
-                            metadata={
-                                "report_date": now.strftime("%Y-%m-%d"),
-                                "report_time_utc": now.strftime("%H:%M:%S"),
-                                "report_length": str(len(report))
-                            }
-                        ))
-                    except Exception as slack_err:
-                        log(f"Slack notification failed: {slack_err}", "WARN")
+
+                    # Slack notification disabled — was sending messages as user to work channels
+                    # slack_notifier = get_slack_notifier(mcp_client)
+                    # try:
+                    #     summary = report[:500] + "..." if len(report) > 500 else report
+                    #     asyncio.create_task(slack_notifier.send_performance_report(...))
+                    # except Exception as slack_err:
+                    #     log(f"Slack notification failed: {slack_err}", "WARN")
         except asyncio.CancelledError:
             break
         except Exception as e:
             log(f"Daily report error: {e}", "WARN")
 
 
+def _load_weekly_last_run() -> float:
+    try:
+        with open(WEEKLY_STATE_FILE, "r") as f:
+            return float(json.load(f).get("last_run", 0) or 0)
+    except Exception:
+        return 0.0
+
+
+def _save_weekly_last_run(ts: float) -> None:
+    try:
+        with open(WEEKLY_STATE_FILE, "w") as f:
+            json.dump({"last_run": ts}, f)
+    except Exception as e:
+        log(f"Could not persist weekly analysis timestamp: {e}", "WARN")
+
+
 async def _weekly_analysis_loop():
     """Background task that performs weekly optimization analysis and delegates to Architect."""
     while True:
         try:
-            # Run every 7 days
-            await asyncio.sleep(7 * 24 * 60 * 60)
+            last = _load_weekly_last_run()
+            now = time.time()
+            if last:
+                due_in = max(0.0, (last + WEEKLY_INTERVAL) - now)
+            else:
+                due_in = 300.0  # first run 5 min after boot, not 7 days
+            if due_in > 0:
+                log(f"Weekly analysis sleeping {due_in / 3600:.2f}h (persisted last_run)", "INFO")
+                await asyncio.sleep(due_in)
 
             if _performance_tracker:
                 violations = _performance_tracker.check_thresholds()
@@ -4180,10 +4462,12 @@ async def _weekly_analysis_loop():
                         log(f"Weekly optimization proposal {proposal.proposal_id} delegated to Architect", "INFO")
                 else:
                     log("Weekly analysis: all metrics within thresholds — no optimization needed", "INFO")
+            _save_weekly_last_run(time.time())
         except asyncio.CancelledError:
             break
         except Exception as e:
             log(f"Weekly analysis error: {e}", "WARN")
+            await asyncio.sleep(3600)
 
 
 async def _auto_join_channels():
@@ -4368,6 +4652,13 @@ async def on_message(message: discord.Message):
 
     # Ignore own messages
     if message.author.id == bot.user.id:
+        return
+
+    # --- Ignore other bots outside of multi-agent channels ---
+    # Bots should only interact in designated multi-agent channels.
+    # In their own channels or other bots' channels, ignore bot messages
+    # to prevent feedback loops.
+    if message.author.bot and not is_multi_agent_channel(message.channel.id):
         return
 
     # === SILENT OBSERVATION MODE ===
@@ -4624,7 +4915,7 @@ async def handle_command(message: discord.Message):
             result = handle_query_memory({"type": "recent"})
             await message.reply(result[:1900])
         elif args.startswith("clear"):
-            clear_session_history(message.channel.id)
+            clear_session_history(session_channel_id(message.channel))
             await message.reply("Session history cleared (persistent memories are retained).")
         elif args.startswith("stats"):
             result = handle_query_memory({"type": "stats"})
@@ -4987,7 +5278,11 @@ async def handle_command(message: discord.Message):
 # Main
 # ---------------------------------------------------------------------------
 
+_SINGLETON_LOCK = None
+
 def main():
+    global _SINGLETON_LOCK
+    _SINGLETON_LOCK = acquire_singleton("proctor")
     if not BOT_TOKEN:
         print("ERROR: PROCTOR_BOT_TOKEN not set in environment")
         sys.exit(1)

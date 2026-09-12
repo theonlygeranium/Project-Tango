@@ -1,0 +1,18 @@
+[Unit]
+Description=Dr. Cortex - Chief Science Officer Bot (AI Research & Optimization)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/Project-Tango/backend/venv/bin/python /opt/Project-Tango/scripts/cortex-bot.py
+WorkingDirectory=/opt/Project-Tango
+EnvironmentFile=/opt/Project-Tango/.env
+User=root
+Group=root
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/var/log/schubert-cortex.log
+StandardError=append:/var/log/schubert-cortex.log
+
+[Install]
+WantedBy=multi-user.target

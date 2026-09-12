@@ -278,6 +278,35 @@ sudo systemctl restart tango-backend tango-web
 curl -s https://tango-api.schubert.life/healthz
 ```
 
+### MCP Voice Tools (SPEC-006)
+
+The deploy script (`scripts/deploy.sh`) automatically symlinks
+`scripts/mcp_client.py` → `backend/mcp_client.py` so the voice worker can
+import the MCP client. If deploying manually:
+
+```bash
+ln -sf /opt/Project-Tango/scripts/mcp_client.py /opt/Project-Tango/backend/mcp_client.py
+```
+
+Environment variables for MCP server bearer tokens (shared with the Discord
+fleet) must be set in `/opt/Project-Tango/.env`:
+
+```
+TANGO_MCP_TOOLS=true          # Master switch; set false to disable
+MCP_SCHUBERT_TOKEN=            # Bearer token for schubert MCP server
+MCP_POSTGRES_TOKEN=            # Bearer token for postgres MCP server
+MCP_REDIS_TOKEN=               # Bearer token for redis MCP server
+MCP_OLLAMA_TOKEN=              # Bearer token for ollama MCP server
+MCP_GITHUB_TOKEN=              # GitHub PAT (passed as Bearer header)
+```
+
+Verify the bridge connected after restart:
+
+```bash
+sudo journalctl -u tango-backend -n 50 --no-pager | grep "Voice MCP bridge"
+# Expected: "Voice MCP bridge connected: N tools discovered"
+```
+
 ---
 
 ## Local Development Setup

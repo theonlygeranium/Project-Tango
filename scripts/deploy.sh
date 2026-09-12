@@ -49,6 +49,11 @@ chown -R "$APP_USER:$APP_GROUP" /opt/Project-Tango/frontend/.next /opt/Project-T
 run_as_app_user npm ci --silent >> "$DEPLOY_LOG" 2>&1
 run_as_app_user npm run build >> "$DEPLOY_LOG" 2>&1
 
+# Symlink mcp_client.py into backend/ so the voice worker can import it.
+# The MCP client lives in scripts/ (used by the Discord fleet); the voice
+# backend imports from backend/. This symlink avoids duplicating the code.
+ln -sf /opt/Project-Tango/scripts/mcp_client.py /opt/Project-Tango/backend/mcp_client.py
+
 # Copy static assets into standalone output (required for Next.js standalone mode)
 # Without this, _next/static/* returns 404 and the app has no CSS or JS chunks.
 run_as_app_user rm -rf /opt/Project-Tango/frontend/.next/standalone/.next/static

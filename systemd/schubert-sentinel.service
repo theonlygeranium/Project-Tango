@@ -1,0 +1,22 @@
+[Unit]
+Description=Schubert Sentinel — Autonomous testing and validation agent (NX-SPEC-10)
+After=network-online.target redis-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/Project-Tango/venv/bin/python -m nexus.testing.sentinel
+WorkingDirectory=/opt/Project-Tango
+User=root
+Group=root
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+EnvironmentFile=/opt/Project-Tango/.env
+Environment=PYTHONPATH=/opt/Project-Tango/src
+Environment=SENTINEL_TEST_CYCLE_INTERVAL=21600
+Environment=SENTINEL_SWEEP_INTERVAL=86400
+
+[Install]
+WantedBy=multi-user.target

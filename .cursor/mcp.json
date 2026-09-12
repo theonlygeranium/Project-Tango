@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "env": {}
+    },
+    "outline": {
+      "url": "http://127.0.0.1:3101/mcp",
+      "headers": {
+        "Authorization": "Bearer ol_api_0HrC2D96bEAy4wlYB5Mz1CN4P3SKrYYftACiYY"
+      }
+    }
+  }
+}

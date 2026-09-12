@@ -1,0 +1,51 @@
+{
+  "totals": {
+    "llm_calls": 4,
+    "llm_errors": 2,
+    "tool_calls": 0,
+    "tool_errors": 0,
+    "agent_requests": 2,
+    "heal_events": 0,
+    "escalations": 8,
+    "auto_updates": 10,
+    "rollbacks": 0
+  },
+  "daily": {
+    "2026-08-18": {
+      "llm_calls": 4,
+      "llm_errors": 2,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 2,
+      "heal_events": 0,
+      "auto_updates": 10
+    }
+  },
+  "llm_latencies": [
+    {
+      "latency": 49.75349950790405,
+      "model": "writer/claude-sonnet-4-5",
+      "ts": 1787038518.27487
+    },
+    {
+      "latency": 31.331221103668213,
+      "model": "writer/claude-sonnet-4-5",
+      "ts": 1787038550.0586143
+    },
+    {
+      "latency": 0.0075113773345947266,
+      "model": "writer/claude-sonnet-4-5",
+      "ts": 1787039492.4047313
+    },
+    {
+      "latency": 0.0073359012603759766,
+      "model": "writer/claude-sonnet-4-5",
+      "ts": 1787039518.5789683
+    }
+  ],
+  "tool_usage": {},
+  "errors": [],
+  "model_usage": {
+    "writer/claude-sonnet-4-5": 4
+  }
+}

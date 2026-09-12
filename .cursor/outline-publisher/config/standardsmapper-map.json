@@ -1,0 +1,29 @@
+{
+  "workspace_url": "https://wiki.edstratumlabs.ai",
+  "ssh_host": "schubert",
+  "api_base_url": "http://127.0.0.1:3101/api",
+  "collection": {
+    "id": "6aa4d303-7ec5-4150-aab7-f02e926ffe83",
+    "name": "standardsmapper",
+    "required_permission": null,
+    "max_active_users": 1,
+    "max_memberships": 1,
+    "sharing_must_be_disabled": true
+  },
+  "keychain": {
+    "service": "codex.standardsmapper.outline",
+    "account": "$USER"
+  },
+  "documents": {
+    "StandardsMapper Home": "998a7e33-db59-42fe-93ad-31a5ba98a0f1",
+    "Product & Experience": "27d00dc4-3873-42a3-b937-7eb47d847296",
+    "System Architecture": "73ff94b7-9a2f-4061-bd68-9e38a9468352",
+    "Delivery & Operations": "485042ae-b477-4916-b3f1-deac644e8a1c",
+    "Governance & Evidence": "539af897-a173-440e-9122-9e525d25de45",
+    "Current Status Snapshot": "59400e1f-1a29-42f8-a587-06ad257463ac",
+    "Phase 1 Task Receipts": "08bb22ce-828b-4ac9-8ce5-1a7b15277cce",
+    "Change Log & Knowledge Base Updates": "51079745-5471-43d2-89fb-4467bc2313db"
+  },
+  "vault_root_title": null,
+  "update_log_title": "Change Log & Knowledge Base Updates"
+}

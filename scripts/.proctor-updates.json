@@ -1,0 +1,232 @@
+[
+  {
+    "timestamp": "2026-08-22T20:09:51.852605+00:00",
+    "target": "proctor",
+    "description": "Fix MODEL_CATEGORIES Claude entries \u2014 all 5 entries incorrectly list writer/palmyra-x6 instead of actual Claude models",
+    "rationale": "The Claude category is populated with Palmyra model identifiers, meaning users selecting 'Claude' from the dropdown would actually get Palmyra x6. This is a clear copy-paste bug that makes the model switching UI misleading and broken for Claude models.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    \"Claude\": [\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n    ],",
+    "new_code_preview": "    \"Claude\": [\n        \"anthropic/claude-sonnet-4-5\",\n        \"anthropic/claude-sonnet-4\",\n        \"anthropic/claude-opus-4\",\n        \"anthropic/claude-3.5-sonnet\",\n        \"anthropic/claude-3-opus\","
+  },
+  {
+    "timestamp": "2026-08-22T20:09:51.883083+00:00",
+    "target": "proctor",
+    "description": "Remove overly generic terms from CODING_PATTERNS that cause false-positive coding model selection for monitoring tasks",
+    "rationale": "The Proctor is a monitoring/observability bot \u2014 terms like 'log', 'error', 'api', 'database', 'query', 'service', 'test', and 'thread' appear in almost every monitoring request. These generic terms cause is_coding_task() to return True for routine monitoring queries, unnecessarily switching to the coding model and adding latency. Removing them keeps coding detection accurate for actual code-editing tasks.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    # Dev concepts\n    \"error\", \"traceback\", \"exception\", \"stack trace\", \"log\",\n    \"regex\", \"api\", \"endpoint\", \"database\", \"query\", \"schema\",\n    \"service\", \"systemd\", \"restart\", \"deploy\", \"commit\", ",
+    "new_code_preview": "    # Dev concepts (specific enough to avoid false positives in monitoring tasks)\n    \"traceback\", \"exception\", \"stack trace\",\n    \"regex\", \"endpoint\", \"schema\",\n    \"systemd\", \"restart\", \"deploy\", \"c"
+  },
+  {
+    "timestamp": "2026-08-22T20:09:51.965267+00:00",
+    "target": "proctor",
+    "description": "Increase LLM_MAX_TOKENS default to reduce truncation risk for complex observability analysis",
+    "rationale": "The Proctor specializes in log analysis, metrics collection, and incident detection \u2014 tasks that often produce detailed, lengthy responses. With 4096 max tokens, complex log analysis or multi-service health reports may get truncated, requiring follow-up calls that increase total latency (currently 22.2s avg). Doubling the token limit allows the model to complete analysis in a single call.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_MAX_TOKENS = _llm.get(\"max_tokens\", 4096)",
+    "new_code_preview": "LLM_MAX_TOKENS = _llm.get(\"max_tokens\", 8192)"
+  },
+  {
+    "timestamp": "2026-08-23T14:18:48.568676+00:00",
+    "target": "schubert",
+    "description": "Reduce LLM timeout from 120s to 90s for faster failure on hung requests",
+    "rationale": "Average LLM latency is 27.23s. A 120s timeout means a hung request blocks the bot for 2 full minutes before failing. 90s still provides ample headroom (3.3x the average) while failing 25% faster on stuck requests, improving error recovery and user experience.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 120",
+    "new_code_preview": "LLM_TIMEOUT = 90"
+  },
+  {
+    "timestamp": "2026-08-23T14:18:48.588427+00:00",
+    "target": "schubert",
+    "description": "Reduce session history token budget from 1536 to 1024 to offset 194-tool context bloat",
+    "rationale": "With 194 MCP tools in the context, tool definitions alone consume a massive portion of the context window. Reducing session history from 1536 to 1024 tokens frees ~512 tokens for tool definitions and memory injection without losing meaningful conversation continuity. This directly addresses the 27s latency by reducing total input token count.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_HISTORY_MAX_TOKENS = 1536  # Reserve ~37% of context for session history, leaving more for tool outputs and memory",
+    "new_code_preview": "SESSION_HISTORY_MAX_TOKENS = 1024  # Reduced from 1536: 194 MCP tool definitions consume significant context; 1024 tokens (~25%) still preserves recent conversation continuity"
+  },
+  {
+    "timestamp": "2026-08-23T14:18:48.607624+00:00",
+    "target": "schubert",
+    "description": "Reduce LLM max output tokens from 4096 to 2048 for faster response generation",
+    "rationale": "For a Discord chat bot with a nautical persona, 4096 output tokens is excessive \u2014 most responses are a few paragraphs. Halving to 2048 reduces generation time significantly (output token count is the primary driver of LLM latency), directly addressing the 27s average latency. The voice prompt already asks for 2-4 sentences, and text responses rarely need more than 2048 tokens.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_MAX_TOKENS = 4096",
+    "new_code_preview": "LLM_MAX_TOKENS = 2048"
+  },
+  {
+    "timestamp": "2026-08-23T14:18:48.689405+00:00",
+    "target": "schubert",
+    "description": "Add tool selection guidance to system prompt MCP section to reduce LLM cognitive load",
+    "rationale": "With 194 tools, the LLM may waste inference time scanning all tool definitions. Explicitly instructing it to first identify the relevant server namespace, then select tools only from that server, reduces the decision space and should improve both latency and tool selection accuracy. This is a zero-risk prompt change that guides the LLM's attention.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "These tools are discovered dynamically. Use them when the task requires external service access.",
+    "new_code_preview": "These tools are discovered dynamically. You have nearly 200 tools available \u2014 do NOT scan or reason through all of them. Instead, identify the relevant server (github, gmail_freelance, schubert, postg"
+  },
+  {
+    "timestamp": "2026-08-23T14:18:48.801485+00:00",
+    "target": "schubert",
+    "description": "Reduce MCP tool retry initial delay from 1.0s to 0.5s for faster recovery",
+    "rationale": "With exponential backoff, the initial delay of 1.0s means 3 retries take 1+2+4=7s. Reducing to 0.5s makes 3 retries take 0.5+1+2=3.5s, cutting retry overhead by 50% while still providing backoff. This improves recovery speed when MCP servers have transient connection issues without increasing load.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MCP_TOOL_RETRY_DELAY = 1.0  # seconds, exponential backoff",
+    "new_code_preview": "MCP_TOOL_RETRY_DELAY = 0.5  # seconds, exponential backoff (reduced from 1.0 for faster transient failure recovery)"
+  },
+  {
+    "timestamp": "2026-08-25T08:22:40.579118+00:00",
+    "target": "schubert",
+    "description": "Fix MODEL_CATEGORIES Claude entries \u2014 all 5 entries are duplicates of writer/palmyra-x6 instead of actual Claude models",
+    "rationale": "The Claude category contains 5 identical copies of writer/palmyra-x6 \u2014 a clear copy-paste bug. Users selecting 'Claude' models get Palmyra instead. This fixes the routing to actual Anthropic Claude models via LiteLLM.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    \"Claude\": [\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n    ],",
+    "new_code_preview": "    \"Claude\": [\n        \"anthropic/claude-sonnet-4-20250514\",\n        \"anthropic/claude-3-5-sonnet-20241022\",\n        \"anthropic/claude-3-5-haiku-20241022\",\n        \"anthropic/claude-3-opus-20240229\","
+  },
+  {
+    "timestamp": "2026-08-25T08:22:40.600759+00:00",
+    "target": "schubert",
+    "description": "Reduce LLM_TIMEOUT from 90s to 60s \u2014 avg latency is 25.4s, so 60s provides ample margin while failing faster on hung requests",
+    "rationale": "With avg_llm_latency_s of 25.4s, a 90s timeout is overly generous. Hung requests waste the Captain's time for 90s before failing. 60s gives 2.3x the average latency as margin, which is sufficient. The 1 LLM error in the last 7 days may have been a timeout that could have recovered faster.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 90",
+    "new_code_preview": "LLM_TIMEOUT = 60"
+  },
+  {
+    "timestamp": "2026-08-25T08:22:40.667221+00:00",
+    "target": "schubert",
+    "description": "Reduce AGENT_TIMEOUT from 300s to 180s \u2014 5 minutes is excessive for a single agent loop iteration",
+    "rationale": "A 5-minute agent timeout means the Captain could wait 5 minutes before a single agent loop fails. With 25.4s avg LLM latency and MAX_ITERATIONS=30, most agent loops should complete well under 3 minutes. 180s still allows complex multi-tool investigations while preventing indefinite hangs.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "AGENT_TIMEOUT = 300",
+    "new_code_preview": "AGENT_TIMEOUT = 180"
+  },
+  {
+    "timestamp": "2026-08-25T08:22:40.688425+00:00",
+    "target": "schubert",
+    "description": "Reduce SESSION_HISTORY_MAX_TOKENS from 1024 to 768 \u2014 194 MCP tool definitions consume significant context budget",
+    "rationale": "With 194 MCP tool definitions consuming substantial context tokens, and the verbose system prompt, 1024 tokens for session history is still too generous. 768 tokens (~4-6 exchanges) is sufficient for conversation continuity while freeing ~256 tokens for memory injection and tool output.",
+    "risk_level": "medium",
+    "success": true,
+    "old_code_preview": "SESSION_HISTORY_MAX_TOKENS = 1024  # Reduced from 1536: 194 MCP tool definitions consume significant context; 1024 tokens (~25%) still preserves recent conversation continuity",
+    "new_code_preview": "SESSION_HISTORY_MAX_TOKENS = 768  # Reduced from 1024: 194 MCP tool definitions + system prompt consume ~60% of context; 768 tokens for history still preserves 4-6 recent exchanges"
+  },
+  {
+    "timestamp": "2026-08-25T08:22:40.709960+00:00",
+    "target": "schubert",
+    "description": "Compress system prompt MCP Tools section \u2014 remove verbose server descriptions and tool counts that are already discovered dynamically",
+    "rationale": "The original MCP section is 8 lines of verbose per-server descriptions with tool counts that are already visible in the tool definitions themselves. Compressing to 3 lines saves ~150 tokens of system prompt on every LLM call. With 52 calls/week, this saves ~7,800 tokens/week. The essential instruction (don't scan all tools, identify the server first) is preserved.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "## MCP Tools Available\nYou have access to MCP (Model Context Protocol) tools from multiple servers. Tool names are namespaced as \"server__tool_name\" (e.g., \"github__create_issue\"). Available servers i",
+    "new_code_preview": "## MCP Tools Available\nYou have MCP tools from multiple servers, namespaced as \"server__tool_name\" (e.g., \"github__create_issue\"). Servers: github, gmail_freelance, schubert, postgres, redis, ollama. "
+  },
+  {
+    "timestamp": "2026-09-10T06:48:37.074906+00:00",
+    "target": "schubert",
+    "description": "Add MCP reconnection interval constant for failed servers",
+    "rationale": "Logs show 3 MCP servers (schubert, gmail_freelance, slack) failing at startup with no reconnection attempt. Adding a reconnection interval constant enables a background task to retry failed servers periodically, improving MCP resilience \u2014 the #1 optimization priority.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MCP_DISCOVERY_TIMEOUT = 10  # seconds (increased from 5 to reduce discovery failures)",
+    "new_code_preview": "MCP_DISCOVERY_TIMEOUT = 10  # seconds (increased from 5 to reduce discovery failures)\nMCP_RECONNECT_INTERVAL = 300  # seconds between reconnection attempts for failed MCP servers"
+  },
+  {
+    "timestamp": "2026-09-10T06:48:37.145226+00:00",
+    "target": "schubert",
+    "description": "Reduce LLM_MAX_TOKENS from 2048 to 1024 to cut latency",
+    "rationale": "Average LLM latency is 22.88s with 0 tool calls \u2014 the bot is generating text-only responses. Most chat responses need <512 tokens. Reducing max_tokens to 1024 cuts generation time roughly in half for typical responses while preserving headroom for longer diagnostic outputs.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_MAX_TOKENS = 2048",
+    "new_code_preview": "LLM_MAX_TOKENS = 1024  # Reduced from 2048: most responses need <512 tokens; 1024 provides headroom while reducing avg latency from ~23s"
+  },
+  {
+    "timestamp": "2026-09-10T06:48:37.164413+00:00",
+    "target": "schubert",
+    "description": "Fix system prompt tool count mismatch (says ~200, actual is 127)",
+    "rationale": "The system prompt claims ~200 tools but logs show 127 connected. It also omits the 'outline' server which has 19 tools connected. Incorrect tool counts can cause the LLM to hallucinate tool names or waste tokens scanning for non-existent tools.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "Servers: github, gmail_freelance, schubert, postgres, redis, ollama. ~200 tools are available \u2014 do NOT scan all of them.",
+    "new_code_preview": "Servers: github, gmail_freelance, schubert, postgres, redis, ollama, outline. Over 100 tools are available \u2014 do NOT scan all of them."
+  },
+  {
+    "timestamp": "2026-09-10T06:48:37.233102+00:00",
+    "target": "schubert",
+    "description": "Tune SESSION_HISTORY_MAX_TOKENS to 640 and fix stale comment",
+    "rationale": "With 127 tool definitions consuming significant context, 768 tokens for history is excessive when 0 tool calls have been made in 7 days. Reducing to 640 frees context budget for memory injection while still preserving 3-5 recent exchanges \u2014 sufficient for conversational continuity.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_HISTORY_MAX_TOKENS = 768  # Reduced from 1024: 194 MCP tool definitions + system prompt consume ~60% of context; 768 tokens for history still preserves 4-6 recent exchanges",
+    "new_code_preview": "SESSION_HISTORY_MAX_TOKENS = 640  # Reduced from 768: 127 MCP tool definitions + system prompt consume ~65% of context; 640 tokens for history still preserves 3-5 recent exchanges"
+  },
+  {
+    "timestamp": "2026-09-10T06:48:37.252448+00:00",
+    "target": "schubert",
+    "description": "Add stale user cleanup to rate limiter to prevent memory leak",
+    "rationale": "The _command_timestamps dict accumulates entries for every user who ever sends a command, never removing inactive users. Over weeks/months in long-running channels, this grows unboundedly. Adding a size-based cleanup prevents the memory leak identified in optimization priority #6.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "def check_rate_limit(user_id: int) -> bool:\n    now = time.time()\n    if user_id not in _command_timestamps:\n        _command_timestamps[user_id] = []\n    _command_timestamps[user_id] = [\n        t fo",
+    "new_code_preview": "def check_rate_limit(user_id: int) -> bool:\n    now = time.time()\n    # Periodic cleanup: remove stale user entries to prevent unbounded dict growth\n    if len(_command_timestamps) > 1000:\n        _co"
+  },
+  {
+    "timestamp": "2026-09-11T00:51:17.648072+00:00",
+    "target": "schubert",
+    "description": "Reduce LLM_TIMEOUT from 60s to 45s for faster failure detection",
+    "rationale": "Average LLM latency is 23.01s. A 45s timeout provides ~2x headroom over average while failing hung requests 15s sooner, reducing user wait time on stuck calls. The single error in 312 calls (0.3% error rate) suggests timeouts are rare, so 45s is safe.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 60",
+    "new_code_preview": "LLM_TIMEOUT = 45"
+  },
+  {
+    "timestamp": "2026-09-11T00:51:17.666251+00:00",
+    "target": "schubert",
+    "description": "Reduce AGENT_TIMEOUT from 180s to 120s",
+    "rationale": "A 3-minute agent timeout is excessive. With 0 agent requests in 7 days, the agent loop is rarely used. 120s (2 minutes) is sufficient for multi-step tool chains while preventing long-running stuck agents from consuming resources.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "AGENT_TIMEOUT = 180",
+    "new_code_preview": "AGENT_TIMEOUT = 120"
+  },
+  {
+    "timestamp": "2026-09-11T00:51:17.734956+00:00",
+    "target": "schubert",
+    "description": "Reduce SHELL_TIMEOUT from 120s to 90s",
+    "rationale": "Most shell commands (systemctl, git, log viewing) complete in under 10s. A 90s timeout still allows for longer operations like git clones or large file processing while failing truly hung commands 30s sooner.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SHELL_TIMEOUT = 120",
+    "new_code_preview": "SHELL_TIMEOUT = 90"
+  },
+  {
+    "timestamp": "2026-09-11T00:51:17.754630+00:00",
+    "target": "schubert",
+    "description": "Remove redundant items from 'What NOT to do' section already covered in Git Operations",
+    "rationale": "Three items ('Do not modify AGENTS.md', 'Do not commit .env files', 'Do not push to main branch') are already stated in the Git Operations section above as 'NEVER' directives. Removing these duplicates saves ~45 tokens of system prompt context on every LLM call, reducing context bloat and latency.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "## What NOT to do\n- Do not run rm -rf, mkfs, dd, or other destructive commands\n- Do not install packages (apt, pip, npm)\n- Do not modify AGENTS.md\n- Do not commit .env files\n- Do not push to main bran",
+    "new_code_preview": "## What NOT to do\n- Do not run rm -rf, mkfs, dd, or other destructive commands\n- Do not install packages (apt, pip, npm)\n- Do not run shutdown, reboot, or halt\n- Do not run chmod 777\n- Do not restart "
+  },
+  {
+    "timestamp": "2026-09-11T00:51:17.773539+00:00",
+    "target": "schubert",
+    "description": "Improve rate limit cleanup to remove only stale users instead of clearing all",
+    "rationale": "The current approach clears ALL rate limit data when the dict exceeds 1000 entries, which resets rate limits for active users and could allow burst violations. Selectively removing only stale users (no activity in 60s) preserves rate limiting for active users while preventing unbounded dict growth.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    if len(_command_timestamps) > 1000:\n        _command_timestamps.clear()",
+    "new_code_preview": "    if len(_command_timestamps) > 1000:\n        # Remove users with no recent activity instead of clearing all\n        stale_users = [uid for uid, ts in _command_timestamps.items() if not ts or now - "
+  }
+]

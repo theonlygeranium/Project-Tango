@@ -1,0 +1,214 @@
+version: "2.0"
+last_updated: "2026-08-21T05:15:00Z"
+
+defaults:
+  model: "writer/palmyra-x6"
+  litellm_base_url: "http://localhost:4000"
+  redis_url: "redis://localhost:6379/0"
+
+bots:
+  admiral:
+    tier: 0
+    model: "writer/palmyra-x6"
+    discord_token_env: "DISCORD_TOKEN_ADMIRAL"
+    system_prompt_file: "prompts/admiral.md"
+    tools: [run_shell, write_file, read_file, health_check, fleet_delegate, fleet_broadcast, service_status, restart_service]
+    health_check_interval: 30
+    port: 8001
+    systemd_service_name: "schubert-bot"
+    circuit_breaker_config:
+      llm:
+        failure_threshold: 5
+        recovery_timeout: 30
+
+  architect:
+    tier: 1
+    model: "writer/palmyra-x6"
+    discord_token_env: "DISCORD_TOKEN_ARCHITECT"
+    system_prompt_file: "prompts/architect.md"
+    tools: [run_shell, write_file, read_file, deploy_code, propagate_fix, git_operations, run_tests]
+    health_check_interval: 30
+    port: 8002
+    systemd_service_name: "schubert-architect"
+    circuit_breaker_config:
+      llm:
+        failure_threshold: 5
+        recovery_timeout: 30
+
+  voss:
+    tier: 1
+    model: "writer/palmyra-x6"
+    discord_token_env: "DISCORD_TOKEN_VOSS"
+    system_prompt_file: "prompts/dr_voss.md"
+    tools: [health_check, service_status, restart_service, view_logs, read_file]
+    health_check_interval: 15
+    port: 8003
+    systemd_service_name: "schubert-dr-voss"
+    circuit_breaker_config:
+      llm:
+        failure_threshold: 5
+        recovery_timeout: 30
+
+  cortex:
+    tier: 1
+    model: "writer/palmyra-x6"
+    discord_token_env: "DISCORD_TOKEN_CORTEX"
+    system_prompt_file: "prompts/dr_cortex.md"
+    tools: [web_search, scan_ai_trends, benchmark_model, analyze_bot_code, read_file, write_file]
+    health_check_interval: 30
+    port: 8004
+    systemd_service_name: "schubert-cortex"
+    circuit_breaker_config:
+      llm:
+        failure_threshold: 5
+        recovery_timeout: 30
+
+  quartermaster:
+    tier: 2
+    model: "writer/palmyra-x6"
+    discord_token_env: "DISCORD_TOKEN_QUARTERMASTER"
+    system_prompt_file: "prompts/quartermaster.md"
+    tools: [docker, caddy, cloudflare, dns, service_status, run_shell]
+    health_check_interval: 45
+    port: 8005
+    systemd_service_name: "schubert-quartermaster"
+    circuit_breaker_config:
+      llm:
+        failure_threshold: 5
+        recovery_timeout: 30
+
+  cartographer:
+    tier: 2
+    model: "writer/palmyra-x6"
+    discord_token_env: "DISCORD_TOKEN_CARTOGRAPHER"
+    system_prompt_file: "prompts/cartographer.md"
+    tools: [read_file, write_file, wiki_publish]
+    health_check_interval: 60
+    port: 8006
+    systemd_service_name: "schubert-cartographer"
+    circuit_breaker_config:
+      llm:
+        failure_threshold: 5
+        recovery_timeout: 30
+
+  proctor:
+    tier: 3
+    model: "writer/palmyra-x6"
+    discord_token_env: "DISCORD_TOKEN_PROCTOR"
+    system_prompt_file: "prompts/proctor.md"
+    tools: [run_tests, write_file, read_file, git_operations]
+    health_check_interval: 45
+    port: 8007
+    systemd_service_name: "schubert-proctor"
+    circuit_breaker_config:
+      llm:
+        failure_threshold: 5
+        recovery_timeout: 30
+
+  sentinel:
+    tier: 3
+    model: "writer/palmyra-x6"
+    discord_token_env: "DISCORD_TOKEN_PROCTOR"
+    system_prompt_file: "prompts/sentinel.md"
+    tools: [run_tests, write_file, read_file, git_operations, generate_tests, repair_code]
+    health_check_interval: 45
+    port: 8008
+    systemd_service_name: "schubert-sentinel"
+    circuit_breaker_config:
+      llm:
+        failure_threshold: 5
+        recovery_timeout: 30
+
+nexus_bus:
+  type: redis_streams
+  stream_prefix: "nexus"
+  consumer_group: "nexus-fleet"
+  consumer_name_prefix: "nexus-consumer"
+  event_namespaces:
+    - "task.*"
+    - "health.*"
+    - "update.*"
+    - "flywheel.*"
+    - "system.*"
+  max_stream_length: 10000
+  block_ms: 5000
+
+self_healing:
+  circuit_breakers:
+    llm:
+      failure_threshold: 5
+      recovery_timeout: 30
+      half_open_max_calls: 1
+    tools:
+      failure_threshold: 3
+      recovery_timeout: 60
+      half_open_max_calls: 1
+  health_monitor:
+    enabled: true
+    report_interval: 30
+    stale_threshold: 90
+  semantic_breaker:
+    enabled: true
+    window: 3
+    repeat_threshold: 3
+  crash_loop_detector:
+    enabled: true
+    restart_window: 300
+    max_restarts: 5
+    action: stop
+  checkpoint:
+    enabled: true
+    backend: redis
+    key_prefix: "nexus:checkpoint"
+    save_on: tool_success
+  supervisor:
+    enabled: true
+    poll_interval: 10
+    watchdog_timeout: 120
+  recovery:
+    retry_attempts: 3
+    backoff_base: 1
+    backoff_max: 30
+    jitter_max: 2
+    escalation_target: admiral
+
+updates:
+  canary_bot: cartographer
+  deployment_strategy: phased
+  rollout_order:
+    - cartographer
+    - proctor
+    - quartermaster
+    - voss
+    - cortex
+    - architect
+    - admiral
+  health_gate:
+    wait_seconds: 60
+    checks:
+      - systemd_active
+      - liveness_endpoint
+      - llm_test_request
+      - no_new_errors
+      - sentinel_tests_passed
+    rollback_on_failure: true
+  rollback:
+    automatic: true
+    max_retries: 2
+    alert_channels:
+      - discord
+
+routing_table:
+  infrastructure: architect
+  deployment: architect
+  diagnostics: voss
+  health: voss
+  analysis: cortex
+  patterns: cortex
+  resources: quartermaster
+  inventory: quartermaster
+  documentation: cartographer
+  mapping: cartographer
+  compliance: proctor
+  monitoring: proctor
+  multi_domain: decompose

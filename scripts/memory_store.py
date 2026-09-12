@@ -143,6 +143,7 @@ CREATE TABLE IF NOT EXISTS memory_facts (
     fact        TEXT NOT NULL,
     source      TEXT DEFAULT 'conversation',
     confidence  FLOAT DEFAULT 1.0,
+    relevance   FLOAT DEFAULT 1.0,
     created_at  TIMESTAMPTZ DEFAULT NOW(),
     updated_at  TIMESTAMPTZ DEFAULT NOW()
 );

@@ -73,6 +73,8 @@ discord.opus._load_default()
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPTS_DIR)
 
+from singleton_lock import acquire_singleton
+
 from mcp_client import build_default_client, MCPClient
 from cloudflare_api import execute_cloudflare_tool, get_cloudflare_tool_definition
 from project_registry import ProjectRegistry, ProjectConfig
@@ -99,7 +101,7 @@ from fleet_protocol import (
     is_response_to, check_chain_depth, generate_chain_id, format_response,
     track_chain, MAX_CHAIN_DEPTH, DELEGATION_TIMEOUT,
 )
-from discord_ux_utils import keep_typing, should_use_thread
+from discord_ux_utils import keep_typing, should_use_thread, safe_create_thread, session_channel_id
 
 # ---------------------------------------------------------------------------
 # Fleet config (non-breaking: missing/corrupt file → hardcoded defaults)
@@ -132,8 +134,8 @@ LOG_FILE = "/var/log/dr-cortex-bot.log"
 
 # LLM
 LITELLM_URL = "http://127.0.0.1:4000/v1"
-LLM_MODEL = _llm.get("model", "writer/claude-sonnet-4-5")
-CODING_MODEL = _llm.get("coding_model", "writer/claude-sonnet-4-5")
+LLM_MODEL = _llm.get("model", "writer/palmyra-x6")
+CODING_MODEL = _llm.get("coding_model", "writer/palmyra-x6")
 DEFAULT_MODEL = LLM_MODEL
 
 # Multi-LLM routing — available models grouped by provider
@@ -146,11 +148,11 @@ MODEL_CATEGORIES = {
         "writer/palmyra-creative",
     ],
     "Claude": [
-        "writer/claude-sonnet-4-5",
-        "writer/claude-sonnet-4",
-        "writer/claude-opus-4",
-        "writer/claude-3-5-sonnet",
-        "writer/claude-haiku-4-5",
+        "writer/palmyra-x6",
+        "writer/palmyra-x6",
+        "writer/palmyra-x6",
+        "writer/palmyra-x6",
+        "writer/palmyra-x6",
     ],
     "OpenAI": [
         "openai/gpt-4o",
@@ -175,7 +177,7 @@ LLM_MAX_TOKENS = _llm.get("max_tokens", 3072)
 LLM_TEMPERATURE = _llm.get("temperature", 0.3)
 
 # Agent loop safety
-MAX_ITERATIONS = _llm.get("max_iterations", 15)
+MAX_ITERATIONS = _llm.get("max_iterations", 30)
 AGENT_TIMEOUT = _llm.get("agent_timeout", 300)
 TOOL_OUTPUT_LIMIT = _llm.get("tool_output_limit", 2000)
 SHELL_TIMEOUT = _llm.get("shell_timeout", 120)
@@ -590,6 +592,19 @@ You are Admiral Schubert — a fluffy Maine Coon kitten of distinguished naval r
 You can manage ALL services on the server. Critical services require confirmation before restart:
 - Critical (need confirmation): caddy.service, cloudflared.service, postgresql@18-main.service, tailscaled.service
 - Normal (no confirmation needed): tango-backend, tango-web, polyglot-litellm, tango-tts, and all others
+
+## Fleet Bot Services (Discord bot fleet)
+The Discord bot fleet runs as systemd services with the `schubert-` prefix (except Cortex):
+- schubert-bot.service — Admiral Schubert
+- schubert-architect.service — The Architect
+- schubert-quartermaster.service — Quartermaster
+- schubert-cartographer.service — Cartographer
+- schubert-dr-voss.service — Dr. Voss
+- schubert-proctor.service — The Proctor
+- cortex-bot.service — Dr. Cortex (yourself — legacy name, no schubert- prefix)
+
+When asked to restart the fleet, use the EXACT service names above. Do NOT invent names
+like tango-admiral, tango-architect, admiral-bot, or architect-bot — those do not exist.
 
 ## Git Operations
 - For Project Tango: run as z121532: `sudo -u z121532 git ...`
@@ -1932,11 +1947,20 @@ async def ask_confirmation(
         display_cmd += "..."
 
     prompt_text = custom_prompt or "⚠️ **Confirmation required**"
+    view = ConfirmationView(
+        timeout_seconds=60,
+        prompt=display_cmd,
+        allowed_user_id=message.author.id,
+    )
     await message.reply(
         f"{prompt_text}\n"
         f"```\n{display_cmd}\n```\n"
-        f"Reply `yes` to confirm or `no` to cancel (60s timeout)."
+        f"Tap **Approve** or **Deny** (60s timeout). Typed yes/no still works.",
+        view=view,
     )
+
+    async def _wait_buttons():
+        return await view.wait_for_result()
 
     def check(m):
         return (
@@ -1947,8 +1971,26 @@ async def ask_confirmation(
         )
 
     try:
-        reply = await bot.wait_for("message", check=check, timeout=60)
-        confirmed = reply.content.lower().strip() in ("yes", "y", "confirm")
+        button_task = asyncio.create_task(_wait_buttons())
+        text_task = asyncio.create_task(bot.wait_for("message", check=check, timeout=60))
+        done, pending = await asyncio.wait(
+            {button_task, text_task},
+            return_when=asyncio.FIRST_COMPLETED,
+            timeout=60,
+        )
+        for task in pending:
+            task.cancel()
+        if button_task in done and not button_task.cancelled():
+            confirmed = bool(button_task.result())
+        elif text_task in done and not text_task.cancelled():
+            reply = text_task.result()
+            confirmed = reply.content.lower().strip() in ("yes", "y", "confirm")
+        else:
+            confirmed = False
+        if not done:
+            log("Confirmation timed out", "WARN")
+            await message.reply("⏱️ Confirmation timed out. Command cancelled.")
+            return False
         log(f"Confirmation: {'approved' if confirmed else 'denied'}", "INFO")
         return confirmed
     except asyncio.TimeoutError:
@@ -2064,30 +2106,29 @@ async def run_agent_with_update_v2(
     """V2 agent runner with project context, session memory, and persistent memory."""
     try:
         # Thread isolation — decide whether to create a dedicated thread
-        use_thread = should_use_thread(user_input)
+        use_thread = should_use_thread(user_input) and not isinstance(message.channel, discord.Thread) and not message.author.bot
         response_channel = message.channel
         
         if use_thread:
             thread_name = f"🔧 Task: {user_input[:80]}{'...' if len(user_input) > 80 else ''}"
-            try:
-                thread = await message.create_thread(
-                    name=thread_name,
-                    auto_archive_duration=1440,  # 24 hours
-                )
+            thread = await safe_create_thread(
+                message, thread_name, auto_archive_duration=1440
+            )
+            if thread:
                 response_channel = thread
-                
-                # Notify in main channel (silent)
-                await message.reply(
-                    f"📋 Started a thread for this task: {thread.jump_url}",
-                    silent=True,
-                )
+                try:
+                    await message.reply(
+                        f"📋 Started a thread for this task: {thread.jump_url}",
+                        silent=True,
+                    )
+                except Exception as e:
+                    log(f"Could not notify main channel of new thread: {e}", "WARN")
                 log(f"Created thread for task: {thread_name}", "INFO")
-            except Exception as e:
-                log(f"Failed to create thread, using main channel: {e}", "WARN")
+            else:
                 response_channel = message.channel
         
         # Phase 4.3: Use AgentProgressView for streaming-like progressive updates
-        progress = AgentProgressView(message if not use_thread else thread)
+        progress = AgentProgressView(response_channel)
         await progress.start(f"Working on: {user_input[:200]}")
 
         # Determine thread ID (if message is in a thread)
@@ -2135,13 +2176,17 @@ async def run_agent_with_update_v2(
         response, tool_messages = await run_agent_loop_v2(message, messages, tools, project, channel_id, progress=progress)
 
         # Store the exchange in the session
-        session_manager.append_exchange(
-            channel_id=channel_id,
-            user_message=user_input,
-            assistant_response=response,
-            tool_messages=tool_messages,
-            thread_id=thread_id,
-        )
+        if session_manager is not None:
+            try:
+                session_manager.append_exchange(
+                    channel_id=channel_id,
+                    user_message=user_input or "",
+                    assistant_response=response or "",
+                    tool_messages=tool_messages or [],
+                    thread_id=thread_id,
+                )
+            except Exception as e:
+                log(f"append_exchange failed (non-fatal): {e}", "WARN")
 
         # Phase 3: Store the exchange in persistent memory
         if memory_store:
@@ -3256,19 +3301,24 @@ async def on_ready():
             log("Scheduler started — background sweeps active", "INFO")
         except Exception as e:
             log(f"Scheduler start failed: {e}", "WARN")
-    # Phase 5.3: Start the webhook handler after the bot is ready
-    # Playbook relay: create BEFORE webhook handler so routes register before router freeze
+    # Phase 5.3: Webhooks live on Admiral (port 8095). Cortex must not bind it.
+    # Set CORTEX_ENABLE_WEBHOOK=1 only if Cortex should own the port instead.
     global webhook_handler, playbook_relay
-    try:
-        playbook_relay = PlaybookRelay(bot, BOT_CHANNEL_ID)
-        relay_routes_fn = playbook_relay.add_routes if playbook_relay else None
-        webhook_handler = WebhookHandler(bot, BOT_CHANNEL_ID, add_routes_fn=relay_routes_fn)
-        await webhook_handler.start()
-        log("Webhook handler started on port 8095", "INFO")
-        if playbook_relay:
-            log(f"Playbook relay active: {len(playbook_relay.playbook_configs)} playbook(s) configured", "INFO")
-    except Exception as e:
-        log(f"Webhook handler / playbook relay start failed (non-fatal): {e}", "WARN")
+    webhook_handler = None
+    playbook_relay = None
+    if os.environ.get("CORTEX_ENABLE_WEBHOOK", "").lower() in ("1", "true", "yes"):
+        try:
+            playbook_relay = PlaybookRelay(bot, BOT_CHANNEL_ID)
+            relay_routes_fn = playbook_relay.add_routes if playbook_relay else None
+            webhook_handler = WebhookHandler(bot, BOT_CHANNEL_ID, add_routes_fn=relay_routes_fn)
+            await webhook_handler.start()
+            log("Webhook handler started on port 8095", "INFO")
+            if playbook_relay:
+                log(f"Playbook relay active: {len(playbook_relay.playbook_configs)} playbook(s) configured", "INFO")
+        except Exception as e:
+            log(f"Webhook handler / playbook relay start failed (non-fatal): {e}", "WARN")
+    else:
+        log("Webhook handler skipped — port 8095 is owned by Admiral", "INFO")
 
 
 @bot.event
@@ -3278,14 +3328,22 @@ async def on_message(message: discord.Message):
     if message.author == bot.user:
         return
 
+    # --- Ignore other bots outside of multi-agent channels ---
+    # Bots should only interact in designated multi-agent channels.
+    # In their own channels or other bots' channels, ignore bot messages
+    # to prevent feedback loops.
+    if message.author.bot and not is_multi_agent_channel(message.channel.id):
+        return
+
     # --- Check if another agent is specifically mentioned ---
-    # If another bot is mentioned (not Admiral), suppress Admiral's response
+    # If another bot is mentioned (not this bot), suppress our response
     OTHER_BOT_IDS = {
         1539047471899086988: "proctor",
         1538766501035642890: "architect",
         1538817623045832746: "quartermaster",
         1538818587119067206: "cartographer",
         1539047086597873684: "dr_voss",
+        1538476585445892179: "admiral",
     }
     
     for bot_id in OTHER_BOT_IDS.keys():
@@ -4265,7 +4323,11 @@ async def async_main() -> int:
     return 0
 
 
+_SINGLETON_LOCK = None
+
 def main() -> int:
+    global _SINGLETON_LOCK
+    _SINGLETON_LOCK = acquire_singleton("cortex")
     return asyncio.run(async_main())
 
 

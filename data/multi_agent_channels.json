@@ -1,0 +1,8 @@
+{
+    "1539023116968398911": {
+        "agents": ["admiral", "architect", "quartermaster", "cartographer", "dr_voss", "cortex"],
+        "mode": "collaborative",
+        "coordinator": "admiral",
+        "require_mention": false
+    }
+}

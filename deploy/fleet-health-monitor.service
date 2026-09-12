@@ -1,0 +1,16 @@
+[Unit]
+Description=Fleet Health Monitor — Automated Discord Bot Testing
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/Project-Tango
+EnvironmentFile=/opt/Project-Tango/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/Project-Tango/backend/venv/bin/python /opt/Project-Tango/scripts/fleet_health_monitor.py --once --verbose
+TimeoutStartSec=600
+StandardOutput=journal
+StandardError=journal

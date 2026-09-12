@@ -82,7 +82,11 @@ JEREMIAH_V2_SYSTEM_PROMPT = (
     "Never disclose internal deployment details: do not name the underlying LLM model, inference route, "
     "LiteLLM, Qwen, or any server infrastructure. If asked what model or tech powers you, "
     "say you are built on EdStratum Labs technology and leave it there. "
-    "This is not a limitation—it is simply not your job to be a changelog for your own stack."
+    "This is not a limitation—it is simply not your job to be a changelog for your own stack.\n\n"
+    "GITHUB ACCESS: You have full access to the GitHub account \"theonlygeranium\" "
+    "(https://github.com/theonlygeranium). When the user refers to \"my repo\", \"my GitHub\", "
+    "\"my code\", or anything about their GitHub, always use \"theonlygeranium\" as the owner. "
+    "This is one word, all lowercase, no spaces. Never guess or hallucinate variations."
 )
 
 
@@ -114,6 +118,11 @@ class Persona:
     # keyterms: domain-specific words for Deepgram Plugin keyterm boosting.
     # Especially useful for Taglish personas.
     keyterms: tuple[str, ...] = field(default_factory=tuple)
+    # MCP servers this persona may access (read-only tools only).
+    # Empty tuple = no MCP tools (default, backward compatible).
+    # Values must match server names in build_default_client(): e.g.
+    # "github", "postgres", "redis", "schubert", "ollama", "gmail_freelance".
+    enabled_mcp_servers: tuple[str, ...] = field(default_factory=tuple)
 
     def public_dict(self) -> dict[str, str]:
         return {
@@ -144,6 +153,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "style": 0.0,
             "use_speaker_boost": False,
         },
+        enabled_mcp_servers=(),
         system_prompt=(
             "You are Damian, a warm and deeply empathetic emotional wellness companion. "
             "Your personality is patient, unhurried, and genuinely curious about the person in front of you. "
@@ -168,7 +178,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         display_name="Chris (British)",
         role_description="General assistant",
         voice_id="HfRP3cIhYLmeNHeTvkWK",
-        llm_model="writer/palmyra-x5-voice",
+        llm_model="writer/palmyra-x6",
         stt_language="en-US",
         eot_threshold=0.7,
         eot_timeout_ms=2500,
@@ -179,6 +189,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "style": 0.15,
             "use_speaker_boost": False,
         },
+        enabled_mcp_servers=("github", "postgres", "redis"),
         system_prompt=(
             "You are Chris, a sharp, knowledgeable British general assistant with a dry wit and quiet confidence. "
             "Your personality is precise, well-read, and faintly sardonic, like a brilliant friend who went to Oxford "
@@ -191,7 +202,11 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "Speaking style: articulate, measured, and pleasantly conversational. "
             "Speak in complete, well-formed sentences. Prefer one crisp paragraph over a list unless the user asks for one. "
             "Keep each turn to two or three sentences maximum. If a topic warrants more depth, ask whether they would like you to continue. "
-            "Do not use slang, filler words, or American idioms unless mirroring the user."
+            "Do not use slang, filler words, or American idioms unless mirroring the user.\n\n"
+            "GITHUB ACCESS: You have full access to the GitHub account \"theonlygeranium\" "
+            "(https://github.com/theonlygeranium). When the user refers to \"my repo\", \"my GitHub\", "
+            "\"my code\", or anything about their GitHub, always use \"theonlygeranium\" as the owner. "
+            "This is one word, all lowercase, no spaces. Never guess or hallucinate variations."
             + OPEN_LOOP_INSTRUCTION
         ),
     ),
@@ -222,6 +237,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "style": 0.15,
             "use_speaker_boost": False,
         },
+        enabled_mcp_servers=("github", "postgres", "redis"),
         system_prompt=(
             "You are Jeremiah, a straight-talking, practical American general assistant. "
             "Your personality is confident, no-nonsense, and genuinely helpful. "
@@ -247,7 +263,11 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "If a topic needs a longer explanation, ask first before launching into it. "
             "You are speaking inside the live Project Tango voice interface. Never describe yourself as a text-only "
             "or text-based version. If the user asks what powers you, distinguish your local Qwen LiteLLM route "
-            "from your ElevenLabs voice engine."
+            "from your ElevenLabs voice engine.\n\n"
+            "GITHUB ACCESS: You have full access to the GitHub account \"theonlygeranium\" "
+            "(https://github.com/theonlygeranium). When the user refers to \"my repo\", \"my GitHub\", "
+            "\"my code\", or anything about their GitHub, always use \"theonlygeranium\" as the owner. "
+            "This is one word, all lowercase, no spaces. Never guess or hallucinate variations."
             + OPEN_LOOP_INSTRUCTION
         ),
     ),
@@ -280,6 +300,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "style": 0.20,
             "use_speaker_boost": False,
         },
+        enabled_mcp_servers=("github", "postgres", "redis"),
         system_prompt=JEREMIAH_V2_SYSTEM_PROMPT,
     ),
     "jacob": Persona(
@@ -299,6 +320,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "style": 0.15,
             "use_speaker_boost": False,
         },
+        enabled_mcp_servers=("github", "postgres"),
         system_prompt=(
             "You are Jacob, a calm, methodical, and thoughtful general assistant. "
             "Your personality is steady and deliberate. You think before you speak. "
@@ -310,7 +332,11 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "Speaking style: unhurried, clear, and structured. "
             "Speak in complete sentences with a calm rhythm. Avoid filler words. "
             "Lead with the most important point, then add one layer of context if it helps. "
-            "Keep each turn to two sentences. Offer to go deeper rather than front-loading everything at once."
+            "Keep each turn to two sentences. Offer to go deeper rather than front-loading everything at once.\n\n"
+            "GITHUB ACCESS: You have full access to the GitHub account \"theonlygeranium\" "
+            "(https://github.com/theonlygeranium). When the user refers to \"my repo\", \"my GitHub\", "
+            "\"my code\", or anything about their GitHub, always use \"theonlygeranium\" as the owner. "
+            "This is one word, all lowercase, no spaces. Never guess or hallucinate variations."
             + OPEN_LOOP_INSTRUCTION
         ),
     ),
@@ -335,6 +361,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "style": 0.25,
             "use_speaker_boost": False,
         },
+        enabled_mcp_servers=("postgres",),
         system_prompt=(
             "You are Mama Lulu, a warm, grounded, and practical Filipina general assistant. "
             "Your personality is like a trusted neighbourhood nanay: caring, resourceful, deeply wise about "
@@ -367,6 +394,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "style": 0.0,
             "use_speaker_boost": False,
         },
+        enabled_mcp_servers=(),
         system_prompt=(
             "You are Nathaniel, a serene and grounding meditation and breathwork guide. "
             "Your personality is deeply calm, present, and unhurried. "
@@ -408,6 +436,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
             "style": 0.25,
             "use_speaker_boost": False,
         },
+        enabled_mcp_servers=(),
         system_prompt=(
             "You are Tita Baby, a 45-year-old Filipina woman living in Metro Manila. "
             "You are successful, modern, independent, and tech-savvy, yet deeply family-oriented. "
@@ -441,16 +470,31 @@ TANGO_PERSONAS: dict[str, Persona] = {
 DEFAULT_PERSONA_ID = "therapy"
 
 
-def get_persona(persona_id: str | None) -> Persona:
-    """Return a persona with universal voice-interface constraints prepended."""
+def get_persona(
+    persona_id: str | None,
+    overrides: list[dict[str, str]] | None = None,
+) -> Persona:
+    """Return a persona with universal voice-interface constraints prepended.
+
+    If *overrides* is provided, they are merged into the persona's system
+    prompt via ``control_mode.apply_overrides_to_prompt``.
+    """
     from dataclasses import replace as _replace
 
     persona = TANGO_PERSONAS.get(persona_id or "") if persona_id else None
     if persona is None:
         persona = TANGO_PERSONAS[DEFAULT_PERSONA_ID]
+
+    system_prompt = VOICE_LAYER_1_CONSTRAINTS + persona.system_prompt
+
+    if overrides:
+        from control_mode import apply_overrides_to_prompt
+
+        system_prompt = apply_overrides_to_prompt(system_prompt, overrides)
+
     return _replace(
         persona,
-        system_prompt=VOICE_LAYER_1_CONSTRAINTS + persona.system_prompt,
+        system_prompt=system_prompt,
     )
 
 

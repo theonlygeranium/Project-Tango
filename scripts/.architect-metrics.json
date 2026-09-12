@@ -1,0 +1,828 @@
+{
+  "totals": {
+    "llm_calls": 1323,
+    "llm_errors": 1,
+    "tool_calls": 1358,
+    "tool_errors": 0,
+    "agent_requests": 146,
+    "heal_events": 13,
+    "escalations": 28,
+    "auto_updates": 35,
+    "rollbacks": 4
+  },
+  "daily": {
+    "2026-08-17": {
+      "llm_calls": 199,
+      "llm_errors": 0,
+      "tool_calls": 218,
+      "tool_errors": 0,
+      "agent_requests": 29,
+      "heal_events": 0,
+      "auto_updates": 5
+    },
+    "2026-08-18": {
+      "llm_calls": 120,
+      "llm_errors": 0,
+      "tool_calls": 160,
+      "tool_errors": 0,
+      "agent_requests": 16,
+      "heal_events": 1,
+      "auto_updates": 5
+    },
+    "2026-08-19": {
+      "llm_calls": 50,
+      "llm_errors": 0,
+      "tool_calls": 36,
+      "tool_errors": 0,
+      "agent_requests": 20,
+      "heal_events": 0,
+      "auto_updates": 10
+    },
+    "2026-08-20": {
+      "llm_calls": 196,
+      "llm_errors": 0,
+      "tool_calls": 230,
+      "tool_errors": 0,
+      "agent_requests": 23,
+      "heal_events": 0,
+      "auto_updates": 5
+    },
+    "2026-08-21": {
+      "llm_calls": 41,
+      "llm_errors": 0,
+      "tool_calls": 39,
+      "tool_errors": 0,
+      "agent_requests": 6,
+      "heal_events": 7,
+      "auto_updates": 5
+    },
+    "2026-08-22": {
+      "llm_calls": 393,
+      "llm_errors": 1,
+      "tool_calls": 428,
+      "tool_errors": 0,
+      "agent_requests": 40,
+      "heal_events": 5,
+      "auto_updates": 0
+    },
+    "2026-08-23": {
+      "llm_calls": 4,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-24": {
+      "llm_calls": 4,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-25": {
+      "llm_calls": 4,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-26": {
+      "llm_calls": 140,
+      "llm_errors": 0,
+      "tool_calls": 143,
+      "tool_errors": 0,
+      "agent_requests": 8,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-27": {
+      "llm_calls": 8,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-28": {
+      "llm_calls": 64,
+      "llm_errors": 0,
+      "tool_calls": 94,
+      "tool_errors": 0,
+      "agent_requests": 1,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-29": {
+      "llm_calls": 8,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-30": {
+      "llm_calls": 8,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-31": {
+      "llm_calls": 8,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-01": {
+      "llm_calls": 8,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-02": {
+      "llm_calls": 18,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-03": {
+      "llm_calls": 12,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-04": {
+      "llm_calls": 0,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-05": {
+      "llm_calls": 11,
+      "llm_errors": 0,
+      "tool_calls": 10,
+      "tool_errors": 0,
+      "agent_requests": 3,
+      "heal_events": 0,
+      "auto_updates": 5
+    },
+    "2026-09-06": {
+      "llm_calls": 4,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-07": {
+      "llm_calls": 4,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-08": {
+      "llm_calls": 4,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-09": {
+      "llm_calls": 4,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-10": {
+      "llm_calls": 7,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-11": {
+      "llm_calls": 4,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    }
+  },
+  "llm_latencies": [
+    {
+      "latency": 25.51874804496765,
+      "model": "writer/palmyra-x6",
+      "ts": 1787962342.5907116
+    },
+    {
+      "latency": 17.870821475982666,
+      "model": "writer/palmyra-x6",
+      "ts": 1787971338.7061443
+    },
+    {
+      "latency": 23.476771116256714,
+      "model": "writer/palmyra-x6",
+      "ts": 1787983966.3498302
+    },
+    {
+      "latency": 22.956698894500732,
+      "model": "writer/palmyra-x6",
+      "ts": 1787992961.9274015
+    },
+    {
+      "latency": 19.874758005142212,
+      "model": "writer/palmyra-x6",
+      "ts": 1788005586.4730363
+    },
+    {
+      "latency": 19.463510513305664,
+      "model": "writer/palmyra-x6",
+      "ts": 1788014581.8417943
+    },
+    {
+      "latency": 18.956578254699707,
+      "model": "writer/palmyra-x6",
+      "ts": 1788027205.6583416
+    },
+    {
+      "latency": 19.649125814437866,
+      "model": "writer/palmyra-x6",
+      "ts": 1788036201.7363486
+    },
+    {
+      "latency": 19.44052743911743,
+      "model": "writer/palmyra-x6",
+      "ts": 1788048827.8949053
+    },
+    {
+      "latency": 20.001972436904907,
+      "model": "writer/palmyra-x6",
+      "ts": 1788057822.1157854
+    },
+    {
+      "latency": 19.336529970169067,
+      "model": "writer/palmyra-x6",
+      "ts": 1788070447.4447398
+    },
+    {
+      "latency": 17.770708084106445,
+      "model": "writer/palmyra-x6",
+      "ts": 1788079440.1286423
+    },
+    {
+      "latency": 18.46458411216736,
+      "model": "writer/palmyra-x6",
+      "ts": 1788092066.2029655
+    },
+    {
+      "latency": 18.753530502319336,
+      "model": "writer/palmyra-x6",
+      "ts": 1788101059.4064143
+    },
+    {
+      "latency": 18.998621702194214,
+      "model": "writer/palmyra-x6",
+      "ts": 1788113685.4329443
+    },
+    {
+      "latency": 19.38439440727234,
+      "model": "writer/palmyra-x6",
+      "ts": 1788122679.1530712
+    },
+    {
+      "latency": 21.098468780517578,
+      "model": "writer/palmyra-x6",
+      "ts": 1788135306.9037156
+    },
+    {
+      "latency": 20.00936770439148,
+      "model": "writer/palmyra-x6",
+      "ts": 1788144299.3716156
+    },
+    {
+      "latency": 19.104337453842163,
+      "model": "writer/palmyra-x6",
+      "ts": 1788156927.23787
+    },
+    {
+      "latency": 18.042547702789307,
+      "model": "writer/palmyra-x6",
+      "ts": 1788165917.731389
+    },
+    {
+      "latency": 22.381662845611572,
+      "model": "writer/palmyra-x6",
+      "ts": 1788178549.843995
+    },
+    {
+      "latency": 25.561020851135254,
+      "model": "writer/palmyra-x6",
+      "ts": 1788187543.537787
+    },
+    {
+      "latency": 22.93162775039673,
+      "model": "writer/palmyra-x6",
+      "ts": 1788200173.063384
+    },
+    {
+      "latency": 19.36984157562256,
+      "model": "writer/palmyra-x6",
+      "ts": 1788209163.1492705
+    },
+    {
+      "latency": 22.548988580703735,
+      "model": "writer/palmyra-x6",
+      "ts": 1788221795.9360218
+    },
+    {
+      "latency": 19.44977045059204,
+      "model": "writer/palmyra-x6",
+      "ts": 1788230782.8833044
+    },
+    {
+      "latency": 18.456876277923584,
+      "model": "writer/palmyra-x6",
+      "ts": 1788243414.891306
+    },
+    {
+      "latency": 17.3259379863739,
+      "model": "writer/palmyra-x6",
+      "ts": 1788252400.439459
+    },
+    {
+      "latency": 26.352067470550537,
+      "model": "writer/palmyra-x6",
+      "ts": 1788265041.4860415
+    },
+    {
+      "latency": 30.67168688774109,
+      "model": "writer/palmyra-x6",
+      "ts": 1788274031.340665
+    },
+    {
+      "latency": 19.301318407058716,
+      "model": "writer/palmyra-x6",
+      "ts": 1788286661.1491396
+    },
+    {
+      "latency": 31.625494956970215,
+      "model": "writer/palmyra-x6",
+      "ts": 1788295663.2095225
+    },
+    {
+      "latency": 28.901782512664795,
+      "model": "writer/palmyra-x6",
+      "ts": 1788308290.5278325
+    },
+    {
+      "latency": 20.07892346382141,
+      "model": "writer/palmyra-x6",
+      "ts": 1788317283.517159
+    },
+    {
+      "latency": 29.65567374229431,
+      "model": "writer/palmyra-x6",
+      "ts": 1788329920.452261
+    },
+    {
+      "latency": 22.54540491104126,
+      "model": "writer/palmyra-x6",
+      "ts": 1788331070.08982
+    },
+    {
+      "latency": 22.265395879745483,
+      "model": "writer/palmyra-x6",
+      "ts": 1788331152.610024
+    },
+    {
+      "latency": 20.95242428779602,
+      "model": "writer/palmyra-x6",
+      "ts": 1788331233.7879717
+    },
+    {
+      "latency": 17.557212829589844,
+      "model": "writer/palmyra-x6",
+      "ts": 1788331311.5849211
+    },
+    {
+      "latency": 37.166338205337524,
+      "model": "writer/palmyra-x6",
+      "ts": 1788352949.033012
+    },
+    {
+      "latency": 21.4124915599823,
+      "model": "writer/palmyra-x6",
+      "ts": 1788368905.5533547
+    },
+    {
+      "latency": 21.648399353027344,
+      "model": "writer/palmyra-x6",
+      "ts": 1788368987.4644861
+    },
+    {
+      "latency": 20.272878885269165,
+      "model": "writer/palmyra-x6",
+      "ts": 1788369067.9413834
+    },
+    {
+      "latency": 18.213542222976685,
+      "model": "writer/palmyra-x6",
+      "ts": 1788369147.517223
+    },
+    {
+      "latency": 17.166439056396484,
+      "model": "writer/palmyra-x6",
+      "ts": 1788374566.6597257
+    },
+    {
+      "latency": 25.993205070495605,
+      "model": "writer/palmyra-x6",
+      "ts": 1788377073.0697646
+    },
+    {
+      "latency": 42.41193413734436,
+      "model": "writer/palmyra-x6",
+      "ts": 1788377175.7145717
+    },
+    {
+      "latency": 16.98927593231201,
+      "model": "writer/palmyra-x6",
+      "ts": 1788377252.9600132
+    },
+    {
+      "latency": 36.01918578147888,
+      "model": "writer/palmyra-x6",
+      "ts": 1788377349.2002606
+    },
+    {
+      "latency": 26.64238715171814,
+      "model": "writer/palmyra-x6",
+      "ts": 1788390774.410136
+    },
+    {
+      "latency": 18.682305335998535,
+      "model": "writer/palmyra-x6",
+      "ts": 1788396185.7456412
+    },
+    {
+      "latency": 28.6943416595459,
+      "model": "writer/palmyra-x6",
+      "ts": 1788398978.2141972
+    },
+    {
+      "latency": 26.226503133773804,
+      "model": "writer/palmyra-x6",
+      "ts": 1788412400.861226
+    },
+    {
+      "latency": 24.538309335708618,
+      "model": "writer/palmyra-x6",
+      "ts": 1788417810.5349183
+    },
+    {
+      "latency": 29.712306261062622,
+      "model": "writer/palmyra-x6",
+      "ts": 1788420608.1589231
+    },
+    {
+      "latency": 22.693671226501465,
+      "model": "writer/palmyra-x6",
+      "ts": 1788434023.8776
+    },
+    {
+      "latency": 100.3298032283783,
+      "model": "writer/palmyra-x6",
+      "ts": 1788439511.0569537
+    },
+    {
+      "latency": 18.988085508346558,
+      "model": "writer/palmyra-x6",
+      "ts": 1788442227.4673328
+    },
+    {
+      "latency": 20.749387741088867,
+      "model": "writer/palmyra-x6",
+      "ts": 1788455644.8445911
+    },
+    {
+      "latency": 21.976370573043823,
+      "model": "writer/palmyra-x6",
+      "ts": 1788461133.299132
+    },
+    {
+      "latency": 21.417455911636353,
+      "model": "writer/palmyra-x6",
+      "ts": 1788463849.176405
+    },
+    {
+      "latency": 27.70424485206604,
+      "model": "writer/palmyra-x6",
+      "ts": 1788477272.8615863
+    },
+    {
+      "latency": 4.705606698989868,
+      "model": "writer/palmyra-x6",
+      "ts": 1788578399.217078
+    },
+    {
+      "latency": 4.211820840835571,
+      "model": "writer/palmyra-x6",
+      "ts": 1788578404.5240283
+    },
+    {
+      "latency": 2.3515284061431885,
+      "model": "writer/palmyra-x6",
+      "ts": 1788578446.2088933
+    },
+    {
+      "latency": 2.9405317306518555,
+      "model": "writer/palmyra-x6",
+      "ts": 1788578450.2717853
+    },
+    {
+      "latency": 2.3959760665893555,
+      "model": "writer/palmyra-x6",
+      "ts": 1788578471.9350169
+    },
+    {
+      "latency": 2.091498374938965,
+      "model": "writer/palmyra-x6",
+      "ts": 1788578474.2392194
+    },
+    {
+      "latency": 2.9914565086364746,
+      "model": "writer/palmyra-x6",
+      "ts": 1788578477.8692503
+    },
+    {
+      "latency": 1.9748809337615967,
+      "model": "writer/palmyra-x6",
+      "ts": 1788578501.919528
+    },
+    {
+      "latency": 2.1980514526367188,
+      "model": "writer/palmyra-x6",
+      "ts": 1788578505.2257533
+    },
+    {
+      "latency": 2.37001633644104,
+      "model": "writer/palmyra-x6",
+      "ts": 1788578507.8768313
+    },
+    {
+      "latency": 5.057446479797363,
+      "model": "writer/palmyra-x6",
+      "ts": 1788578513.4275
+    },
+    {
+      "latency": 19.85851263999939,
+      "model": "writer/palmyra-x6",
+      "ts": 1788658600.3567033
+    },
+    {
+      "latency": 21.88076663017273,
+      "model": "writer/palmyra-x6",
+      "ts": 1788680222.5041127
+    },
+    {
+      "latency": 18.653913021087646,
+      "model": "writer/palmyra-x6",
+      "ts": 1788701841.4375083
+    },
+    {
+      "latency": 27.78749680519104,
+      "model": "writer/palmyra-x6",
+      "ts": 1788723469.4618433
+    },
+    {
+      "latency": 25.945899724960327,
+      "model": "writer/palmyra-x6",
+      "ts": 1788745095.6654108
+    },
+    {
+      "latency": 20.206348419189453,
+      "model": "writer/palmyra-x6",
+      "ts": 1788766718.3668675
+    },
+    {
+      "latency": 18.796884775161743,
+      "model": "writer/palmyra-x6",
+      "ts": 1788788337.4627
+    },
+    {
+      "latency": 31.73934054374695,
+      "model": "writer/palmyra-x6",
+      "ts": 1788809969.4277754
+    },
+    {
+      "latency": 33.07858753204346,
+      "model": "writer/palmyra-x6",
+      "ts": 1788831602.8084638
+    },
+    {
+      "latency": 19.777058362960815,
+      "model": "writer/palmyra-x6",
+      "ts": 1788853222.8422103
+    },
+    {
+      "latency": 32.62343978881836,
+      "model": "writer/palmyra-x6",
+      "ts": 1788874855.8263495
+    },
+    {
+      "latency": 23.52989172935486,
+      "model": "writer/palmyra-x6",
+      "ts": 1788896479.6510003
+    },
+    {
+      "latency": 19.02277421951294,
+      "model": "writer/palmyra-x6",
+      "ts": 1788918098.974707
+    },
+    {
+      "latency": 19.942392110824585,
+      "model": "writer/palmyra-x6",
+      "ts": 1788939719.2020226
+    },
+    {
+      "latency": 26.31363582611084,
+      "model": "writer/palmyra-x6",
+      "ts": 1788961345.8182645
+    },
+    {
+      "latency": 20.789193153381348,
+      "model": "writer/palmyra-x6",
+      "ts": 1788982966.870786
+    },
+    {
+      "latency": 21.357690572738647,
+      "model": "writer/palmyra-x6",
+      "ts": 1789004588.5424268
+    },
+    {
+      "latency": 31.306822061538696,
+      "model": "writer/palmyra-x6",
+      "ts": 1789022781.1734297
+    },
+    {
+      "latency": 22.818111419677734,
+      "model": "writer/palmyra-x6",
+      "ts": 1789022864.8009567
+    },
+    {
+      "latency": 20.10712194442749,
+      "model": "writer/palmyra-x6",
+      "ts": 1789022945.5753877
+    },
+    {
+      "latency": 21.059272289276123,
+      "model": "writer/palmyra-x6",
+      "ts": 1789023026.8682091
+    },
+    {
+      "latency": 28.48376441001892,
+      "model": "writer/palmyra-x6",
+      "ts": 1789044655.6464715
+    },
+    {
+      "latency": 21.130951166152954,
+      "model": "writer/palmyra-x6",
+      "ts": 1789066277.0636997
+    },
+    {
+      "latency": 18.55502724647522,
+      "model": "writer/palmyra-x6",
+      "ts": 1789087896.0618823
+    },
+    {
+      "latency": 20.518864154815674,
+      "model": "writer/palmyra-x6",
+      "ts": 1789109516.8910513
+    },
+    {
+      "latency": 23.947028636932373,
+      "model": "writer/palmyra-x6",
+      "ts": 1789131141.0768807
+    },
+    {
+      "latency": 18.57487416267395,
+      "model": "writer/palmyra-x6",
+      "ts": 1789152759.9290836
+    }
+  ],
+  "tool_usage": {
+    "cloudflare": 4,
+    "query_memory": 42,
+    "search_code": 145,
+    "read_code": 260,
+    "schubert__schubert_list_directory": 29,
+    "schubert__schubert_run_command": 444,
+    "schubert__schubert_read_file": 139,
+    "deploy_file": 29,
+    "postgres__redis_get": 2,
+    "service_status": 30,
+    "schubert__schubert_get_system_health": 13,
+    "view_logs": 36,
+    "schubert__schubert_get_journal_logs": 16,
+    "schubert__schubert_list_docker_containers": 1,
+    "schubert__schubert_get_gpu_status": 9,
+    "schubert__schubert_get_ollama_status": 2,
+    "schubert__schubert_get_service_status": 18,
+    "query_quality_issues": 2,
+    "web_search": 2,
+    "restart_service": 7,
+    "schubert__schubert_write_file": 10,
+    "slack__slack_list_channels": 28,
+    "slack__slack_get_users": 3,
+    "slack__slack_get_channel_history": 12,
+    "slack__slack_post_message": 2,
+    "schubert__schubert_get_ollama_running_models": 6,
+    "schubert__schubert_get_process_list": 1,
+    "schubert__schubert_find_files": 19,
+    "schubert__knowledge_brain_stats": 8,
+    "schubert__schubert_manage_service": 1,
+    "schubert__knowledge_brain_search": 14,
+    "schubert__knowledge_brain_get_document": 6,
+    "run_test": 8,
+    "postgres__redis_keys": 3,
+    "schubert__schubert_get_network_status": 1,
+    "schubert__schubert_get_tailscale_status": 1,
+    "schubert__knowledge_brain_trigger_sync": 3,
+    "slack__slack_get_user_profile": 1,
+    "schubert__schubert_http_request": 1
+  },
+  "errors": [
+    {
+      "msg": "Pending update marker on startup \u2014 possible incomplete update",
+      "context": "auto_updater",
+      "ts": 1786943294.6553187
+    },
+    {
+      "msg": "Pending update marker on startup \u2014 possible incomplete update",
+      "context": "auto_updater",
+      "ts": 1787014556.826192
+    },
+    {
+      "msg": "Pending update marker on startup \u2014 possible incomplete update",
+      "context": "auto_updater",
+      "ts": 1787038522.0090716
+    },
+    {
+      "msg": "Pending update marker on startup \u2014 possible incomplete update",
+      "context": "auto_updater",
+      "ts": 1787184916.2128127
+    },
+    {
+      "msg": "Pending update marker on startup \u2014 possible incomplete update",
+      "context": "auto_updater",
+      "ts": 1787360376.2702832
+    },
+    {
+      "msg": "Pending update marker on startup \u2014 possible incomplete update",
+      "context": "auto_updater",
+      "ts": 1788571969.7809775
+    }
+  ],
+  "model_usage": {
+    "writer/palmyra-x6": 1067,
+    "writer/claude-sonnet-4-5": 256
+  }
+}

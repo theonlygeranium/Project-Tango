@@ -1,0 +1,38 @@
+{
+  "3127f817-46b1-4bf2-ab9d-f2db661c4a86": {
+    "playbook": "discord-bot-designer",
+    "playbook_name": "Discord Bot Designer",
+    "playbook_id": "4cc35514-51da-4759-98f5-405219d3e51b",
+    "started_at": "2026-08-18T06:13:04.673961+00:00",
+    "notified_stuck": true,
+    "result_posted": false,
+    "status": "awaiting_user_response",
+    "webhook_url": "https://app.writer.com/webhook/triggers/playbook/4cc35514-51da-4759-98f5-405219d3e51b",
+    "api_key": "3272e822daf045d3372b162408ef32516b5a8bb9d26430616aa210499fb8c91b",
+    "notified_awaiting": true
+  },
+  "6da612ba-ac71-40b3-a5e9-bd01dc5bb79b": {
+    "playbook": "discord-bot-designer",
+    "playbook_name": "Discord Bot Designer",
+    "playbook_id": "4cc35514-51da-4759-98f5-405219d3e51b",
+    "started_at": "2026-08-18T06:50:03.020851+00:00",
+    "notified_stuck": true,
+    "result_posted": false,
+    "status": "awaiting_user_response",
+    "webhook_url": "https://app.writer.com/webhook/triggers/playbook/4cc35514-51da-4759-98f5-405219d3e51b",
+    "api_key": "3272e822daf045d3372b162408ef32516b5a8bb9d26430616aa210499fb8c91b",
+    "notified_awaiting": true
+  },
+  "2e5b5442-7040-4658-bfb3-27679909e322": {
+    "playbook": "discord-bot-designer",
+    "playbook_name": "Discord Bot Designer",
+    "playbook_id": "4cc35514-51da-4759-98f5-405219d3e51b",
+    "started_at": "2026-08-18T07:22:36.673408+00:00",
+    "notified_stuck": true,
+    "result_posted": false,
+    "status": "awaiting_user_response",
+    "webhook_url": "https://app.writer.com/webhook/triggers/playbook/4cc35514-51da-4759-98f5-405219d3e51b",
+    "api_key": "3272e822daf045d3372b162408ef32516b5a8bb9d26430616aa210499fb8c91b",
+    "notified_awaiting": true
+  }
+}

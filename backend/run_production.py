@@ -45,8 +45,8 @@ def main() -> int:
     log_level = os.getenv("LOG_LEVEL", "info")
     worker_log_level = os.getenv("LIVEKIT_LOG_LEVEL", log_level).upper()
 
-    processes = [
-        _spawn(
+    specs: list[tuple[str, list[str]]] = [
+        (
             "tango-api",
             [
                 python,
@@ -63,7 +63,7 @@ def main() -> int:
                 log_level.lower(),
             ],
         ),
-        _spawn(
+        (
             "tango-livekit-worker",
             [
                 python,
@@ -74,6 +74,7 @@ def main() -> int:
             ],
         ),
     ]
+    processes = [_spawn(name, args) for name, args in specs]
 
     stopping = False
 
@@ -90,15 +91,19 @@ def main() -> int:
 
     try:
         while not stopping:
-            for process in processes:
+            for index, process in enumerate(processes):
                 return_code = process.poll()
-                if return_code is not None:
-                    print(
-                        f"backend child pid={process.pid} exited with code {return_code}",
-                        flush=True,
-                    )
-                    _terminate(processes)
+                if return_code is None:
+                    continue
+                name, args = specs[index]
+                print(
+                    f"backend child {name} pid={process.pid} exited with code {return_code}; restarting",
+                    flush=True,
+                )
+                time.sleep(1)
+                if stopping:
                     return return_code or 1
+                processes[index] = _spawn(name, args)
             time.sleep(1)
     finally:
         _terminate(processes)

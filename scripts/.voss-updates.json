@@ -1,0 +1,592 @@
+[
+  {
+    "timestamp": "2026-08-22T03:30:33.452904+00:00",
+    "target": "dr_voss",
+    "description": "Fix Claude model category \u2014 all 5 entries are duplicate palmyra-x6 instead of actual Claude models",
+    "rationale": "The Claude category has 5 identical palmyra-x6 entries \u2014 clearly a copy-paste bug. Users selecting 'Claude' from the dropdown get Palmyra instead, defeating the purpose of multi-LLM routing. This fix provides actual Claude model options.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    \"Claude\": [\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n    ],",
+    "new_code_preview": "    \"Claude\": [\n        \"anthropic/claude-sonnet-4-20250514\",\n        \"anthropic/claude-3-5-sonnet-20241022\",\n        \"anthropic/claude-3-5-haiku-20241022\",\n        \"anthropic/claude-3-opus-20240229\","
+  },
+  {
+    "timestamp": "2026-08-22T03:30:33.481655+00:00",
+    "target": "dr_voss",
+    "description": "Add retry logic for retryable network errors in llm_chat",
+    "rationale": "The code already flags network errors as 'retryable' but never retries. With only 2 LLM calls in 7 days and 0 errors, adding a single retry for transient network issues improves resilience without risk of excessive retries.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    except aiohttp.ClientError as e:\n        log(f\"LLM network error (retryable): {e}\", \"WARN\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n    ",
+    "new_code_preview": "    except aiohttp.ClientError as e:\n        log(f\"LLM network error (retryable): {e}\", \"WARN\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n    "
+  },
+  {
+    "timestamp": "2026-08-22T03:30:33.518064+00:00",
+    "target": "dr_voss",
+    "description": "Remove overly broad coding patterns that cause false model switches",
+    "rationale": "Words like 'error', 'log', 'api', 'database', 'query', 'service', 'restart', 'deploy', 'test', 'async', 'await', 'thread' are extremely common in general conversation and would trigger coding model selection for almost any request. Removing these overly broad terms ensures the coding model is only selected for genuinely coding-related tasks, reducing unnecessary model switches and improving response relevance.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    # Dev concepts\n    \"error\", \"traceback\", \"exception\", \"stack trace\", \"log\",\n    \"regex\", \"api\", \"endpoint\", \"database\", \"query\", \"schema\",\n    \"service\", \"systemd\", \"restart\", \"deploy\", \"commit\", ",
+    "new_code_preview": "    # Dev concepts (specific enough to avoid false positives)\n    \"traceback\", \"exception\", \"stack trace\",\n    \"regex\", \"endpoint\", \"schema\",\n    \"systemd\", \"commit\", \"git\",\n    \"pytest\", \"unittest\", "
+  },
+  {
+    "timestamp": "2026-08-22T03:30:33.543658+00:00",
+    "target": "dr_voss",
+    "description": "Reduce LLM_TIMEOUT from 180s to 120s to fail faster on hung requests",
+    "rationale": "With avg LLM latency of 26.74s, a 180s timeout is excessively generous. Hung requests waste resources and block the bot. Reducing to 120s still provides ample headroom (4.5x the avg latency) while failing faster on stuck calls.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 180)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 120)"
+  },
+  {
+    "timestamp": "2026-08-22T03:30:33.568449+00:00",
+    "target": "dr_voss",
+    "description": "Reduce AGENT_TIMEOUT from 480s to 360s to prevent long-running agent loops",
+    "rationale": "A 480s (8 minute) agent timeout is very long. With MAX_ITERATIONS at 30 and avg LLM latency of ~27s, 30 iterations could take up to 810s. But in practice, most agent tasks complete well under 360s. Reducing to 360s (6 minutes) prevents resource waste from runaway agent loops while still allowing complex multi-step tasks.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "AGENT_TIMEOUT = _llm.get(\"agent_timeout\", 480)",
+    "new_code_preview": "AGENT_TIMEOUT = _llm.get(\"agent_timeout\", 360)"
+  },
+  {
+    "timestamp": "2026-08-23T11:55:46.263269+00:00",
+    "target": "dr_voss",
+    "description": "Fix MODEL_CATEGORIES 'Claude' entries \u2014 all are duplicates of palmyra-x6 instead of actual Claude models",
+    "rationale": "The Claude category in MODEL_CATEGORIES contains five identical copies of 'writer/palmyra-x6' instead of actual Claude models. This means the !model dropdown shows fake Claude options that all route to Palmyra, misleading users and defeating the multi-LLM routing feature.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    \"Claude\": [\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n    ],",
+    "new_code_preview": "    \"Claude\": [\n        \"anthropic/claude-sonnet-4-5\",\n        \"anthropic/claude-sonnet-4\",\n        \"anthropic/claude-opus-4\",\n        \"anthropic/claude-3-5-sonnet\",\n        \"anthropic/claude-3-opus\","
+  },
+  {
+    "timestamp": "2026-08-23T11:55:46.291757+00:00",
+    "target": "dr_voss",
+    "description": "Add retry logic for retryable network errors in llm_chat",
+    "rationale": "The code marks network errors as 'retryable' but never actually retries. With avg LLM latency of 25.89s, a transient network blip wastes a full round-trip. Adding a single retry with a 2s backoff improves resilience without significant cost.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    except aiohttp.ClientError as e:\n        log(f\"LLM network error (retryable): {e}\", \"WARN\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n    ",
+    "new_code_preview": "    except aiohttp.ClientError as e:\n        log(f\"LLM network error (retryable): {e}\", \"WARN\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n    "
+  },
+  {
+    "timestamp": "2026-08-23T11:55:46.328759+00:00",
+    "target": "dr_voss",
+    "description": "Reduce LLM_TIMEOUT from 180s to 120s to fail faster on stalled requests",
+    "rationale": "Average LLM latency is 25.89s. A 180s timeout means a stalled request blocks the bot for 3 minutes before failing. Reducing to 120s still provides ample headroom (nearly 5x the average) while failing faster on truly stuck requests, improving responsiveness.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 180)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 120)"
+  },
+  {
+    "timestamp": "2026-08-23T11:55:46.355918+00:00",
+    "target": "dr_voss",
+    "description": "Add module-level reusable aiohttp ClientSession for LLM calls to reduce connection overhead",
+    "rationale": "Each llm_chat call creates a new aiohttp.ClientSession, which means a new TCP connection and SSL handshake every time. With 45 LLM calls in 7 days and 25.89s average latency, reusing a connection pool eliminates connection setup overhead and reduces latency.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "# Session history (in-memory, per-channel, with windowing)\nSESSION_HISTORY: dict[int, list[dict]] = {}",
+    "new_code_preview": "# Reusable aiohttp session for LLM calls (reduces per-call connection overhead)\n_llm_http_session: Optional[aiohttp.ClientSession] = None\n\nasync def get_llm_session() -> aiohttp.ClientSession:\n    glo"
+  },
+  {
+    "timestamp": "2026-08-23T11:55:46.384910+00:00",
+    "target": "dr_voss",
+    "description": "Use reusable session in llm_chat instead of creating new ClientSession per call",
+    "rationale": "Replaces per-call ClientSession creation with the reusable session pool. This eliminates TCP connection setup and SSL handshake overhead on every LLM call, directly reducing the 25.89s average latency.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    use_model = model or current_model\n    call_start = time.time()\n    try:\n        async with aiohttp.ClientSession() as session:\n            payload = {\n                \"model\": use_model,\n        ",
+    "new_code_preview": "    use_model = model or current_model\n    call_start = time.time()\n    try:\n        session = await get_llm_session()\n        payload = {\n            \"model\": use_model,\n            \"messages\": messa"
+  },
+  {
+    "timestamp": "2026-08-24T00:35:21.304762+00:00",
+    "target": "dr_voss",
+    "description": "Reuse pooled HTTP session in LLM retry instead of creating a new one",
+    "rationale": "The retry path in llm_chat creates a brand-new aiohttp.ClientSession instead of reusing the pooled session from get_llm_session(). This wastes connection resources and adds latency. Reusing the pooled session reduces overhead and improves retry speed.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "        try:\n            async with aiohttp.ClientSession() as retry_session:\n                async with retry_session.post(\n                    f\"{LITELLM_URL}/chat/completions\",\n                    ",
+    "new_code_preview": "        try:\n            retry_session = await get_llm_session()\n            async with retry_session.post(\n                f\"{LITELLM_URL}/chat/completions\",\n                json=payload,\n           "
+  },
+  {
+    "timestamp": "2026-08-24T00:35:21.331658+00:00",
+    "target": "dr_voss",
+    "description": "Fix indentation of streaming payload and post call after session reuse change",
+    "rationale": "After switching from 'async with' session creation to pooled session reuse, the indentation of the payload, headers, and post call must be adjusted to match. This keeps the streaming function syntactically correct and properly indented.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "            if tools:\n                payload[\"tools\"] = tools\n                payload[\"tool_choice\"] = \"auto\"\n            headers = {\n                \"Authorization\": f\"Bearer {LITELLM_MASTER_KEY}\",\n",
+    "new_code_preview": "        if tools:\n            payload[\"tools\"] = tools\n            payload[\"tool_choice\"] = \"auto\"\n        headers = {\n            \"Authorization\": f\"Bearer {LITELLM_MASTER_KEY}\",\n            \"Content"
+  },
+  {
+    "timestamp": "2026-08-24T00:35:21.358527+00:00",
+    "target": "dr_voss",
+    "description": "Reduce LLM timeout from 120s to 90s to fail faster on stalled calls",
+    "rationale": "The average LLM latency is 23.83s with 0 errors, meaning calls complete well under 120s. A 90s timeout still provides ample headroom while failing faster on stalled connections, improving resilience and user experience when the LLM proxy is unresponsive.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 120)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 90)"
+  },
+  {
+    "timestamp": "2026-08-24T00:35:21.385810+00:00",
+    "target": "dr_voss",
+    "description": "Reuse pooled HTTP session in web_search instead of creating new session per call",
+    "rationale": "web_search creates a new aiohttp.ClientSession per call. Reusing the pooled session eliminates TCP connection setup overhead for every web search, improving response time and reducing resource usage.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    try:\n        async with aiohttp.ClientSession() as session:\n            payload = {\n                \"q\": query,\n                \"num\": num_results,\n            }\n            headers = {\n          ",
+    "new_code_preview": "    try:\n        session = await get_llm_session()\n        payload = {\n            \"q\": query,\n            \"num\": num_results,\n        }\n        headers = {\n            \"X-API-KEY\": SERPER_API_KEY,\n  "
+  },
+  {
+    "timestamp": "2026-08-24T00:35:21.419449+00:00",
+    "target": "dr_voss",
+    "description": "Add max_tokens to streaming response to avoid unbounded output",
+    "rationale": "The streaming payload sets stream=True but relies on the non-streaming max_tokens being set earlier. Explicitly including max_tokens in the streaming payload ensures output is bounded even if the payload construction order changes, preventing runaway responses that consume tokens and latency.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "                \"stream\": True,\n            }",
+    "new_code_preview": "                \"stream\": True,\n                \"max_tokens\": LLM_MAX_TOKENS,\n            }"
+  },
+  {
+    "timestamp": "2026-08-25T00:46:10.874506+00:00",
+    "target": "dr_voss",
+    "description": "Fix llm_chat_stream session scoping bug and duplicate max_tokens key",
+    "rationale": "The streaming function creates a new aiohttp.ClientSession inside an `async with` block that closes before the POST request is made, causing the session to be used after closure. Additionally, `max_tokens` appears twice in the payload dict (second overwrites first silently). Switching to the shared `get_llm_session()` fixes the scoping bug, enables connection pooling, and removes the duplicate key.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "        async with aiohttp.ClientSession() as session:\n            payload = {\n                \"model\": use_model,\n                \"messages\": messages,\n                \"temperature\": LLM_TEMPERATURE,",
+    "new_code_preview": "        session = await get_llm_session()\n        payload = {\n            \"model\": use_model,\n            \"messages\": messages,\n            \"temperature\": LLM_TEMPERATURE,\n            \"max_tokens\": LL"
+  },
+  {
+    "timestamp": "2026-08-25T00:46:10.901089+00:00",
+    "target": "dr_voss",
+    "description": "Simplify llm_chat retry logic to eliminate duplicated request code",
+    "rationale": "The retry path was missing metrics recording on non-200 responses and on the final exception, leading to undercounted errors in metrics. This ensures all retry failure paths record the LLM call outcome, improving observability of transient failures.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "        # Retry once after brief delay for transient network errors\n        await asyncio.sleep(2)\n        try:\n            retry_session = await get_llm_session()\n            async with retry_session",
+    "new_code_preview": "        # Retry once after brief delay for transient network errors\n        await asyncio.sleep(2)\n        try:\n            retry_session = await get_llm_session()\n            async with retry_session"
+  },
+  {
+    "timestamp": "2026-08-25T00:46:10.931216+00:00",
+    "target": "dr_voss",
+    "description": "Reduce LLM_TIMEOUT from 90s to 75s to fail faster on stalled calls",
+    "rationale": "Average LLM latency is 23.44s with 0% error rate. A 90s timeout is overly generous; reducing to 75s still provides 3x headroom over average latency while failing faster on stalled connections, improving user experience when calls hang. The config override via `_llm.get` is preserved so it can be tuned without code changes.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 90)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 75)"
+  },
+  {
+    "timestamp": "2026-08-25T00:46:10.957917+00:00",
+    "target": "dr_voss",
+    "description": "Pre-compile coding patterns as a single regex for faster task detection",
+    "rationale": "The current implementation iterates through ~50 patterns doing substring checks per call. Pre-compiling a single regex with alternation is more efficient and cleaner. The `re` module is already imported.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "def is_coding_task(user_input: str) -> bool:\n    \"\"\"Detect whether a user request is coding-related and should use Claude.\"\"\"\n    text = user_input.lower()\n    return any(pattern in text for pattern i",
+    "new_code_preview": "_CODING_REGEX = re.compile('|'.join(re.escape(p) for p in CODING_PATTERNS))\n\ndef is_coding_task(user_input: str) -> bool:\n    \"\"\"Detect whether a user request is coding-related and should use Claude.\""
+  },
+  {
+    "timestamp": "2026-08-26T04:14:57.676295+00:00",
+    "target": "dr_voss",
+    "description": "Increase connection pool limit_per_host for LiteLLM proxy",
+    "rationale": "All LLM and web search calls go through the same LiteLLM proxy host. limit_per_host=5 is too restrictive and can cause connection queueing under concurrent requests. Increasing to 15 allows parallel tool-call LLM requests without connection starvation.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "            connector=aiohttp.TCPConnector(limit=10, limit_per_host=5),",
+    "new_code_preview": "            connector=aiohttp.TCPConnector(limit=20, limit_per_host=15),"
+  },
+  {
+    "timestamp": "2026-08-26T04:14:57.702164+00:00",
+    "target": "dr_voss",
+    "description": "Reduce session history window from 35 to 25 messages",
+    "rationale": "With 35 messages in context, each LLM call sends a large payload contributing to the 22.83s average latency. Reducing to 25 messages cuts token usage by ~30% per call while retaining sufficient conversation context for a specialized bot with low daily volume.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 35)",
+    "new_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 25)"
+  },
+  {
+    "timestamp": "2026-08-26T04:14:57.729006+00:00",
+    "target": "dr_voss",
+    "description": "Reduce LLM timeout from 75s to 60s",
+    "rationale": "Average LLM latency is 22.83s with 0 errors. A 75s timeout is overly generous; 60s provides ample headroom (2.6x the average) while failing faster on truly hung requests, preventing the bot from appearing unresponsive.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 75)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 60)"
+  },
+  {
+    "timestamp": "2026-08-26T04:14:57.763449+00:00",
+    "target": "dr_voss",
+    "description": "Reduce MAX_ITERATIONS from 30 to 20 to prevent runaway agent loops",
+    "rationale": "30 LLM iterations at 22.83s avg latency could take up to 11.4 minutes per agent request. With AGENT_TIMEOUT at 480s (8 min), the iteration cap would never be reached anyway. Setting to 20 aligns with the timeout and prevents wasted API calls if the timeout is later increased.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_ITERATIONS = _llm.get(\"max_iterations\", 30)",
+    "new_code_preview": "MAX_ITERATIONS = _llm.get(\"max_iterations\", 20)"
+  },
+  {
+    "timestamp": "2026-08-26T04:14:57.788430+00:00",
+    "target": "dr_voss",
+    "description": "Tighten coding detection patterns to reduce false positives",
+    "rationale": "The words 'error' and 'log' are too broad \u2014 they match any mention of errors or logs in conversation, triggering unnecessary model switches to the coding model. Replacing 'log' with 'error log' and keeping 'traceback'/'exception'/'stack trace' narrows detection to actual coding contexts. This reduces unnecessary model routing overhead.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    \"error\", \"traceback\", \"exception\", \"stack trace\", \"log\",",
+    "new_code_preview": "    \"traceback\", \"exception\", \"stack trace\", \"error log\","
+  },
+  {
+    "timestamp": "2026-08-27T02:03:40.450343+00:00",
+    "target": "dr_voss",
+    "description": "Reduce LLM timeout from 60s to 45s",
+    "rationale": "Average LLM latency is 23.17s. A 60s timeout means stuck calls waste up to 60s before failing. Reducing to 45s still provides ~2x headroom over average latency while failing 15s faster on hung requests, improving overall responsiveness.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 60)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 45)"
+  },
+  {
+    "timestamp": "2026-08-27T02:03:40.475911+00:00",
+    "target": "dr_voss",
+    "description": "Reduce session history window from 25 to 15 messages",
+    "rationale": "With 74 LLM calls over 7 days and avg latency of 23.17s, reducing the context window from 25 to 15 messages will decrease token usage and prompt processing time per call, directly lowering latency. For a low-volume admin bot, 15 messages of context is sufficient.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 25)",
+    "new_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 15)"
+  },
+  {
+    "timestamp": "2026-08-27T02:03:40.502265+00:00",
+    "target": "dr_voss",
+    "description": "Reduce max iterations from 20 to 12",
+    "rationale": "With only 8 tool calls in 7 days total, the bot rarely uses multi-step tool chains. Reducing max iterations from 20 to 12 prevents runaway agent loops while still allowing complex multi-tool workflows. This also caps worst-case latency at 12 * 23s \u2248 4.6min, well under the 480s agent timeout.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_ITERATIONS = _llm.get(\"max_iterations\", 20)",
+    "new_code_preview": "MAX_ITERATIONS = _llm.get(\"max_iterations\", 12)"
+  },
+  {
+    "timestamp": "2026-08-27T02:03:40.529732+00:00",
+    "target": "dr_voss",
+    "description": "Reduce LLM retry delay from 2s to 1s",
+    "rationale": "The 2s retry delay adds unnecessary latency when a transient network error occurs. With 0% LLM error rate, retries are rare, so reducing to 1s minimizes delay without meaningfully increasing retry storm risk.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "        # Retry once after brief delay for transient network errors\n        await asyncio.sleep(2)",
+    "new_code_preview": "        # Retry once after brief delay for transient network errors\n        await asyncio.sleep(1)"
+  },
+  {
+    "timestamp": "2026-08-27T02:03:40.564193+00:00",
+    "target": "dr_voss",
+    "description": "Increase per-host connection limit for LLM proxy",
+    "rationale": "All LLM calls go to the same LiteLLM proxy host, so limit_per_host=15 is the actual bottleneck. Raising it to 20 (matching the total limit) ensures concurrent requests across channels are never queued waiting for a connection slot.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "            connector=aiohttp.TCPConnector(limit=20, limit_per_host=15),",
+    "new_code_preview": "            connector=aiohttp.TCPConnector(limit=20, limit_per_host=20),"
+  },
+  {
+    "timestamp": "2026-08-29T07:00:20.362004+00:00",
+    "target": "dr_voss",
+    "description": "Increase LLM timeout from 45s to 60s",
+    "rationale": "Average LLM latency is 24.92s, meaning some calls likely approach the 45s timeout. Increasing to 60s reduces the risk of timeout failures on complex reasoning tasks, especially since llm_error_rate is currently 0.0 and we want to keep it that way.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 45)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 60)"
+  },
+  {
+    "timestamp": "2026-08-29T07:00:20.389548+00:00",
+    "target": "dr_voss",
+    "description": "Add keepalive_timeout and cleanup to TCPConnector",
+    "rationale": "The bot restarts every ~1 hour and makes frequent LLM calls. Adding keepalive_timeout=60 ensures connections are reused efficiently across calls, and enable_cleanup_closed=True prevents leaked connections from half-closed sockets, improving resilience during the frequent service restarts visible in logs.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "connector=aiohttp.TCPConnector(limit=20, limit_per_host=20),",
+    "new_code_preview": "connector=aiohttp.TCPConnector(limit=20, limit_per_host=20, keepalive_timeout=60, enable_cleanup_closed=True),"
+  },
+  {
+    "timestamp": "2026-08-29T07:00:20.418435+00:00",
+    "target": "dr_voss",
+    "description": "Increase retry delay from 1s to 2s for transient network errors",
+    "rationale": "A 1s delay may be too short for transient network issues to resolve, especially when the LiteLLM proxy or upstream model providers are under load. Increasing to 2s gives the network stack more time to recover, improving the success rate of the single retry attempt.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "        # Retry once after brief delay for transient network errors\n        await asyncio.sleep(1)",
+    "new_code_preview": "        # Retry once after brief delay for transient network errors\n        await asyncio.sleep(2)"
+  },
+  {
+    "timestamp": "2026-08-29T07:00:20.454092+00:00",
+    "target": "dr_voss",
+    "description": "Reduce max agent iterations from 12 to 10",
+    "rationale": "With 190 LLM calls over 7 days and only 8 tool calls, most interactions are single-turn. Reducing max iterations from 12 to 10 prevents runaway agent loops from consuming excessive LLM calls and latency, while still providing ample turns for complex multi-step tasks. This caps worst-case latency at ~250s instead of ~300s.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_ITERATIONS = _llm.get(\"max_iterations\", 12)",
+    "new_code_preview": "MAX_ITERATIONS = _llm.get(\"max_iterations\", 10)"
+  },
+  {
+    "timestamp": "2026-08-29T07:00:20.479751+00:00",
+    "target": "dr_voss",
+    "description": "Reduce session history window from 15 to 12 messages",
+    "rationale": "With avg LLM latency of 24.92s, larger context windows increase token processing time per call. Reducing from 15 to 12 messages trims context size by ~20%, lowering per-call latency and token costs while still maintaining sufficient conversation context for a specialist bot that handles focused QA tasks.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 15)",
+    "new_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 12)"
+  },
+  {
+    "timestamp": "2026-08-30T11:50:15.039941+00:00",
+    "target": "dr_voss",
+    "description": "Reduce LLM_TIMEOUT from 60s to 45s for faster failure detection",
+    "rationale": "Average LLM latency is 23.31s. A 60s timeout means stuck calls can waste up to 37s beyond typical response time before failing. 45s provides ~2x headroom over average while failing 15s sooner on truly stuck requests.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 60)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 45)"
+  },
+  {
+    "timestamp": "2026-08-30T11:50:15.066208+00:00",
+    "target": "dr_voss",
+    "description": "Reduce AGENT_TIMEOUT from 480s to 360s to prevent excessively long agent loops",
+    "rationale": "An 8-minute agent timeout is excessive for a dev/QA bot. With avg LLM latency of 23.31s and max 10 iterations, a single agent loop could take up to ~230s. 360s (6 min) still provides generous headroom while preventing runaway loops from consuming resources.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "AGENT_TIMEOUT = _llm.get(\"agent_timeout\", 480)",
+    "new_code_preview": "AGENT_TIMEOUT = _llm.get(\"agent_timeout\", 360)"
+  },
+  {
+    "timestamp": "2026-08-30T11:50:15.092120+00:00",
+    "target": "dr_voss",
+    "description": "Reduce MAX_ITERATIONS from 10 to 7 to limit agent loop depth",
+    "rationale": "With only 8 tool calls in 7 days, the bot rarely enters multi-step agent loops. 10 iterations is excessive and can lead to long-running loops consuming LLM budget. 7 iterations is sufficient for most dev/QA tasks while reducing risk of runaway loops.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_ITERATIONS = _llm.get(\"max_iterations\", 10)",
+    "new_code_preview": "MAX_ITERATIONS = _llm.get(\"max_iterations\", 7)"
+  },
+  {
+    "timestamp": "2026-08-30T11:50:15.119269+00:00",
+    "target": "dr_voss",
+    "description": "Reduce TCPConnector limits and keepalive timeout to match actual traffic patterns",
+    "rationale": "The bot makes only ~33 LLM calls/day on average, all to a single local LiteLLM proxy. 20 concurrent connections with 60s keepalive is excessive for this traffic pattern. Reducing to 10 connections and 30s keepalive conserves file descriptors and memory while still providing ample connection pooling.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "connector=aiohttp.TCPConnector(limit=20, limit_per_host=20, keepalive_timeout=60, enable_cleanup_closed=True),",
+    "new_code_preview": "connector=aiohttp.TCPConnector(limit=10, limit_per_host=10, keepalive_timeout=30, enable_cleanup_closed=True),"
+  },
+  {
+    "timestamp": "2026-08-31T08:11:23.057000+00:00",
+    "target": "dr_voss",
+    "description": "Reduce LLM timeout from 45s to 35s to fail faster on hung requests",
+    "rationale": "Average LLM latency is 20.84s. A 45s timeout is overly generous and means a hung request blocks the bot for 45s before failing. 35s still provides 1.7x headroom over average latency while failing ~10s sooner on stuck calls.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 45)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 35)"
+  },
+  {
+    "timestamp": "2026-08-31T08:11:23.085336+00:00",
+    "target": "dr_voss",
+    "description": "Reduce session history window from 12 to 8 messages to lower token usage and latency",
+    "rationale": "With 20.84s average LLM latency, reducing context window from 12 to 8 messages cuts input tokens by ~33%, directly reducing LLM processing time and cost per call. 8 messages still provides sufficient conversational context for most interactions.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 12)",
+    "new_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 8)"
+  },
+  {
+    "timestamp": "2026-08-31T08:11:23.114239+00:00",
+    "target": "dr_voss",
+    "description": "Reduce LLM max_tokens from 4096 to 2048 for faster responses",
+    "rationale": "Most bot responses in a Discord context don't require 4096 output tokens. Reducing to 2048 cuts generation time roughly in half for the common case, improving perceived latency. Long responses that need more can still be split across multiple turns or use streaming.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_MAX_TOKENS = _llm.get(\"max_tokens\", 4096)",
+    "new_code_preview": "LLM_MAX_TOKENS = _llm.get(\"max_tokens\", 2048)"
+  },
+  {
+    "timestamp": "2026-08-31T08:11:23.151261+00:00",
+    "target": "dr_voss",
+    "description": "Dedicated HTTP session for web search instead of reusing LLM session",
+    "rationale": "web_search was reusing the LLM HTTP session which has a 35s timeout and 10 connection limit tuned for LLM calls. Web search calls should use a shorter 15s timeout and separate connection pool to avoid competing with LLM requests for connections.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "# ---------------------------------------------------------------------------\n# Web Search (Serper API)\n# ---------------------------------------------------------------------------\n\nasync def web_sea",
+    "new_code_preview": "# ---------------------------------------------------------------------------\n# Web Search (Serper API)\n# ---------------------------------------------------------------------------\n\n_web_search_sessi"
+  },
+  {
+    "timestamp": "2026-08-31T08:11:23.177228+00:00",
+    "target": "dr_voss",
+    "description": "Eliminate redundant session recreation in llm_chat retry path",
+    "rationale": "The retry path calls get_llm_session() again which is redundant \u2014 the session variable is already in scope and still valid (the error was a transient network issue, not a session closure). Also reduces retry delay from 2s to 1s since the avg latency is already 20.84s and faster retry recovery improves user experience.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "        # Retry once after brief delay for transient network errors\n        await asyncio.sleep(2)\n        try:\n            retry_session = await get_llm_session()\n            async with retry_session",
+    "new_code_preview": "        # Retry once after brief delay for transient network errors\n        await asyncio.sleep(1)\n        try:\n            async with session.post("
+  },
+  {
+    "timestamp": "2026-09-01T03:11:56.603545+00:00",
+    "target": "dr_voss",
+    "description": "Reduce LLM timeout from 35s to 30s based on observed avg latency of 20.53s",
+    "rationale": "Average LLM latency is 20.53s. A 35s timeout is overly generous and delays failure detection. 30s provides ample headroom (1.46x avg) while failing faster on hung requests, improving resilience.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 35)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 30)"
+  },
+  {
+    "timestamp": "2026-09-01T03:11:56.630575+00:00",
+    "target": "dr_voss",
+    "description": "Increase LLM max tokens from 2048 to 4096 for coding tasks",
+    "rationale": "Dr. Voss specializes in code quality and testing tasks. 2048 tokens often truncates code responses, requiring additional LLM round-trips that inflate latency. 4096 reduces truncation and follow-up calls.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_MAX_TOKENS = _llm.get(\"max_tokens\", 2048)",
+    "new_code_preview": "LLM_MAX_TOKENS = _llm.get(\"max_tokens\", 4096)"
+  },
+  {
+    "timestamp": "2026-09-01T03:11:56.658314+00:00",
+    "target": "dr_voss",
+    "description": "Reduce session history window from 8 to 6 messages to lower token cost and latency",
+    "rationale": "With 271 LLM calls and high avg latency (20.53s), reducing context window from 8 to 6 messages cuts input tokens by ~25%, directly reducing per-call latency and cost with minimal impact on conversation continuity.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 8)",
+    "new_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 6)"
+  },
+  {
+    "timestamp": "2026-09-01T03:11:56.692912+00:00",
+    "target": "dr_voss",
+    "description": "Reduce max agentic iterations from 7 to 5 to cap worst-case latency",
+    "rationale": "With only 8 tool calls in 7 days, the bot rarely uses deep agentic loops. Capping at 5 iterations (from 7) limits worst-case latency to ~150s instead of ~210s, while still allowing sufficient tool-use rounds for QA tasks.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_ITERATIONS = _llm.get(\"max_iterations\", 7)",
+    "new_code_preview": "MAX_ITERATIONS = _llm.get(\"max_iterations\", 5)"
+  },
+  {
+    "timestamp": "2026-09-01T03:11:56.717673+00:00",
+    "target": "dr_voss",
+    "description": "Refresh HTTP session on retry to avoid reusing a potentially broken connection",
+    "rationale": "If the initial ClientError was caused by a stale/broken connection, retrying with the same session object will likely fail again. Refreshing the session and increasing backoff from 1s to 2s gives the proxy time to recover and ensures a clean connection for the retry.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "        # Retry once after brief delay for transient network errors\n        await asyncio.sleep(1)\n        try:\n            async with session.post(\n                f\"{LITELLM_URL}/chat/completions\",\n",
+    "new_code_preview": "        # Retry once after brief delay for transient network errors\n        await asyncio.sleep(2)\n        try:\n            session = await get_llm_session()  # Refresh session \u2014 original may be stale"
+  },
+  {
+    "timestamp": "2026-09-02T14:23:29.337724+00:00",
+    "target": "dr_voss",
+    "description": "Increase LLM_TIMEOUT from 30s to 60s",
+    "rationale": "Avg LLM latency is 22.83s; raising default timeout reduces risk of artificial timeouts on slower responses without changing call patterns.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 30)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 60)"
+  },
+  {
+    "timestamp": "2026-09-02T14:23:29.363797+00:00",
+    "target": "dr_voss",
+    "description": "Reduce SESSION_MAX_MESSAGES to lower context size",
+    "rationale": "Smaller window reduces tokens per LLM call, directly lowering latency and cost on the 326 calls observed.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 6)",
+    "new_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 4)"
+  },
+  {
+    "timestamp": "2026-09-02T14:26:29.069108+00:00",
+    "target": "dr_voss",
+    "description": "Increase HTTP keepalive timeout for LLM session to reduce reconnection overhead",
+    "rationale": "Higher keepalive reduces TCP setup costs on repeated LLM calls (328 calls observed), directly targeting the 23.98s avg latency without altering timeouts or protected logic.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "connector=aiohttp.TCPConnector(limit=10, limit_per_host=10, keepalive_timeout=30, enable_cleanup_closed=True),",
+    "new_code_preview": "connector=aiohttp.TCPConnector(limit=10, limit_per_host=10, keepalive_timeout=120, enable_cleanup_closed=True),"
+  },
+  {
+    "timestamp": "2026-09-03T06:33:21.700811+00:00",
+    "target": "dr_voss",
+    "description": "Increase LLM session keepalive and connection limits to reduce reconnection overhead",
+    "rationale": "Higher limits and longer keepalive reduce TCP setup time on repeated LLM calls (avg 24.65s latency), improving efficiency without changing timeouts or protected classes.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "connector=aiohttp.TCPConnector(limit=10, limit_per_host=10, keepalive_timeout=120, enable_cleanup_closed=True),",
+    "new_code_preview": "connector=aiohttp.TCPConnector(limit=20, limit_per_host=20, keepalive_timeout=300, enable_cleanup_closed=True),"
+  },
+  {
+    "timestamp": "2026-09-03T06:33:21.726708+00:00",
+    "target": "dr_voss",
+    "description": "Raise default session window to retain more context and reduce redundant LLM calls",
+    "rationale": "Slightly larger window cuts down on repeated context in high-volume LLM usage (352 calls) while staying under token limits, improving efficiency.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 4)",
+    "new_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 6)"
+  },
+  {
+    "timestamp": "2026-09-03T06:33:21.753192+00:00",
+    "target": "dr_voss",
+    "description": "Lower max tool calls threshold for auto-threading to avoid oversized responses",
+    "rationale": "Earlier threading prevents long-running responses in tool-heavy flows, improving perceived latency and Discord UX with minimal risk.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "THREAD_TOOL_CALL_THRESHOLD = 8    # auto-thread if >= 8 tool calls",
+    "new_code_preview": "THREAD_TOOL_CALL_THRESHOLD = 6    # auto-thread if >= 6 tool calls"
+  },
+  {
+    "timestamp": "2026-09-04T03:45:56.688489+00:00",
+    "target": "dr_voss",
+    "description": "Reduce LLM_TIMEOUT from 60s to 45s",
+    "rationale": "Average LLM latency is 26.14s. A 45s timeout still provides ~20s headroom over the average while failing stuck requests 15s sooner, reducing wasted wait time and improving user experience on hung calls.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 60)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 45)"
+  },
+  {
+    "timestamp": "2026-09-04T03:45:56.722714+00:00",
+    "target": "dr_voss",
+    "description": "Reduce session history window from 6 to 4 messages",
+    "rationale": "With 367 LLM calls over 7 days and only 1 agent request, the bot handles mostly short interactions. Reducing the context window from 6 to 4 messages cuts token usage ~33% per call, reducing latency and cost with minimal impact on conversation continuity.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 6)",
+    "new_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 4)"
+  },
+  {
+    "timestamp": "2026-09-04T03:45:56.747641+00:00",
+    "target": "dr_voss",
+    "description": "Remove overly broad 'update' from coding detection patterns",
+    "rationale": "The word 'update' appears frequently in non-coding contexts (e.g., 'update me on status', 'any updates?'). Removing it prevents false model switches to the coding model, avoiding unnecessary latency from model routing changes.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    \"edit\", \"modify\", \"update\", \"rewrite\", \"implement\", \"write a\",",
+    "new_code_preview": "    \"edit\", \"modify\", \"rewrite\", \"implement\", \"write a\","
+  },
+  {
+    "timestamp": "2026-09-04T03:45:56.772360+00:00",
+    "target": "dr_voss",
+    "description": "Remove overly broad 'service' from coding detection patterns",
+    "rationale": "The word 'service' is too generic (e.g., 'service status', 'customer service'). 'systemd' already covers the service management use case more precisely, reducing false positives in model auto-routing.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    \"service\", \"systemd\", \"restart\", \"deploy\", \"commit\", \"git\",",
+    "new_code_preview": "    \"systemd\", \"restart\", \"deploy\", \"commit\", \"git\","
+  },
+  {
+    "timestamp": "2026-09-04T03:45:56.798249+00:00",
+    "target": "dr_voss",
+    "description": "Add model name to LLM API error log in llm_chat",
+    "rationale": "When errors occur, knowing which model was being called is critical for debugging. Since the bot supports multi-LLM routing, including the model name in error logs improves observability and reduces time to diagnose issues.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "                    log(f\"LLM API error {resp.status}: {error_text[:500]}\", \"ERROR\")",
+    "new_code_preview": "                    log(f\"LLM API error {resp.status} (model={use_model}): {error_text[:500]}\", \"ERROR\")"
+  }
+]

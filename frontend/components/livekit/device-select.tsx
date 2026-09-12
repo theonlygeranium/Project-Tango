@@ -76,8 +76,13 @@ export function DeviceSelect({
     onDeviceListChange?.(devices);
   }, [devices, onDeviceListChange]);
 
+  const selectableDevices = devices.filter((device) => device.deviceId);
+  const selectValue = selectableDevices.some((device) => device.deviceId === activeDeviceId)
+    ? activeDeviceId
+    : undefined;
+
   return (
-    <Select value={activeDeviceId} onValueChange={handleValueChange}>
+    <Select value={selectValue} onValueChange={handleValueChange}>
       <SelectTrigger
         className={cn(selectVariants({ size }), className)}
         title={title ?? label}
@@ -89,7 +94,7 @@ export function DeviceSelect({
         )}
       </SelectTrigger>
       <SelectContent>
-        {devices.map((device, index) => (
+        {selectableDevices.map((device, index) => (
           <SelectItem key={device.deviceId} value={device.deviceId} className="font-mono text-xs">
             {device.label || `Device ${index + 1}`}
           </SelectItem>

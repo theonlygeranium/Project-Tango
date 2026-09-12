@@ -7,6 +7,74 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ---
 
+## [Unreleased] Fleet Command — Palmyra x6 defaults
+
+### Changed
+- Fleet Command default LLM is `writer/palmyra-x6` for both `model` and
+  `coding_model`. The Sentinel stub no longer advertises Claude Sonnet.
+- `GET /api/fleet/config` fills a blank coding model with Palmyra x6 so the
+  UI does not show an empty or leftover Claude field.
+- Discord bot script fallbacks (`CODING_MODEL` / `LLM_MODEL`) now default to
+  Palmyra x6. Claude remains selectable via `!model`.
+- Fleet Command API version `1.2.1`.
+
+---
+
+## [Unreleased] Fleet Command — Nexus roster UI
+
+### Added
+- `command-ui/` — LCARS console with an 8-bot roster (Sentinel card) and
+  canonical id `voss` instead of `dr_voss`. Served by `fleet-api` at `/`.
+- `GET /api/fleet/config` presents `voss` plus a Sentinel stub so the new
+  UI can render eight cards before `schubert-sentinel.service` exists.
+- Same-origin browser calls to `/api` no longer require a token baked into
+  the JavaScript bundle.
+
+### Changed
+- Fleet Command API version `1.2.0`. The Pages app at
+  `command.schubert.life` still hardcodes seven IDs; use
+  `https://api-command.schubert.life/` for the Nexus roster.
+
+---
+
+## [Unreleased] Fleet Command — Nexus compatibility
+
+### Added
+- `fleet-api/` — Fleet Command API that backs `command.schubert.life`
+  (`api-command.schubert.life` → `127.0.0.1:8097`).
+- `fleet-api/nexus_catalog.py` — merges Nexus tools into the pre-Nexus UI
+  `bots.*.tools` contract and maps `voss` → `dr_voss`.
+- `GET /api/nexus/status` — roster, aliases, and sentinel deploy state.
+- ADR-019 and runbook `docs/runbooks/fleet-command.md`.
+
+### Changed
+- `GET /api/fleet/config`, `GET /api/bots/{id}`, and
+  `GET /api/bots/{id}/tools` return the union of `fleet-config.json` tools
+  and the Nexus catalog so the Cloudflare Pages SPA stays connected after
+  the fleet rebuild.
+
+---
+
+## [Unreleased] v2 — Voice Pipeline Optimization
+
+### Added
+- DeepGram Flux Eager End-of-Turn (`eager_eot_threshold`) for English personas.
+  Per-persona tunable: Chris (0.6), Jeremiah (0.6), Jeremiah V2 (0.55),
+  Jacob (0.65); disabled for Damian, Nathaniel, and Tagalog personas.
+  See ADR-011.
+- Optional global override `TANGO_EAGER_EOT_THRESHOLD` env var.
+- ElevenLabs voice clone audit script (`scripts/audit_elevenlabs_voices.py`).
+- ElevenLabs TTFB verification script (`scripts/verify_elevenlabs_ttfb.py`).
+- Per-agent-turn latency logging in `tango-backend` logs.
+- Conditional `use_pvc_as_ivc` support via `TANGO_ELEVENLABS_USE_PVC_AS_IVC` env var
+  with graceful fallback when the installed plugin version doesn't support it.
+
+### Changed
+- Startup log line now includes `eager_eot_threshold`.
+- `docs/architecture.md` voice pipeline diagram updated to reflect eager EOT.
+
+---
+
 ## [Unreleased]
 
 ### Fixed
@@ -75,6 +143,29 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
   in .env.
 
 ### Fixed
+- **Primary page crash after login** (2026-08-22): Homepage `ProgramLibrary` iterated `/api/programs` JSON `{programs: []}` as if it were an array (`TypeError: e is not iterable`). Fetch now unwraps `programs`, grouping ignores non-arrays, LiveKit session UI mounts only after Start, and empty media-device IDs no longer crash Radix Select.
+- **Post-login client crash** (2026-08-22): Next SSR forwarded cookies via
+  `cookies().toString()` which serializes to `[object Object]`, so
+  `/api/auth/me` 401'd after a successful login and the app shell threw.
+  Session cookies are now copied by name. Backend fetch failures return
+  logged-out instead of throwing. LiveKit worker exits no longer take the
+  API process down with them.
+- **Tango voice login/worker crash** (2026-08-22): `slack_write_guard` was
+  imported by `backend/mcp_client.py` but the file only lived in `scripts/`,
+  so the LiveKit worker exited 255 every ~3 minutes and bounced the API
+  under the login page. Copied the module into backend and made the import
+  optional. Homepage persona fetch treats HTTP 401 as logged-out instead of
+  crashing the app shell.
+- **Hide Proceed on completed work** (2026-08-22): Proceed/Cancel are not
+  attached to "implementation complete" / "what was delivered" replies, so
+  a second tap cannot rewrite the same files. `safe_create_thread` skips
+  messages that already have a thread (Discord 160004) and Proceed reuses
+  the existing thread as the progress anchor.
+- **Proceed / Cancel buttons** (2026-08-22): Architect, Proctor, and
+  Voss follow-ups now attach ✅ Proceed / ❌ Cancel / 🔁 Regenerate.
+  Proceed continues the last plan (`Yes, proceed with the plan you just
+  outlined`) without typing. Admiral/Cortex `ask_confirmation` uses the
+  Approve/Deny buttons (typed yes/no still works). Captain-only.
 - Fixed Admiral Schubert voice bot DAVE encryption handling. Three root causes
   were identified and resolved:
   1. DAVE DecryptionFailed exception: At ~packet #23, DAVE transitions send

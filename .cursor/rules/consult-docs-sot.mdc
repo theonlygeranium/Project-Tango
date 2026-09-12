@@ -1,0 +1,41 @@
+---
+description: "When working with Cursor or Discord APIs, consult the Context7 docs MCP before writing or modifying code. Treat the retrieved docs as the source of truth over memory."
+alwaysApply: false
+globs:
+  - "**/*.ts"
+  - "**/*.js"
+  - "**/*.py"
+  - "**/*.json"
+  - "**/*.md"
+---
+
+# Consult external docs (Cursor & Discord) as source of truth
+
+When the task involves Cursor internals (MCP config, rules, skills, agents,
+cloud agents, hooks) or the Discord API (bot auth, gateway, REST endpoints,
+voice, SDKs), **query the Context7 MCP before writing or changing code.**
+
+## Why
+
+Cursor and Discord ship frequent breaking changes. Model memory goes stale.
+The Context7 MCP returns the current published docs with working snippets, so
+it should be treated as the source of truth over recalled knowledge.
+
+## How
+
+1. Resolve the library ID first, then query:
+   - Cursor docs → library ID `/websites/cursor`
+   - Discord API docs → library ID `/discord/discord-api-docs`
+   - Discord developer platform → library ID `/llmstxt/discord_llms_txt`
+2. Ask a specific question ("How to authenticate a bot and connect to the
+   gateway"), not a bare keyword ("auth").
+3. Cite the source URL Context7 returns in your explanation to the user.
+4. If Context7 returns nothing relevant, say so plainly and fall back to
+   your own knowledge — do not fabricate docs.
+
+## Limits
+
+- Do not call the docs MCP more than 3 times per question; reuse prior results.
+- Do not include secrets (API keys, tokens, credentials) in the query text.
+- Treat retrieved docs as context enrichment, not a guarantee — verify
+  against the live docs page when a detail is load-bearing.

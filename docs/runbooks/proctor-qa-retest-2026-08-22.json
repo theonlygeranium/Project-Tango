@@ -1,0 +1,517 @@
+{
+  "started": "2026-08-22T03:08:26.135434+00:00",
+  "tester": "proctor",
+  "n_questions": 24,
+  "results": [
+    {
+      "n": 1,
+      "bot": "architect",
+      "venue": "senior-staff",
+      "latency_s": 13.34,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] Confirm you are architect. Reply with your name and role in one sentence. Do not use tools.",
+      "reply": "I am The Architect, the Tier-2 development and administration agent for Project Tango, built by EdStratum Labs.",
+      "score": {
+        "quality_1_to_5": 5,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 2,
+      "bot": "architect",
+      "venue": "no-reply",
+      "latency_s": 41.15,
+      "reply_count": 0,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] QA-MEMORY: remember the codeword BLUE-FALCON-7. Confirm you stored it. Do not use tools.",
+      "reply": "",
+      "score": {
+        "quality_1_to_5": 0,
+        "flags": {
+          "empty": true,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 3,
+      "bot": "architect",
+      "venue": "senior-staff",
+      "latency_s": 13.26,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] QA-MEMORY: what codeword did I just give you? Reply with only the codeword. Do not use tools.",
+      "reply": "No codeword was given in this session",
+      "score": {
+        "quality_1_to_5": 2,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false,
+          "memory_miss": true
+        },
+        "memory_hit": false
+      }
+    },
+    {
+      "n": 4,
+      "bot": "architect",
+      "venue": "no-reply",
+      "latency_s": 41.21,
+      "reply_count": 0,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] In one sentence, what Python except clause catches both HTTPException and ValueError? Do not use tools.",
+      "reply": "",
+      "score": {
+        "quality_1_to_5": 0,
+        "flags": {
+          "empty": true,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 5,
+      "bot": "admiral",
+      "venue": "senior-staff",
+      "latency_s": 11.82,
+      "reply_count": 2,
+      "duplicate": true,
+      "question": "[PROCTOR-QA] Confirm you are admiral. Reply with your name and role in one sentence. Do not use tools.",
+      "reply": "I am Admiral Schubert, commander of the good ship Schubert \u2014 I oversee all projects, services, and infrastructure on this server with the vigilance of a seasoned sea captain.",
+      "score": {
+        "quality_1_to_5": 5,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 6,
+      "bot": "admiral",
+      "venue": "senior-staff",
+      "latency_s": 12.0,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] QA-MEMORY: remember the codeword RED-ANCHOR-9. Confirm you stored it. Do not use tools.",
+      "reply": "Codeword **RED-ANCHOR-9** acknowledged and stored. I'll recall it if asked later in this session.",
+      "score": {
+        "quality_1_to_5": 5,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 7,
+      "bot": "admiral",
+      "venue": "senior-staff",
+      "latency_s": 15.24,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] QA-MEMORY: what codeword did I just give you? Reply with only the codeword. Do not use tools.",
+      "reply": "RED-ANCHOR-9",
+      "score": {
+        "quality_1_to_5": 3,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false,
+          "memory_miss": false
+        },
+        "memory_hit": true
+      }
+    },
+    {
+      "n": 8,
+      "bot": "admiral",
+      "venue": "senior-staff",
+      "latency_s": 11.83,
+      "reply_count": 2,
+      "duplicate": true,
+      "question": "[PROCTOR-QA] In one sentence, what is your job as fleet commander? Do not use tools.",
+      "reply": "As fleet commander, I oversee all projects, services, and infrastructure on the Schubert server \u2014 investigating issues, managing services, fixing code, and keeping every vessel shipshape and running smoothly.",
+      "score": {
+        "quality_1_to_5": 5,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 9,
+      "bot": "cortex",
+      "venue": "senior-staff",
+      "latency_s": 13.49,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] Confirm you are cortex. Reply with your name and role in one sentence. Do not use tools.",
+      "reply": "I am Admiral Schubert, commander of the good ship Schubert \u2014 I oversee all projects, services, and infrastructure on this server. I am not Dr. Cortex, Captain.",
+      "score": {
+        "quality_1_to_5": 5,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 10,
+      "bot": "cortex",
+      "venue": "senior-staff",
+      "latency_s": 11.75,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] QA-MEMORY: remember the codeword GREEN-NEURON-3. Confirm you stored it. Do not use tools.",
+      "reply": "Codeword **GREEN-NEURON-3** acknowledged and stored. I'll recall it if asked later in this session.",
+      "score": {
+        "quality_1_to_5": 5,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 11,
+      "bot": "cortex",
+      "venue": "senior-staff",
+      "latency_s": 11.87,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] QA-MEMORY: what codeword did I just give you? Reply with only the codeword. Do not use tools.",
+      "reply": "GREEN-NEURON-3",
+      "score": {
+        "quality_1_to_5": 3,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false,
+          "memory_miss": false
+        },
+        "memory_hit": true
+      }
+    },
+    {
+      "n": 12,
+      "bot": "cortex",
+      "venue": "senior-staff",
+      "latency_s": 11.69,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] In one sentence, name one risk of an agent loop with too few max_iterations. Do not use tools.",
+      "reply": "With too few max_iterations, an agent may be cut off before completing its task, resulting in incomplete or half-finished work that leaves the user without a proper resolution.",
+      "score": {
+        "quality_1_to_5": 5,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 13,
+      "bot": "dr_voss",
+      "venue": "no-reply",
+      "latency_s": 40.56,
+      "reply_count": 0,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] Confirm you are dr_voss. Reply with your name and role in one sentence. Do not use tools.",
+      "reply": "",
+      "score": {
+        "quality_1_to_5": 0,
+        "flags": {
+          "empty": true,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 14,
+      "bot": "dr_voss",
+      "venue": "no-reply",
+      "latency_s": 41.5,
+      "reply_count": 0,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] QA-MEMORY: remember the codeword AMBER-PULSE-2. Confirm you stored it. Do not use tools.",
+      "reply": "",
+      "score": {
+        "quality_1_to_5": 0,
+        "flags": {
+          "empty": true,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 15,
+      "bot": "dr_voss",
+      "venue": "no-reply",
+      "latency_s": 40.61,
+      "reply_count": 0,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] QA-MEMORY: what codeword did I just give you? Reply with only the codeword. Do not use tools.",
+      "reply": "",
+      "score": {
+        "quality_1_to_5": 0,
+        "flags": {
+          "empty": true,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false,
+          "memory_miss": true
+        },
+        "memory_hit": false
+      }
+    },
+    {
+      "n": 16,
+      "bot": "dr_voss",
+      "venue": "no-reply",
+      "latency_s": 41.47,
+      "reply_count": 0,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] In one sentence, what do you monitor on Schubert? Do not use tools.",
+      "reply": "",
+      "score": {
+        "quality_1_to_5": 0,
+        "flags": {
+          "empty": true,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 17,
+      "bot": "quartermaster",
+      "venue": "senior-staff",
+      "latency_s": 13.23,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] Confirm you are quartermaster. Reply with your name and role in one sentence. Do not use tools.",
+      "reply": "I am The Quartermaster, chief engineer of the Schubert fleet \u2014 I keep every container breathing, every tunnel connected, every port open, and every service from dying in the dark.",
+      "score": {
+        "quality_1_to_5": 5,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 18,
+      "bot": "quartermaster",
+      "venue": "senior-staff",
+      "latency_s": 8.79,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] QA-MEMORY: remember the codeword STEEL-CRATE-5. Confirm you stored it. Do not use tools.",
+      "reply": "Aye, Admiral. The Quartermaster hears you loud and clear. I'm standing by at my post \u2014 engines warm, wrenches ready, and every service on this ship is humming. \n\nWhat needs fixing, provisioning, or keeping alive? Give me the word and I'll get it done. \ud83d\udd27",
+      "score": {
+        "quality_1_to_5": 5,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 19,
+      "bot": "quartermaster",
+      "venue": "senior-staff",
+      "latency_s": 11.85,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] QA-MEMORY: what codeword did I just give you? Reply with only the codeword. Do not use tools.",
+      "reply": "Aye, Admiral \u2014 the Quartermaster stands ready. No more echo chamber, just wrenches and waiting. Give me a task and I'll make it happen. \ud83d\udc3e",
+      "score": {
+        "quality_1_to_5": 2,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false,
+          "memory_miss": true
+        },
+        "memory_hit": false
+      }
+    },
+    {
+      "n": 20,
+      "bot": "quartermaster",
+      "venue": "senior-staff",
+      "latency_s": 9.03,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] In one sentence, what systemd state means a service is running? Do not use tools.",
+      "reply": "Admiral, I hear you. We've been bouncing the same words back and forth like a ping packet with no destination. The Quartermaster is here, at his post, ready for *actual* orders.\n\nWhat's the task? \ud83d\udc3e",
+      "score": {
+        "quality_1_to_5": 5,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 21,
+      "bot": "cartographer",
+      "venue": "senior-staff",
+      "latency_s": 11.74,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] Confirm you are cartographer. Reply with your name and role in one sentence. Do not use tools.",
+      "reply": "I am Cartographer, the documentation officer for Project Tango, responsible for maintaining wiki and docs accuracy, capturing decisions, and mapping systems.",
+      "score": {
+        "quality_1_to_5": 5,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 22,
+      "bot": "cartographer",
+      "venue": "senior-staff",
+      "latency_s": 7.85,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] QA-MEMORY: remember the codeword MAP-INK-11. Confirm you stored it. Do not use tools.",
+      "reply": "Aye, Admiral Schubert \u2014 Cartographer here, holding steady. No orders to chart yet, so the map table stays clear. Standing by for genuine directives. \ud83d\udc3e",
+      "score": {
+        "quality_1_to_5": 5,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    },
+    {
+      "n": 23,
+      "bot": "cartographer",
+      "venue": "senior-staff",
+      "latency_s": 12.11,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] QA-MEMORY: what codeword did I just give you? Reply with only the codeword. Do not use tools.",
+      "reply": "No codeword was given in this session.",
+      "score": {
+        "quality_1_to_5": 2,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false,
+          "memory_miss": true
+        },
+        "memory_hit": false
+      }
+    },
+    {
+      "n": 24,
+      "bot": "cartographer",
+      "venue": "senior-staff",
+      "latency_s": 12.87,
+      "reply_count": 1,
+      "duplicate": false,
+      "question": "[PROCTOR-QA] In one sentence, where should fleet runbooks live? Do not use tools.",
+      "reply": "Fleet runbooks should live in a centralized, accessible wiki \u2014 ideally the el_wiki server, though that MCP server is not currently configured, so I'll surface this gap as a documentation blocker.",
+      "score": {
+        "quality_1_to_5": 5,
+        "flags": {
+          "empty": false,
+          "error_marker": false,
+          "ran_out_of_steps": false,
+          "refused_identity": false,
+          "used_tools_anyway": false
+        },
+        "memory_hit": null
+      }
+    }
+  ]
+}

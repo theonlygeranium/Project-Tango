@@ -1,0 +1,24 @@
+[Unit]
+Description=Slack MCP Server (Streamable HTTP)
+After=network.target
+
+[Service]
+Type=simple
+User=z121532
+WorkingDirectory=/opt/Project-Tango
+Environment="NODE_ENV=production"
+Environment="SLACK_BOT_TOKEN="
+Environment="SLACK_TEAM_ID="
+EnvironmentFile=-/opt/Project-Tango/.env
+ExecStart=/usr/bin/slack-mcp --transport http --port 8075
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=slack-mcp
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

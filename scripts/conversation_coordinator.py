@@ -95,7 +95,7 @@ class MultiAgentChannelManager:
         # TODO: Load from database
         # For now, return default fleet
         if channel_id in self._channels:
-            return ["admiral", "architect", "quartermaster", "cartographer"]
+            return ["admiral", "architect", "quartermaster", "cartographer", "dr_voss", "cortex", "proctor"]
         return []
 
 

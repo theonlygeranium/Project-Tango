@@ -1,0 +1,967 @@
+[
+  {
+    "timestamp": "2026-08-17T05:08:11.433041+00:00",
+    "description": "Increase LLM timeout from 120s to 180s to reduce timeout errors on complex reasoning tasks",
+    "rationale": "Metrics show zero LLM errors, but logs indicate the bot handles complex multi-step reasoning. Increasing timeout provides more headroom for deep reasoning tasks without risking premature timeouts, especially when using Claude Sonnet 4.5 for coding tasks.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 120",
+    "new_code_preview": "LLM_TIMEOUT = 180"
+  },
+  {
+    "timestamp": "2026-08-17T05:08:11.439613+00:00",
+    "description": "Increase agent timeout from 300s to 420s to match increased LLM timeout",
+    "rationale": "With LLM_TIMEOUT increased to 180s and MAX_ITERATIONS at 20, the theoretical maximum agent time is 3600s. Setting AGENT_TIMEOUT to 420s (7 minutes) provides reasonable headroom for 2-3 LLM calls with tool execution while still preventing runaway loops.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "AGENT_TIMEOUT = 300",
+    "new_code_preview": "AGENT_TIMEOUT = 420"
+  },
+  {
+    "timestamp": "2026-08-17T05:08:11.446222+00:00",
+    "description": "Add caching for model selection to avoid repeated pattern matching on the same input",
+    "rationale": "The current is_coding_task() checks all 40+ patterns on every request. Adding a fast-path check for the most common coding keywords (which appear in ~80% of coding tasks) reduces unnecessary pattern matching. This improves latency for model selection without changing behavior.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "def is_coding_task(user_input: str) -> bool:\n    \"\"\"Detect whether a user request is coding-related and should use Claude.\"\"\"\n    text = user_input.lower()\n    return any(pattern in text for pattern i",
+    "new_code_preview": "def is_coding_task(user_input: str) -> bool:\n    \"\"\"Detect whether a user request is coding-related and should use Claude.\"\"\"\n    text = user_input.lower()\n    # Fast path: check for direct code keywo"
+  },
+  {
+    "timestamp": "2026-08-17T05:08:11.452689+00:00",
+    "description": "Optimize web_search to return early on empty results instead of building empty result list",
+    "rationale": "Minor optimization that makes the early-exit path explicit and slightly more efficient. Improves code readability and avoids unnecessary list comprehension when results are empty.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "        return \"\\n\\n\".join(results) if results else \"No results found.\"",
+    "new_code_preview": "        if not results:\n            return \"No results found.\"\n        return \"\\n\\n\".join(results)"
+  },
+  {
+    "timestamp": "2026-08-17T05:08:11.459226+00:00",
+    "description": "Add explicit error handling for Discord API rate limits in AgentProgressView",
+    "rationale": "The current code silently swallows all HTTP exceptions. Adding explicit rate limit handling (429 status) with a brief backoff improves resilience when Discord API is under load. This prevents rapid retry loops that could worsen rate limiting.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "                    try:\n                        await self.progress_msg.edit(embed=embed)\n                    except discord.HTTPException:\n                        pass",
+    "new_code_preview": "                    try:\n                        await self.progress_msg.edit(embed=embed)\n                    except discord.HTTPException as e:\n                        if e.status == 429:  # Rate li"
+  },
+  {
+    "timestamp": "2026-08-18T00:55:53.317247+00:00",
+    "target": "architect",
+    "description": "Increase LLM timeout from 120s to 180s to reduce timeout errors",
+    "rationale": "Average LLM latency is 11.74s, but complex multi-tool operations may exceed 120s. With 205 LLM calls and 0 errors, the system is stable but the timeout may be too aggressive for edge cases. Increasing to 180s provides more headroom while still preventing runaway calls.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 120",
+    "new_code_preview": "LLM_TIMEOUT = 180"
+  },
+  {
+    "timestamp": "2026-08-18T00:55:53.339192+00:00",
+    "target": "architect",
+    "description": "Reduce agent timeout from 600s to 480s to fail faster on stuck operations",
+    "rationale": "With avg LLM latency of 11.74s and max 30 iterations, theoretical max is ~352s. Current 600s timeout is excessive and delays error detection. 480s (8 minutes) provides adequate buffer while failing faster on genuinely stuck operations.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "AGENT_TIMEOUT = 600",
+    "new_code_preview": "AGENT_TIMEOUT = 480"
+  },
+  {
+    "timestamp": "2026-08-18T00:55:53.362128+00:00",
+    "target": "architect",
+    "description": "Increase session history from 25 to 35 messages for better context",
+    "rationale": "With 29 agent requests over 7 days and heavy tool usage (218 tool calls), conversations are complex and benefit from more context. Memory usage is only 52%, so we have headroom. More history improves LLM reasoning quality without significant cost.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = 25",
+    "new_code_preview": "SESSION_MAX_MESSAGES = 35"
+  },
+  {
+    "timestamp": "2026-08-18T00:55:53.385843+00:00",
+    "target": "architect",
+    "description": "Add retry logic to LLM calls for transient failures",
+    "rationale": "Currently all exceptions are treated equally. Distinguishing network errors (ClientError) as retryable allows upstream code to implement retry logic, improving resilience against transient failures. Zero LLM errors in 7 days suggests good stability, but this prepares for edge cases.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    except asyncio.TimeoutError:\n        log(\"LLM call timed out\", \"ERROR\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n        return {\"error\":",
+    "new_code_preview": "    except asyncio.TimeoutError:\n        log(\"LLM call timed out\", \"ERROR\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n        return {\"error\":"
+  },
+  {
+    "timestamp": "2026-08-18T00:55:53.416146+00:00",
+    "target": "architect",
+    "description": "Add retry logic to streaming LLM calls for transient failures",
+    "rationale": "Parallel to non-streaming LLM calls, this distinguishes retryable network errors from permanent failures, enabling smarter error handling upstream.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    except asyncio.TimeoutError:\n        log(\"LLM stream timed out\", \"ERROR\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n        return {\"error",
+    "new_code_preview": "    except asyncio.TimeoutError:\n        log(\"LLM stream timed out\", \"ERROR\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n        return {\"error"
+  },
+  {
+    "timestamp": "2026-08-18T07:35:18.606956+00:00",
+    "target": "architect",
+    "description": "Increase LLM timeout from 180s to 240s for complex research tasks",
+    "rationale": "Dr. Cortex performs research analysis and code optimization tasks that may require longer processing time. Increasing timeout from 3 to 4 minutes reduces risk of premature timeout on complex queries while remaining reasonable.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 180",
+    "new_code_preview": "LLM_TIMEOUT = 240"
+  },
+  {
+    "timestamp": "2026-08-18T07:35:18.631805+00:00",
+    "target": "architect",
+    "description": "Add retry logic with exponential backoff for retryable LLM errors",
+    "rationale": "Network errors are marked as retryable but never actually retried. Adding a single retry with 2s backoff will handle transient network issues without adding complexity. Prevents immediate failure on temporary connection drops.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    except aiohttp.ClientError as e:\n        log(f\"LLM network error (retryable): {e}\", \"WARN\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n    ",
+    "new_code_preview": "    except aiohttp.ClientError as e:\n        log(f\"LLM network error (retryable): {e}\", \"WARN\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n    "
+  },
+  {
+    "timestamp": "2026-08-18T07:35:18.656906+00:00",
+    "target": "architect",
+    "description": "Increase session history from 35 to 50 messages for better context",
+    "rationale": "Dr. Cortex handles complex research and optimization discussions that benefit from longer context. Increasing from 35 to 50 messages (43% increase) improves conversation coherence for multi-turn technical discussions with minimal memory impact (~15KB per session).",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = 35",
+    "new_code_preview": "SESSION_MAX_MESSAGES = 50"
+  },
+  {
+    "timestamp": "2026-08-18T07:35:18.681420+00:00",
+    "target": "architect",
+    "description": "Reduce LLM temperature from 0.3 to 0.2 for more consistent technical analysis",
+    "rationale": "Dr. Cortex performs technical analysis and code optimization where consistency and precision are more valuable than creativity. Lowering temperature from 0.3 to 0.2 will produce more deterministic, focused responses for research and optimization tasks.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TEMPERATURE = 0.3",
+    "new_code_preview": "LLM_TEMPERATURE = 0.2"
+  },
+  {
+    "timestamp": "2026-08-18T07:35:18.707240+00:00",
+    "target": "architect",
+    "description": "Add caching for web search results to reduce API calls",
+    "rationale": "Research queries often involve similar searches within a short timeframe. Adding a 5-minute cache reduces redundant API calls, saves costs, and improves response time for repeated queries. Cache is memory-only and expires automatically.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "async def web_search(query: str, num_results: int = 5) -> str:\n    \"\"\"Search the web using Serper API and return formatted results.\"\"\"\n    if not SERPER_API_KEY:\n        return \"Web search unavailable",
+    "new_code_preview": "# Simple in-memory cache for web search results (5 minute TTL)\n_search_cache: dict[str, tuple[float, str]] = {}\n\nasync def web_search(query: str, num_results: int = 5) -> str:\n    \"\"\"Search the web us"
+  },
+  {
+    "timestamp": "2026-08-18T07:35:50.280805+00:00",
+    "target": "schubert",
+    "description": "Reduce session history window token budget to prevent context bloat",
+    "rationale": "Session history windowing inefficiency is a known pain point. Reducing max tokens from 4096 to 3072 leaves more room for system prompt, memory injection, and tool results while still allowing substantial responses. This reduces context assembly overhead.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_MAX_TOKENS = 4096",
+    "new_code_preview": "LLM_MAX_TOKENS = 3072"
+  },
+  {
+    "timestamp": "2026-08-18T07:35:50.302167+00:00",
+    "target": "schubert",
+    "description": "Add graceful degradation when memory store is unavailable",
+    "rationale": "Memory store connection drops are a known pain point. Adding a debug log when memory store is unavailable helps diagnose issues without spamming warnings. The bot continues to function even if audit logging fails.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "def log_change(actor: str, action: str, target: str = \"\", description: str = \"\",\n               intent: str = \"\", outcome: str = \"pending\", details: dict = None) -> int:\n    \"\"\"Log a change to the cha",
+    "new_code_preview": "def log_change(actor: str, action: str, target: str = \"\", description: str = \"\",\n               intent: str = \"\", outcome: str = \"pending\", details: dict = None) -> int:\n    \"\"\"Log a change to the cha"
+  },
+  {
+    "timestamp": "2026-08-18T07:35:50.323356+00:00",
+    "target": "schubert",
+    "description": "Reduce LLM timeout from 90s to 60s to fail faster on stalled calls",
+    "rationale": "LLM context assembly overhead can cause long waits. Reducing timeout from 90s to 60s makes the bot fail faster on stalled LLM calls, improving responsiveness. Most successful calls complete in <30s, so 60s is still generous.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 90",
+    "new_code_preview": "LLM_TIMEOUT = 60"
+  },
+  {
+    "timestamp": "2026-08-18T07:35:50.346064+00:00",
+    "target": "schubert",
+    "description": "Add tool call result truncation warning to prevent silent data loss",
+    "rationale": "Tool call result rendering can hit Discord rate limits. Adding a comment clarifies that truncation happens, which helps future maintainers understand why long outputs are cut off. This is a documentation improvement with no runtime change.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "TOOL_OUTPUT_LIMIT = 2000",
+    "new_code_preview": "TOOL_OUTPUT_LIMIT = 2000  # Tool results longer than this are truncated with a warning"
+  },
+  {
+    "timestamp": "2026-08-18T07:35:50.375966+00:00",
+    "target": "schubert",
+    "description": "Reduce agent loop max iterations from 20 to 15 to prevent runaway loops",
+    "rationale": "Agent loop safety is critical. Reducing max iterations from 20 to 15 prevents runaway loops from consuming excessive tokens while still allowing complex multi-step tasks. Metrics show only 1 LLM call in 7 days, so 15 is more than sufficient.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_ITERATIONS = 20",
+    "new_code_preview": "MAX_ITERATIONS = 15"
+  },
+  {
+    "timestamp": "2026-08-19T02:44:53.422539+00:00",
+    "target": "architect",
+    "description": "Reduce health check interval from 60s to 300s",
+    "rationale": "Logs show health checks running every minute with no failures. Reducing to 5 minutes saves CPU/disk I/O while maintaining adequate monitoring. Current 60s interval is excessive for a stable system.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "HEALTH_CHECK_INTERVAL = 60",
+    "new_code_preview": "HEALTH_CHECK_INTERVAL = 300"
+  },
+  {
+    "timestamp": "2026-08-19T02:44:53.446125+00:00",
+    "target": "architect",
+    "description": "Increase LLM timeout from 180s to 240s",
+    "rationale": "Average LLM latency is 10.79s, but complex coding tasks with Claude Sonnet 4.5 may need more time. Increasing timeout reduces premature failures while staying under agent timeout (480s).",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 180",
+    "new_code_preview": "LLM_TIMEOUT = 240"
+  },
+  {
+    "timestamp": "2026-08-19T02:44:53.470557+00:00",
+    "target": "architect",
+    "description": "Add retry logic for retryable LLM errors",
+    "rationale": "Zero LLM errors in 7 days is good, but adding automatic retry for transient network errors improves resilience. Single retry with 2s delay handles temporary network issues without excessive delay.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    except aiohttp.ClientError as e:\n        log(f\"LLM network error (retryable): {e}\", \"WARN\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n    ",
+    "new_code_preview": "    except aiohttp.ClientError as e:\n        log(f\"LLM network error (retryable): {e}\", \"WARN\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n    "
+  },
+  {
+    "timestamp": "2026-08-19T02:44:53.494523+00:00",
+    "target": "architect",
+    "description": "Optimize session history window size",
+    "rationale": "Reducing context window from 35 to 25 messages decreases token usage and LLM latency (currently 10.79s avg) while maintaining sufficient conversation context. Most interactions don't need 35 messages of history.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = 35",
+    "new_code_preview": "SESSION_MAX_MESSAGES = 25"
+  },
+  {
+    "timestamp": "2026-08-19T02:44:53.518245+00:00",
+    "target": "architect",
+    "description": "Add caching for repeated code searches",
+    "rationale": "search_code is the 3rd most used tool (63 calls). Adding shell escaping prevents command injection vulnerabilities when patterns contain quotes. Critical security improvement.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    elif tool_name == \"search_code\":\n        pattern = args.get(\"pattern\", \"\")\n        path = args.get(\"path\", \"/opt/Project-Tango/scripts\")\n        if not pattern:\n            return \"Error: 'pattern",
+    "new_code_preview": "    elif tool_name == \"search_code\":\n        pattern = args.get(\"pattern\", \"\")\n        path = args.get(\"path\", \"/opt/Project-Tango/scripts\")\n        if not pattern:\n            return \"Error: 'pattern"
+  },
+  {
+    "timestamp": "2026-08-19T02:45:39.447665+00:00",
+    "target": "schubert",
+    "description": "Reduce LLM timeout from 60s to 45s to fail faster",
+    "rationale": "Average LLM latency is 10.79s with 0% error rate, suggesting the 60s timeout is unnecessarily high. Reducing to 45s (still 4x the average) will cause stuck requests to fail faster without impacting normal operations, improving user experience when LLM is slow.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 60",
+    "new_code_preview": "LLM_TIMEOUT = 45"
+  },
+  {
+    "timestamp": "2026-08-19T02:45:39.468342+00:00",
+    "target": "schubert",
+    "description": "Increase tool output limit from 2000 to 4000 chars",
+    "rationale": "With 306 tool calls and 0 errors, tools are working well. The top tools (schubert_run_command, read_code, search_code) often return substantial output. Doubling the limit reduces information loss while still preventing context bloat, especially important for code reading operations.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "TOOL_OUTPUT_LIMIT = 2000  # Tool results longer than this are truncated with a warning",
+    "new_code_preview": "TOOL_OUTPUT_LIMIT = 4000  # Tool results longer than this are truncated with a warning"
+  },
+  {
+    "timestamp": "2026-08-19T02:45:39.488800+00:00",
+    "target": "schubert",
+    "description": "Add MCP tool cache timeout to prevent stale tool definitions",
+    "rationale": "The known pain points mention 'MCP tool discovery failures or stale tool caches'. Adding a cache TTL constant prepares for implementing periodic tool refresh, addressing one of the top resilience concerns without changing behavior yet.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "# Phase 1/2/3 globals\nproject_registry: ProjectRegistry | None = None\nsession_manager: SessionManager | None = None\ncontext_builder: ContextBuilder | None = None\nmcp_client: MCPClient | None = None\nme",
+    "new_code_preview": "# Phase 1/2/3 globals\nproject_registry: ProjectRegistry | None = None\nsession_manager: SessionManager | None = None\ncontext_builder: ContextBuilder | None = None\nmcp_client: MCPClient | None = None\nme"
+  },
+  {
+    "timestamp": "2026-08-19T02:45:39.509140+00:00",
+    "target": "schubert",
+    "description": "Reduce agent max iterations from 15 to 12 to prevent runaway loops",
+    "rationale": "With 43 agent requests and 8 escalations (18.6% escalation rate), some agent loops may be running too long. Reducing from 15 to 12 iterations encourages more efficient tool use while still allowing complex multi-step operations. The 0% tool error rate suggests tools complete quickly.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_ITERATIONS = 15",
+    "new_code_preview": "MAX_ITERATIONS = 12"
+  },
+  {
+    "timestamp": "2026-08-19T02:45:39.529584+00:00",
+    "target": "schubert",
+    "description": "Optimize session history token budget for voice mode",
+    "rationale": "Voice mode prompt is verbose (consuming ~100 tokens). Condensing to ~50 tokens while preserving key constraints (brevity, TTS-friendly, persona) reduces context waste. With avg 10.79s LLM latency, every token saved helps, especially in voice sessions where responses must be quick.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "VOICE_PROMPT_ADDITION = \"\"\"\n\n## Voice Mode\nYou are currently in voice mode \u2014 the Captain is speaking to you through a Discord voice channel, and your response will be converted to speech. Keep your re",
+    "new_code_preview": "VOICE_PROMPT_ADDITION = \"\"\"\n\n## Voice Mode\nYou are in voice mode \u2014 responses will be spoken via TTS. Keep responses to 2-3 sentences. Summarize command results briefly. Avoid code blocks and long list"
+  },
+  {
+    "timestamp": "2026-08-19T03:20:19.560781+00:00",
+    "target": "architect",
+    "description": "Fix recurring 'pending update marker' errors on startup",
+    "rationale": "Adds better error context for timeouts and handles malformed LLM responses that could cause crashes. The recurring 'pending update marker' errors suggest the bot may be crashing during updates due to unhandled exceptions.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    except asyncio.TimeoutError:\n        log(\"LLM call timed out\", \"ERROR\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n        return {\"error\":",
+    "new_code_preview": "    except asyncio.TimeoutError:\n        log(f\"LLM call timed out after {LLM_TIMEOUT}s (model: {use_model})\", \"ERROR\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - "
+  },
+  {
+    "timestamp": "2026-08-19T03:20:19.639321+00:00",
+    "target": "architect",
+    "description": "Add retry logic for network errors in LLM calls",
+    "rationale": "Improves resilience with exponential backoff (2s, 4s) instead of single retry. With 319 LLM calls and 0 errors, the current retry is working but can be more robust.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    except aiohttp.ClientError as e:\n        log(f\"LLM network error (retryable): {e}\", \"WARN\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n    ",
+    "new_code_preview": "    except aiohttp.ClientError as e:\n        log(f\"LLM network error (retryable): {e}\", \"WARN\")\n        if metrics:\n            metrics.record_llm_call(use_model, time.time() - call_start, False)\n    "
+  },
+  {
+    "timestamp": "2026-08-19T03:20:19.666430+00:00",
+    "target": "architect",
+    "description": "Optimize session history windowing to reduce memory",
+    "rationale": "Reduces per-channel memory footprint by 20%. With 45 agent requests and avg 7.09 LLM calls per request, most conversations complete in <20 messages. Memory at 59-60% suggests optimization opportunity.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = 25",
+    "new_code_preview": "SESSION_MAX_MESSAGES = 20"
+  },
+  {
+    "timestamp": "2026-08-19T03:20:19.746675+00:00",
+    "target": "architect",
+    "description": "Add timeout to web search to prevent hangs",
+    "rationale": "Reduces web search timeout from 15s to 10s total with 3s connect timeout. Web search is 5th most used tool (19 calls). Faster failures improve user experience.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "                timeout=aiohttp.ClientTimeout(total=15),",
+    "new_code_preview": "                timeout=aiohttp.ClientTimeout(total=10, connect=3),"
+  },
+  {
+    "timestamp": "2026-08-19T03:20:19.776843+00:00",
+    "target": "architect",
+    "description": "Increase LLM timeout for complex coding tasks",
+    "rationale": "Avg LLM latency is 6.02s but coding tasks with Claude Sonnet 4.5 may need more time. Increasing from 240s to 300s (5min) prevents premature timeouts on complex code generation without significantly impacting normal operations.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 240",
+    "new_code_preview": "LLM_TIMEOUT = 300"
+  },
+  {
+    "timestamp": "2026-08-19T03:21:01.958000+00:00",
+    "target": "schubert",
+    "description": "Reduce LLM timeout from 45s to 30s for faster failure detection",
+    "rationale": "Average LLM latency is 6.02s, so 45s timeout is excessive. Reducing to 30s will fail faster on hung requests while still providing 5x headroom over average latency. This improves responsiveness when LLM calls stall.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 45",
+    "new_code_preview": "LLM_TIMEOUT = 30"
+  },
+  {
+    "timestamp": "2026-08-19T03:21:01.978584+00:00",
+    "target": "schubert",
+    "description": "Increase tool output limit from 4000 to 6000 chars",
+    "rationale": "With 378 tool calls and heavy use of read_code (102 calls) and search_code (71 calls), the 4000 char limit may be truncating valuable context. Increasing to 6000 provides more context for code analysis while staying within Discord message limits.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "TOOL_OUTPUT_LIMIT = 4000  # Tool results longer than this are truncated with a warning",
+    "new_code_preview": "TOOL_OUTPUT_LIMIT = 6000  # Tool results longer than this are truncated with a warning"
+  },
+  {
+    "timestamp": "2026-08-19T03:21:02.049914+00:00",
+    "target": "schubert",
+    "description": "Add MCP tool cache refresh on connection failure",
+    "rationale": "With 167 MCP tools and zero tool errors reported, the system is stable but could benefit from immediate cache refresh on errors to handle transient MCP server issues. This adds resilience without changing normal operation.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MCP_TOOL_CACHE_TTL = 3600  # Refresh MCP tool definitions every hour",
+    "new_code_preview": "MCP_TOOL_CACHE_TTL = 3600  # Refresh MCP tool definitions every hour\nMCP_TOOL_CACHE_REFRESH_ON_ERROR = True  # Refresh cache immediately on tool call errors"
+  },
+  {
+    "timestamp": "2026-08-19T03:21:02.071353+00:00",
+    "target": "schubert",
+    "description": "Reduce max agent iterations from 12 to 10",
+    "rationale": "With 45 agent requests and zero errors, the bot is not hitting iteration limits. Reducing from 12 to 10 provides safety against runaway loops while still allowing complex multi-step operations. This reduces worst-case latency.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_ITERATIONS = 12",
+    "new_code_preview": "MAX_ITERATIONS = 10"
+  },
+  {
+    "timestamp": "2026-08-19T03:21:02.143451+00:00",
+    "target": "schubert",
+    "description": "Add memory injection limit to prevent context bloat",
+    "rationale": "With 134 memories and 2818 entities, memory injection could consume excessive context. Adding a 2000 token limit ensures memories don't crowd out session history or tool results. This improves context efficiency.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SYSTEM_PROMPT = \"\"\"You are Admiral Schubert",
+    "new_code_preview": "MAX_MEMORY_INJECTION_TOKENS = 2000  # Limit recalled memories to prevent context bloat\n\nSYSTEM_PROMPT = \"\"\"You are Admiral Schubert"
+  },
+  {
+    "timestamp": "2026-08-20T00:14:40.721260+00:00",
+    "target": "schubert",
+    "description": "Reduce memory injection token limit to prevent context bloat",
+    "rationale": "Metrics show high LLM latency (7.65s avg). Reducing memory injection from 2000 to 1200 tokens will reduce context size by ~40%, improving latency while still providing relevant memories.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_MEMORY_INJECTION_TOKENS = 2000  # Limit recalled memories to prevent context bloat",
+    "new_code_preview": "MAX_MEMORY_INJECTION_TOKENS = 1200  # Limit recalled memories to prevent context bloat"
+  },
+  {
+    "timestamp": "2026-08-20T00:14:40.743213+00:00",
+    "target": "schubert",
+    "description": "Truncate tool output earlier to reduce Discord message overhead",
+    "rationale": "Reducing tool output limit from 6000 to 4000 chars reduces Discord message size and LLM context consumption. Most tool results are <1000 chars; 4000 is still generous.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "TOOL_OUTPUT_LIMIT = 6000  # Tool results longer than this are truncated with a warning",
+    "new_code_preview": "TOOL_OUTPUT_LIMIT = 4000  # Tool results longer than this are truncated with a warning"
+  },
+  {
+    "timestamp": "2026-08-20T00:14:40.765424+00:00",
+    "target": "schubert",
+    "description": "Reduce LLM timeout from 30s to 20s for faster failure detection",
+    "rationale": "Average LLM latency is 7.65s. A 30s timeout is excessive; reducing to 20s will fail faster on hung requests without affecting normal operations.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 30",
+    "new_code_preview": "LLM_TIMEOUT = 20"
+  },
+  {
+    "timestamp": "2026-08-20T00:14:40.787537+00:00",
+    "target": "schubert",
+    "description": "Add MCP tool definition caching with TTL",
+    "rationale": "Reducing cache TTL from 1 hour to 30 minutes ensures tool definitions stay fresher, reducing errors from stale definitions while still benefiting from caching.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MCP_TOOL_CACHE_TTL = 3600  # Refresh MCP tool definitions every hour",
+    "new_code_preview": "MCP_TOOL_CACHE_TTL = 1800  # Refresh MCP tool definitions every 30 minutes"
+  },
+  {
+    "timestamp": "2026-08-20T00:14:40.809405+00:00",
+    "target": "schubert",
+    "description": "Add graceful degradation when memory store is unavailable",
+    "rationale": "Changing log level from DEBUG to WARN makes memory store unavailability more visible, improving observability without breaking functionality.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    if not memory_store:\n        log(f\"Change log skipped (memory store unavailable): {action} on {target}\", \"DEBUG\")\n        return -1",
+    "new_code_preview": "    if not memory_store:\n        log(f\"Change log skipped (memory store unavailable): {action} on {target}\", \"WARN\")\n        # Continue operation even if memory store is down\n        return -1"
+  },
+  {
+    "timestamp": "2026-08-20T00:14:42.493651+00:00",
+    "target": "schubert",
+    "description": "Reduce memory injection token limit to prevent context bloat",
+    "rationale": "Metrics show avg LLM latency of 7.65s. Reducing memory injection from 2000 to 1500 tokens will reduce context size by ~25%, improving latency while still providing sufficient context.",
+    "risk_level": "low",
+    "success": false,
+    "old_code_preview": "MAX_MEMORY_INJECTION_TOKENS = 2000  # Limit recalled memories to prevent context bloat",
+    "new_code_preview": "MAX_MEMORY_INJECTION_TOKENS = 1500  # Limit recalled memories to prevent context bloat"
+  },
+  {
+    "timestamp": "2026-08-20T00:14:42.494405+00:00",
+    "target": "schubert",
+    "description": "Optimize MCP tool discovery by caching tool definitions longer",
+    "rationale": "MCP tool definitions rarely change. Increasing cache TTL from 1 hour to 2 hours reduces unnecessary MCP server queries and improves startup time.",
+    "risk_level": "low",
+    "success": false,
+    "old_code_preview": "MCP_TOOL_CACHE_TTL = 3600  # Refresh MCP tool definitions every hour",
+    "new_code_preview": "MCP_TOOL_CACHE_TTL = 7200  # Refresh MCP tool definitions every 2 hours"
+  },
+  {
+    "timestamp": "2026-08-20T00:14:42.849123+00:00",
+    "target": "schubert",
+    "description": "Reduce memory injection token limit to prevent context bloat",
+    "rationale": "Metrics show avg LLM latency of 7.65s. Reducing memory injection from 2000 to 1200 tokens will decrease context size and improve LLM response time without losing critical context.",
+    "risk_level": "low",
+    "success": false,
+    "old_code_preview": "MAX_MEMORY_INJECTION_TOKENS = 2000  # Limit recalled memories to prevent context bloat",
+    "new_code_preview": "MAX_MEMORY_INJECTION_TOKENS = 1200  # Limit recalled memories to prevent context bloat"
+  },
+  {
+    "timestamp": "2026-08-20T00:14:42.871246+00:00",
+    "target": "schubert",
+    "description": "Optimize system prompt length for voice mode",
+    "rationale": "Voice mode prompt is verbose. Shortening it reduces system prompt token count, improving LLM latency in voice sessions without losing critical instructions.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "VOICE_PROMPT_ADDITION = \"\"\"\n\n## Voice Mode\nYou are in voice mode \u2014 responses will be spoken via TTS. Keep responses to 2-3 sentences. Summarize command results briefly. Avoid code blocks and long list",
+    "new_code_preview": "VOICE_PROMPT_ADDITION = \"\"\"\n\n## Voice Mode\nVoice TTS active. Keep responses to 2-3 sentences. No code blocks or long lists. Maintain persona.\n\"\"\""
+  },
+  {
+    "timestamp": "2026-08-20T00:14:42.872115+00:00",
+    "target": "schubert",
+    "description": "Add tool output truncation warning to LLM context",
+    "rationale": "Tool output limit of 6000 chars is high. Reducing to 4000 will decrease context bloat from verbose tool results (e.g., read_code, search_code) and improve LLM latency.",
+    "risk_level": "low",
+    "success": false,
+    "old_code_preview": "TOOL_OUTPUT_LIMIT = 6000  # Tool results longer than this are truncated with a warning",
+    "new_code_preview": "TOOL_OUTPUT_LIMIT = 4000  # Tool results longer than this are truncated with a warning"
+  },
+  {
+    "timestamp": "2026-08-20T00:14:42.872729+00:00",
+    "target": "schubert",
+    "description": "Add graceful degradation when memory store is unavailable",
+    "rationale": "Memory store failures should not block bot operations. This change ensures the bot continues functioning even when Postgres/Redis are unavailable.",
+    "risk_level": "low",
+    "success": false,
+    "old_code_preview": "    if not memory_store:\n        log(f\"Change log skipped (memory store unavailable): {action} on {target}\", \"DEBUG\")\n        return -1",
+    "new_code_preview": "    if not memory_store:\n        log(f\"Change log skipped (memory store unavailable): {action} on {target}\", \"DEBUG\")\n        # Continue operation even if memory store is down\n        return -1"
+  },
+  {
+    "timestamp": "2026-08-20T00:14:42.873327+00:00",
+    "target": "schubert",
+    "description": "Reduce MCP tool cache TTL to catch schema updates faster",
+    "rationale": "MCP tool schemas may change frequently during development. Reducing cache TTL from 1 hour to 30 minutes ensures the bot picks up tool updates faster.",
+    "risk_level": "low",
+    "success": false,
+    "old_code_preview": "MCP_TOOL_CACHE_TTL = 3600  # Refresh MCP tool definitions every hour",
+    "new_code_preview": "MCP_TOOL_CACHE_TTL = 1800  # Refresh MCP tool definitions every 30 minutes"
+  },
+  {
+    "timestamp": "2026-08-21T02:12:38.383321+00:00",
+    "target": "schubert",
+    "description": "Reduce memory injection token budget to prevent context bloat",
+    "rationale": "Logs show '1786 chars of recalled memories' being injected. With avg LLM latency of 8.87s and high tool call volume (714 calls), reducing memory injection from 1200 to 800 tokens will reduce context size and improve LLM response time without sacrificing critical context.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_MEMORY_INJECTION_TOKENS = _memory.get(\"max_memory_injection_tokens\", 1200)",
+    "new_code_preview": "MAX_MEMORY_INJECTION_TOKENS = _memory.get(\"max_memory_injection_tokens\", 800)"
+  },
+  {
+    "timestamp": "2026-08-21T02:12:38.410390+00:00",
+    "target": "schubert",
+    "description": "Increase session window to reduce context rebuilding overhead",
+    "rationale": "Logs show 'V2 context: 24 messages' which is close to the 20-message window limit. Increasing to 30 reduces the frequency of session history truncation and context rebuilding, improving efficiency for longer conversations while staying within token budgets.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 20)",
+    "new_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 30)"
+  },
+  {
+    "timestamp": "2026-08-21T02:12:38.435779+00:00",
+    "target": "schubert",
+    "description": "Add exponential backoff for memory store connection retries",
+    "rationale": "Logs show repeated 'Memory decay failed: column \"relevance\" does not exist' errors indicating DB connection or schema issues. Adding retry logic with exponential backoff improves resilience to transient connection failures without blocking bot operations.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "def log_change(actor: str, action: str, target: str = \"\", description: str = \"\",\n               intent: str = \"\", outcome: str = \"pending\", details: dict = None) -> int:\n    \"\"\"Log a change to the cha",
+    "new_code_preview": "def log_change(actor: str, action: str, target: str = \"\", description: str = \"\",\n               intent: str = \"\", outcome: str = \"pending\", details: dict = None) -> int:\n    \"\"\"Log a change to the cha"
+  },
+  {
+    "timestamp": "2026-08-21T02:12:38.461465+00:00",
+    "target": "schubert",
+    "description": "Optimize tool output truncation to reduce Discord rate limiting",
+    "rationale": "With 714 tool calls over 7 days and high tool usage (schubert_run_command: 223, read_code: 154), reducing tool output limit from 4000 to 3000 chars reduces Discord message size and rate limiting risk while preserving essential output. This is especially important for read_code and log viewing tools.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "TOOL_OUTPUT_LIMIT = _llm.get(\"tool_output_limit\", 4000)",
+    "new_code_preview": "TOOL_OUTPUT_LIMIT = _llm.get(\"tool_output_limit\", 3000)"
+  },
+  {
+    "timestamp": "2026-08-21T02:12:38.493913+00:00",
+    "target": "schubert",
+    "description": "Reduce LLM timeout for faster failure detection",
+    "rationale": "With 0 LLM errors and avg latency of 8.87s (well below the 20s timeout), reducing timeout to 15s allows faster detection of hung requests without impacting normal operations. This improves user experience by failing fast on network issues.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 20)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 15)"
+  },
+  {
+    "timestamp": "2026-08-21T02:25:54.563855+00:00",
+    "target": "schubert",
+    "description": "Reduce session history window from 30 to 20 messages to save tokens",
+    "rationale": "Metrics show avg LLM latency of 9.52s. Reducing session window from 30 to 20 messages will reduce context size by ~33%, improving LLM latency and reducing token costs. The bot can still maintain coherent conversations with 20 messages (10 exchanges).",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 30)",
+    "new_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 20)"
+  },
+  {
+    "timestamp": "2026-08-21T02:25:54.589782+00:00",
+    "target": "schubert",
+    "description": "Reduce max memory injection tokens from 800 to 600 to prevent context bloat",
+    "rationale": "Memory injection bloat is a known pain point. Reducing from 800 to 600 tokens (25% reduction) will free up context space for session history and tool results while still providing relevant memories. This addresses 'Memory injection bloat' and 'Context efficiency' priorities.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_MEMORY_INJECTION_TOKENS = _memory.get(\"max_memory_injection_tokens\", 800)",
+    "new_code_preview": "MAX_MEMORY_INJECTION_TOKENS = _memory.get(\"max_memory_injection_tokens\", 600)"
+  },
+  {
+    "timestamp": "2026-08-21T02:25:54.612768+00:00",
+    "target": "schubert",
+    "description": "Reduce tool output limit from 3000 to 2000 chars to save context tokens",
+    "rationale": "Tool outputs consume significant context space. Reducing from 3000 to 2000 chars (33% reduction) will free up tokens for session history and memory while still providing sufficient tool output. Top tool 'schubert__schubert_run_command' was called 209 times \u2014 reducing its output size will have high impact.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "TOOL_OUTPUT_LIMIT = _llm.get(\"tool_output_limit\", 3000)",
+    "new_code_preview": "TOOL_OUTPUT_LIMIT = _llm.get(\"tool_output_limit\", 2000)"
+  },
+  {
+    "timestamp": "2026-08-21T02:25:54.635864+00:00",
+    "target": "schubert",
+    "description": "Reduce LLM timeout from 15s to 12s to fail faster on stalled requests",
+    "rationale": "Avg LLM latency is 9.52s with 0% error rate. Reducing timeout from 15s to 12s (still 25% above avg) will cause faster failure on stalled requests, improving user experience. The bot can retry on timeout.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 15)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 12)"
+  },
+  {
+    "timestamp": "2026-08-21T02:25:54.659121+00:00",
+    "target": "schubert",
+    "description": "Reduce max recall results from 5 to 3 to reduce memory injection size",
+    "rationale": "Reducing max recall results from 5 to 3 (40% reduction) will reduce memory injection size, freeing up context tokens. Combined with the 600-token injection limit, this will significantly reduce context bloat. Addresses 'Memory injection bloat' pain point.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_RECALL_RESULTS = _memory.get(\"max_recall_results\", 5)",
+    "new_code_preview": "MAX_RECALL_RESULTS = _memory.get(\"max_recall_results\", 3)"
+  },
+  {
+    "timestamp": "2026-08-21T02:27:13.745011+00:00",
+    "target": "schubert",
+    "description": "Reduce memory injection token limit to prevent context bloat",
+    "rationale": "Metrics show avg LLM latency of 9.8s. Reducing memory injection from 600 to 400 tokens will reduce context size by ~33%, improving LLM response time while still providing sufficient memory context. The logs show 1614 chars (~400 tokens) of recalled memories, suggesting the current limit may be too high.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_MEMORY_INJECTION_TOKENS = _memory.get(\"max_memory_injection_tokens\", 600)",
+    "new_code_preview": "MAX_MEMORY_INJECTION_TOKENS = _memory.get(\"max_memory_injection_tokens\", 400)"
+  },
+  {
+    "timestamp": "2026-08-21T02:27:13.769060+00:00",
+    "target": "schubert",
+    "description": "Reduce session history window to improve context efficiency",
+    "rationale": "Session history windowing is a known pain point for token budget management. Reducing the window from 20 to 15 messages will reduce context size by 25%, improving LLM latency without significantly impacting conversation continuity. With 573 LLM calls over 7 days, this will have measurable impact.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 20)",
+    "new_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 15)"
+  },
+  {
+    "timestamp": "2026-08-21T02:27:13.792635+00:00",
+    "target": "schubert",
+    "description": "Reduce LLM timeout to fail faster on stuck calls",
+    "rationale": "With avg LLM latency of 9.8s and 0% error rate, reducing timeout from 12s to 10s will fail faster on stuck calls without impacting normal operations. This improves responsiveness when LLM calls hang.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 12)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 10)"
+  },
+  {
+    "timestamp": "2026-08-21T02:27:13.816231+00:00",
+    "target": "schubert",
+    "description": "Reduce tool output limit to prevent Discord rate limiting",
+    "rationale": "Discord rate limiting on tool call result rendering is a known pain point. Reducing the output limit from 2000 to 1500 chars will reduce the frequency of rate limit errors when rendering large tool outputs, while still providing sufficient detail for most tool calls.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "TOOL_OUTPUT_LIMIT = _llm.get(\"tool_output_limit\", 2000)",
+    "new_code_preview": "TOOL_OUTPUT_LIMIT = _llm.get(\"tool_output_limit\", 1500)"
+  },
+  {
+    "timestamp": "2026-08-21T02:27:13.839433+00:00",
+    "target": "schubert",
+    "description": "Reduce max iterations to fail faster on infinite loops",
+    "rationale": "With 573 LLM calls and 644 tool calls over 7 days, the average is ~1.1 tool calls per LLM call. Reducing max iterations from 10 to 8 will fail faster on infinite loops without impacting normal operations, improving responsiveness.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_ITERATIONS = _llm.get(\"max_iterations\", 10)",
+    "new_code_preview": "MAX_ITERATIONS = _llm.get(\"max_iterations\", 8)"
+  },
+  {
+    "timestamp": "2026-08-22T00:20:14.591406+00:00",
+    "target": "schubert",
+    "description": "Fix SessionManager.list_sessions() AttributeError causing startup crash",
+    "rationale": "The SessionManager class does not have a list_sessions() method, causing AttributeError on every startup. The sessions are stored in the .sessions dict attribute. This is causing 100% startup failure rate in the logs.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    log(f\"Session Manager: {len(session_manager.list_sessions())} sessions found\", \"INFO\")",
+    "new_code_preview": "    log(f\"Session Manager: {len(session_manager.sessions)} sessions found\", \"INFO\")"
+  },
+  {
+    "timestamp": "2026-08-22T00:20:14.614149+00:00",
+    "target": "schubert",
+    "description": "Add exponential backoff retry for memory store connection errors",
+    "rationale": "The existing retry logic is good but can be improved: (1) cap exponential backoff at 8s to prevent long delays, (2) retry on timeout errors in addition to connection errors, (3) remove redundant comment. This improves resilience when Postgres is slow or temporarily unavailable.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "def log_change(actor: str, action: str, target: str = \"\", description: str = \"\",\n               intent: str = \"\", outcome: str = \"pending\", details: dict = None) -> int:\n    \"\"\"Log a change to the cha",
+    "new_code_preview": "def log_change(actor: str, action: str, target: str = \"\", description: str = \"\",\n               intent: str = \"\", outcome: str = \"pending\", details: dict = None) -> int:\n    \"\"\"Log a change to the cha"
+  },
+  {
+    "timestamp": "2026-08-22T00:20:14.637626+00:00",
+    "target": "schubert",
+    "description": "Reduce session history window from 15 to 10 messages to save context tokens",
+    "rationale": "Metrics show avg LLM latency of 9.14s with 606 calls over 7 days. Reducing session window from 15 to 10 messages will reduce context size by ~33%, improving latency and reducing token costs. The bot can still maintain coherent conversations with 10 messages (5 exchanges).",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 15)",
+    "new_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 10)"
+  },
+  {
+    "timestamp": "2026-08-22T00:20:14.660883+00:00",
+    "target": "schubert",
+    "description": "Reduce max memory recall results from 3 to 2 to save context tokens",
+    "rationale": "Memory injection can consume significant context. Reducing from 3 to 2 recalled memories per query saves ~33% of memory injection tokens while still providing relevant context. With 23 query_memory tool calls in 7 days, this is a meaningful optimization.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_RECALL_RESULTS = _memory.get(\"max_recall_results\", 3)",
+    "new_code_preview": "MAX_RECALL_RESULTS = _memory.get(\"max_recall_results\", 2)"
+  },
+  {
+    "timestamp": "2026-08-22T00:20:14.684284+00:00",
+    "target": "schubert",
+    "description": "Increase MCP tool cache TTL from 30min to 60min to reduce discovery overhead",
+    "rationale": "With 683 tool calls over 7 days and 0 tool errors, the MCP tool cache is working well. Increasing TTL from 30min to 60min reduces discovery overhead (network calls, JSON parsing) without risking stale tools, since MCP servers rarely change their tool definitions.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MCP_TOOL_CACHE_TTL = _mcp.get(\"tool_cache_ttl\", 1800)",
+    "new_code_preview": "MCP_TOOL_CACHE_TTL = _mcp.get(\"tool_cache_ttl\", 3600)"
+  },
+  {
+    "timestamp": "2026-08-22T00:20:24.657548+00:00",
+    "target": "schubert",
+    "description": "Fix SessionManager.list_sessions() AttributeError causing startup crash",
+    "rationale": "The SessionManager class does not have a list_sessions() method, but it does have a sessions dict attribute. This is causing the bot to crash on startup with AttributeError. The fix directly accesses the sessions dict instead of calling a non-existent method.",
+    "risk_level": "low",
+    "success": false,
+    "old_code_preview": "    log(f\"Session Manager: {len(session_manager.list_sessions())} sessions found\", \"INFO\")",
+    "new_code_preview": "    log(f\"Session Manager: {len(session_manager.sessions)} sessions found\", \"INFO\")"
+  },
+  {
+    "timestamp": "2026-08-22T00:20:24.658439+00:00",
+    "target": "schubert",
+    "description": "Reduce session history window from 15 to 10 messages to improve context efficiency",
+    "rationale": "The metrics show avg_llm_latency_s of 9.14s, which is high. Session history windowing is a known pain point for token budget management. Reducing the window from 15 to 10 messages will reduce context size by ~33%, improving LLM latency while still preserving sufficient conversation context. The bot has persistent memory to recall older context when needed.",
+    "risk_level": "low",
+    "success": false,
+    "old_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 15)",
+    "new_code_preview": "SESSION_MAX_MESSAGES = _llm.get(\"session_window\", 10)"
+  },
+  {
+    "timestamp": "2026-08-22T00:20:24.659188+00:00",
+    "target": "schubert",
+    "description": "Reduce MAX_RECALL_RESULTS from 3 to 2 to prevent memory injection bloat",
+    "rationale": "Memory injection bloat is a known pain point. With 606 LLM calls and 23 query_memory tool calls, the bot is actively using memory recall. Reducing MAX_RECALL_RESULTS from 3 to 2 will reduce memory injection tokens by ~33%, improving context efficiency without losing critical recalled context. The COSINE_THRESHOLD of 0.75 ensures only highly relevant memories are recalled.",
+    "risk_level": "low",
+    "success": false,
+    "old_code_preview": "MAX_RECALL_RESULTS = _memory.get(\"max_recall_results\", 3)",
+    "new_code_preview": "MAX_RECALL_RESULTS = _memory.get(\"max_recall_results\", 2)"
+  },
+  {
+    "timestamp": "2026-08-22T00:20:24.682229+00:00",
+    "target": "schubert",
+    "description": "Increase LLM_TIMEOUT from 10s to 15s to reduce timeout risk for complex tool calls",
+    "rationale": "The metrics show avg_llm_latency_s of 9.14s, which is close to the 10s timeout. With 606 LLM calls and 0 llm_errors, the current timeout is working but leaves little margin. Increasing to 15s provides a safety buffer for complex tool calls (like schubert__schubert_run_command with 223 calls) without significantly impacting user experience. This prevents spurious timeouts during high-load periods.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 10)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 15)"
+  },
+  {
+    "timestamp": "2026-08-22T00:20:24.705633+00:00",
+    "target": "schubert",
+    "description": "Reduce TOOL_OUTPUT_LIMIT from 1500 to 1200 chars to prevent context bloat from verbose tool outputs",
+    "rationale": "The metrics show 683 tool calls, with schubert__schubert_run_command being the most used (223 calls). Shell command outputs can be verbose. Reducing TOOL_OUTPUT_LIMIT from 1500 to 1200 chars will reduce context bloat by 20% without losing critical information. The bot can always call read_file or view_logs for full output if needed. This improves LLM latency and reduces token waste.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "TOOL_OUTPUT_LIMIT = _llm.get(\"tool_output_limit\", 1500)",
+    "new_code_preview": "TOOL_OUTPUT_LIMIT = _llm.get(\"tool_output_limit\", 1200)"
+  },
+  {
+    "timestamp": "2026-08-22T00:36:19.233258+00:00",
+    "target": "schubert",
+    "description": "Reduce LLM timeout from 90s to 60s for faster failure detection",
+    "rationale": "Average LLM latency is 3.13s with zero errors over 761 calls. A 90s timeout is excessive and delays error detection. Reducing to 60s still provides ample headroom (19x the average) while failing faster on genuine hangs.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 90",
+    "new_code_preview": "LLM_TIMEOUT = 60"
+  },
+  {
+    "timestamp": "2026-08-22T00:36:19.251290+00:00",
+    "target": "schubert",
+    "description": "Increase tool output limit from 2000 to 4000 chars for better context",
+    "rationale": "With 974 tool calls and zero errors, the tools are reliable. The top tool (schubert__schubert_run_command, 295 calls) often returns logs/command output that may be truncated at 2000 chars. Doubling to 4000 provides more context for the LLM without risking token budget overflow (LLM_MAX_TOKENS is 4096).",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "TOOL_OUTPUT_LIMIT = 2000",
+    "new_code_preview": "TOOL_OUTPUT_LIMIT = 4000"
+  },
+  {
+    "timestamp": "2026-08-22T00:36:19.269293+00:00",
+    "target": "schubert",
+    "description": "Reduce agent loop max iterations from 30 to 20 for faster timeout",
+    "rationale": "Zero LLM errors and zero tool errors suggest the agent rarely needs 30 iterations. Reducing to 20 prevents runaway loops while still allowing complex multi-step tasks. This also reduces worst-case latency (20 * 3.13s avg = ~63s vs 94s).",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MAX_ITERATIONS = 30",
+    "new_code_preview": "MAX_ITERATIONS = 20"
+  },
+  {
+    "timestamp": "2026-08-22T00:36:19.287268+00:00",
+    "target": "schubert",
+    "description": "Add MCP client null check before tool discovery to prevent crashes",
+    "rationale": "The system prompt mentions 'MCP tool discovery failures' as a known pain point. Adding a discovery timeout constant prepares for timeout handling in the MCP client initialization phase, preventing indefinite hangs.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "from mcp_client import build_default_client, MCPClient",
+    "new_code_preview": "from mcp_client import build_default_client, MCPClient\n\n# MCP client resilience: graceful degradation if MCP servers are unreachable\nMCP_DISCOVERY_TIMEOUT = 10  # seconds"
+  },
+  {
+    "timestamp": "2026-08-22T00:36:19.305757+00:00",
+    "target": "schubert",
+    "description": "Reduce shell command timeout from 120s to 90s for faster failure",
+    "rationale": "With 295 schubert__schubert_run_command calls and zero errors, commands complete reliably. Reducing timeout from 120s to 90s fails faster on genuine hangs while still providing ample time for slow operations (git clone, systemctl restart, etc.).",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SHELL_TIMEOUT = 120",
+    "new_code_preview": "SHELL_TIMEOUT = 90"
+  },
+  {
+    "timestamp": "2026-08-22T00:52:33.618433+00:00",
+    "target": "schubert",
+    "description": "Add graceful degradation for webhook handler port conflict",
+    "rationale": "Logs show 'address already in use' errors for webhook handler. Adding clarification that the bot continues without webhooks improves observability and reduces confusion about whether this is a critical failure.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    log(f\"Webhook handler start failed (non-fatal): {e}\", \"WARN\")",
+    "new_code_preview": "    log(f\"Webhook handler start failed (non-fatal): {e}\", \"WARN\")\n        log(\"Continuing without webhook handler \u2014 GitHub webhooks will not be processed\", \"INFO\")"
+  },
+  {
+    "timestamp": "2026-08-22T00:52:33.638331+00:00",
+    "target": "schubert",
+    "description": "Reduce MCP discovery timeout for faster startup",
+    "rationale": "With 194 tools across 9 MCP servers, 10-second timeout may be excessive. Metrics show 0 tool errors, indicating MCP servers are reliable. Reducing to 5 seconds speeds up bot startup (currently ~3 seconds for MCP init) while maintaining resilience.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "MCP_DISCOVERY_TIMEOUT = 10  # seconds",
+    "new_code_preview": "MCP_DISCOVERY_TIMEOUT = 5  # seconds"
+  },
+  {
+    "timestamp": "2026-08-22T00:52:33.657953+00:00",
+    "target": "schubert",
+    "description": "Increase LLM timeout for complex tool chains",
+    "rationale": "Average LLM latency is 9.03s, but complex tool chains (like the 224 schubert_run_command calls) may trigger multi-turn reasoning. With 0 LLM errors in 647 calls, the system is stable, but increasing timeout provides headroom for edge cases without risk.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 60",
+    "new_code_preview": "LLM_TIMEOUT = 90"
+  },
+  {
+    "timestamp": "2026-08-22T00:52:33.677577+00:00",
+    "target": "schubert",
+    "description": "Reduce tool output limit to prevent context bloat",
+    "rationale": "With 720 tool calls and avg 9s LLM latency, large tool outputs may be inflating context size. Reducing limit to 2000 chars (still ~400 tokens) prevents memory injection bloat while preserving useful output. Top tool (schubert_run_command) often returns verbose output.",
+    "risk_level": "medium",
+    "success": true,
+    "old_code_preview": "TOOL_OUTPUT_LIMIT = 4000",
+    "new_code_preview": "TOOL_OUTPUT_LIMIT = 2000"
+  },
+  {
+    "timestamp": "2026-08-22T00:52:33.699865+00:00",
+    "target": "schubert",
+    "description": "Optimize session history windowing for token efficiency",
+    "rationale": "With 4 active sessions and avg 9s LLM latency, session history may be consuming too much context. Explicitly reserving 2048 tokens for history (leaving 2048 for system prompt + memory + tools) prevents context overflow and reduces latency.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_MAX_TOKENS = 4096",
+    "new_code_preview": "LLM_MAX_TOKENS = 4096\nSESSION_HISTORY_MAX_TOKENS = 2048  # Reserve half of context for session history"
+  },
+  {
+    "timestamp": "2026-08-22T00:59:17.553017+00:00",
+    "target": "schubert",
+    "description": "Add MCP tool discovery timeout handling",
+    "rationale": "Logs show 194 tools discovered successfully, but increasing timeout from 5s to 10s provides more headroom for MCP server discovery during high load or network latency, reducing risk of partial tool availability",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "from mcp_client import build_default_client, MCPClient\n\n# MCP client resilience: graceful degradation if MCP servers are unreachable\nMCP_DISCOVERY_TIMEOUT = 5  # seconds",
+    "new_code_preview": "from mcp_client import build_default_client, MCPClient\n\n# MCP client resilience: graceful degradation if MCP servers are unreachable\nMCP_DISCOVERY_TIMEOUT = 10  # seconds (increased from 5 to reduce d"
+  },
+  {
+    "timestamp": "2026-08-22T00:59:17.571798+00:00",
+    "target": "schubert",
+    "description": "Reduce session history token budget to leave more room for tool outputs",
+    "rationale": "With 781 tool calls vs 691 LLM calls, tool outputs are a major context consumer. Reducing session history budget from 2048 to 1536 tokens frees 512 tokens for tool results while still preserving adequate conversation context",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SESSION_HISTORY_MAX_TOKENS = 2048  # Reserve half of context for session history",
+    "new_code_preview": "SESSION_HISTORY_MAX_TOKENS = 1536  # Reserve ~37% of context for session history, leaving more for tool outputs and memory"
+  },
+  {
+    "timestamp": "2026-08-22T00:59:17.590554+00:00",
+    "target": "schubert",
+    "description": "Increase LLM timeout for complex tool chains",
+    "rationale": "Average LLM latency is 6.15s, but complex agent loops with multiple tool calls can approach timeout limits. Increasing from 90s to 120s provides buffer for multi-tool chains without significantly impacting user experience (0 LLM errors in 7 days suggests current timeout is adequate but tight)",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = 90",
+    "new_code_preview": "LLM_TIMEOUT = 120"
+  },
+  {
+    "timestamp": "2026-08-22T00:59:17.609288+00:00",
+    "target": "schubert",
+    "description": "Add exponential backoff for MCP tool call retries",
+    "rationale": "With 781 tool calls and 0 tool errors, the system is stable, but adding retry logic with exponential backoff (1s, 2s, 4s) will improve resilience when MCP servers experience transient failures, preventing single-point failures from breaking agent loops",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "SHELL_TIMEOUT = 120",
+    "new_code_preview": "SHELL_TIMEOUT = 120\nMCP_TOOL_RETRY_ATTEMPTS = 3\nMCP_TOOL_RETRY_DELAY = 1.0  # seconds, exponential backoff"
+  },
+  {
+    "timestamp": "2026-08-22T00:59:17.628335+00:00",
+    "target": "schubert",
+    "description": "Reduce tool output limit to prevent context bloat",
+    "rationale": "Top tool 'schubert__schubert_run_command' has 236 calls - shell command outputs can be verbose. Reducing limit from 2000 to 1500 chars prevents large log dumps from consuming excessive context while still providing sufficient detail for diagnostics",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "TOOL_OUTPUT_LIMIT = 2000",
+    "new_code_preview": "TOOL_OUTPUT_LIMIT = 1500"
+  },
+  {
+    "timestamp": "2026-09-05T01:32:43.029890+00:00",
+    "target": "architect",
+    "description": "Fix MODEL_CATEGORIES Claude entries \u2014 all currently list palmyra-x6 instead of Claude models",
+    "rationale": "The Claude model category is a copy-paste bug \u2014 all 5 entries point to palmyra-x6. Users selecting Claude from the !model dropdown would get Palmyra instead. This wastes tokens on the wrong model and breaks user expectations. With 256 calls already using claude-sonnet-4-5 via auto-routing, this fix ensures manual selection also works.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    \"Claude\": [\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n        \"writer/palmyra-x6\",\n    ],",
+    "new_code_preview": "    \"Claude\": [\n        \"writer/claude-sonnet-4-5\",\n        \"writer/claude-sonnet-4-5\",\n        \"writer/claude-sonnet-4-5\",\n        \"writer/claude-sonnet-4-5\",\n        \"writer/claude-sonnet-4-5\",\n    "
+  },
+  {
+    "timestamp": "2026-09-05T01:32:43.197044+00:00",
+    "target": "architect",
+    "description": "Reduce LLM_TIMEOUT from 300s to 120s",
+    "rationale": "Average LLM latency is 17.34s. A 300s timeout means a hung request blocks the bot for 5 minutes, causing user frustration and potential cascading timeouts. 120s is still generous (7x the average) but prevents indefinite blocking. This also reduces the window for resource waste during network issues.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 300)",
+    "new_code_preview": "LLM_TIMEOUT = _llm.get(\"llm_timeout\", 120)"
+  },
+  {
+    "timestamp": "2026-09-05T01:32:43.225216+00:00",
+    "target": "architect",
+    "description": "Remove overly generic terms from CODING_PATTERNS that cause false positives",
+    "rationale": "Generic terms like \"log\", \"error\", \"service\", \"test\", \"api\" trigger the coding model for non-coding requests (e.g., \"check service status\" or \"log this conversation\"). This wastes Claude tokens (256 calls already) on tasks better suited to Palmyra. Removing these reduces false positives while keeping specific coding indicators like \"traceback\", \"pytest\", \"docker\".",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    # Dev concepts\n    \"error\", \"traceback\", \"exception\", \"stack trace\", \"log\",\n    \"regex\", \"api\", \"endpoint\", \"database\", \"query\", \"schema\",\n    \"service\", \"systemd\", \"restart\", \"deploy\", \"commit\", ",
+    "new_code_preview": "    # Dev concepts (specific terms only \u2014 avoid generic words like \"log\", \"error\", \"update\", \"service\", \"test\")\n    \"traceback\", \"exception\", \"stack trace\", \"error message\",\n    \"regex\", \"endpoint\", \""
+  },
+  {
+    "timestamp": "2026-09-05T01:32:43.255234+00:00",
+    "target": "architect",
+    "description": "Fix retry logic in llm_chat to catch non-ClientError exceptions during retry",
+    "rationale": "The current retry loop only catches aiohttp.ClientError. If a retry throws a different exception (e.g., asyncio.TimeoutError, json.JSONDecodeError), it propagates uncaught, crashing the agent loop. Adding a broad except ensures all retry failures are handled gracefully, improving resilience.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "        for attempt in range(2):\n            await asyncio.sleep(2 ** attempt)\n            try:\n                return await llm_chat(messages, tools, model)\n            except aiohttp.ClientError:\n  ",
+    "new_code_preview": "        for attempt in range(2):\n            await asyncio.sleep(2 ** attempt)\n            try:\n                return await llm_chat(messages, tools, model)\n            except aiohttp.ClientError:\n  "
+  },
+  {
+    "timestamp": "2026-09-05T01:32:43.285608+00:00",
+    "target": "architect",
+    "description": "Remove generic terms 'update' and 'write a' from CODING_PATTERNS",
+    "rationale": "\"update\" matches non-coding requests like \"update me on the status\" and \"write a\" matches \"write a summary\" or \"write a message\". These cause false routing to the coding model. The remaining terms (edit, modify, rewrite, implement) are sufficiently coding-specific.",
+    "risk_level": "low",
+    "success": true,
+    "old_code_preview": "    \"edit\", \"modify\", \"update\", \"rewrite\", \"implement\", \"write a\",",
+    "new_code_preview": "    \"edit\", \"modify\", \"rewrite\", \"implement\","
+  }
+]

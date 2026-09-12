@@ -84,7 +84,7 @@ FORBIDDEN_SERVICES = {
 
 FORBIDDEN_SERVICE_PREFIXES = ("meetscribe", "foxtrot", "ollama")
 
-SAFE_SERVICES = {BACKEND_SERVICE, WEB_SERVICE, LITELLM_SERVICE, TTS_SERVICE}
+SAFE_SERVICES = {BACKEND_SERVICE, WEB_SERVICE, TTS_SERVICE}
 
 # ElevenLabs
 ELEVENLABS_SUBSCRIPTION_URL = "https://api.us.elevenlabs.io/v1/user/subscription"
@@ -122,6 +122,7 @@ HARD_BLOCKED_PATTERNS = [
 
 # Patterns that require user confirmation before execution
 CONFIRM_PATTERNS = [
+    (r"systemctl\s+(restart|stop)\s+polyglot-litellm", "LiteLLM restart/stop"),
     (r"\bgit\s+push\b", "git push"),
 ]
 
@@ -318,7 +319,8 @@ SYSTEM_PROMPT = """You are Tango Agent, an autonomous AI assistant operating on 
 - Git branch: fix/route-all-personas-to-elevenlabs (feature branch)
 
 ## Services
-Safe to restart: tango-backend.service, tango-web.service, polyglot-litellm.service, tango-tts.service
+Safe to restart: tango-backend.service, tango-web.service, tango-tts.service
+polyglot-litellm.service requires human confirmation before restart (shared by all projects)
 NEVER touch: caddy.service, cloudflared.service, postgresql@18-main.service, tailscaled.service, meetscribe-*, foxtrot-*, ollama.service
 
 ## Git Operations

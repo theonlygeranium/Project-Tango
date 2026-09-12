@@ -57,7 +57,7 @@ export interface BackendLlmModel {
 }
 
 export interface PersonaCatalogResponse {
-  default_persona_id: string;
+  default_persona_id: string | null;
   personas: BackendPersona[];
   llm_models: BackendLlmModel[];
 }

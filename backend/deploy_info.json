@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-11T06:22:00Z",
-  "note": "Mintlify docs integration — voice agents can now search and read product documentation.",
-  "version": "2.0.0"
+  "timestamp": "2026-09-12T00:30:42Z",
+  "note": "Reconcile: Schubert fleet/Nexus WIP merged with origin/main (PR #10 voice cutouts, transcription, meditation, Mintlify).",
+  "version": "reconcile-2026-09-12"
 }

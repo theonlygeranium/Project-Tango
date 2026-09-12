@@ -1,0 +1,14 @@
+[Unit]
+Description=Run Fleet Health Monitor every 2 hours
+Requires=fleet-health-monitor.service
+
+[Timer]
+# Run every 2 hours
+OnCalendar=*-*-* 02/2:00:00
+# If a run is missed (e.g. system was down), run immediately on boot
+Persistent=true
+# Randomize start by up to 5 minutes to avoid hammering Discord API
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

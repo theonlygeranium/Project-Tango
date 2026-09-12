@@ -1,0 +1,717 @@
+{
+  "totals": {
+    "llm_calls": 313,
+    "llm_errors": 1,
+    "tool_calls": 0,
+    "tool_errors": 0,
+    "agent_requests": 0,
+    "heal_events": 0,
+    "escalations": 4,
+    "auto_updates": 23,
+    "rollbacks": 0
+  },
+  "daily": {
+    "2026-08-22": {
+      "llm_calls": 35,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 3
+    },
+    "2026-08-23": {
+      "llm_calls": 6,
+      "llm_errors": 1,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 5
+    },
+    "2026-08-24": {
+      "llm_calls": 8,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-25": {
+      "llm_calls": 4,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 5
+    },
+    "2026-08-26": {
+      "llm_calls": 26,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-27": {
+      "llm_calls": 16,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-28": {
+      "llm_calls": 16,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-29": {
+      "llm_calls": 16,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-30": {
+      "llm_calls": 16,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-08-31": {
+      "llm_calls": 16,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-01": {
+      "llm_calls": 16,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-02": {
+      "llm_calls": 18,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-03": {
+      "llm_calls": 8,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-04": {
+      "llm_calls": 22,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-05": {
+      "llm_calls": 16,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-06": {
+      "llm_calls": 16,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-07": {
+      "llm_calls": 16,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-08": {
+      "llm_calls": 16,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-09": {
+      "llm_calls": 16,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 0
+    },
+    "2026-09-10": {
+      "llm_calls": 8,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 5
+    },
+    "2026-09-11": {
+      "llm_calls": 2,
+      "llm_errors": 0,
+      "tool_calls": 0,
+      "tool_errors": 0,
+      "agent_requests": 0,
+      "heal_events": 0,
+      "auto_updates": 5
+    }
+  },
+  "llm_latencies": [
+    {
+      "latency": 22.628305196762085,
+      "model": "writer/palmyra-x6",
+      "ts": 1788517556.3266637
+    },
+    {
+      "latency": 19.71609354019165,
+      "model": "writer/palmyra-x6",
+      "ts": 1788517576.0498521
+    },
+    {
+      "latency": 41.409565925598145,
+      "model": "writer/palmyra-x6",
+      "ts": 1788526248.6092987
+    },
+    {
+      "latency": 34.071945905685425,
+      "model": "writer/palmyra-x6",
+      "ts": 1788526282.6885371
+    },
+    {
+      "latency": 35.180047035217285,
+      "model": "writer/palmyra-x6",
+      "ts": 1788539211.4916437
+    },
+    {
+      "latency": 26.919132709503174,
+      "model": "writer/palmyra-x6",
+      "ts": 1788539238.4177427
+    },
+    {
+      "latency": 24.647247552871704,
+      "model": "writer/palmyra-x6",
+      "ts": 1788547907.6061862
+    },
+    {
+      "latency": 20.71494174003601,
+      "model": "writer/palmyra-x6",
+      "ts": 1788547928.3287883
+    },
+    {
+      "latency": 34.44535040855408,
+      "model": "writer/palmyra-x6",
+      "ts": 1788560873.3981907
+    },
+    {
+      "latency": 26.633342742919922,
+      "model": "writer/palmyra-x6",
+      "ts": 1788560900.03871
+    },
+    {
+      "latency": 18.63153314590454,
+      "model": "writer/palmyra-x6",
+      "ts": 1788569547.7458458
+    },
+    {
+      "latency": 20.28783082962036,
+      "model": "writer/palmyra-x6",
+      "ts": 1788569568.0408015
+    },
+    {
+      "latency": 20.15891456604004,
+      "model": "writer/palmyra-x6",
+      "ts": 1788582520.4182584
+    },
+    {
+      "latency": 18.38895535469055,
+      "model": "writer/palmyra-x6",
+      "ts": 1788582538.8145735
+    },
+    {
+      "latency": 21.1172776222229,
+      "model": "writer/palmyra-x6",
+      "ts": 1788591189.4823587
+    },
+    {
+      "latency": 21.42384958267212,
+      "model": "writer/palmyra-x6",
+      "ts": 1788591210.9131799
+    },
+    {
+      "latency": 20.230128288269043,
+      "model": "writer/palmyra-x6",
+      "ts": 1788604159.3372843
+    },
+    {
+      "latency": 20.711202383041382,
+      "model": "writer/palmyra-x6",
+      "ts": 1788604180.05575
+    },
+    {
+      "latency": 17.364916563034058,
+      "model": "writer/palmyra-x6",
+      "ts": 1788612828.5561028
+    },
+    {
+      "latency": 18.362083196640015,
+      "model": "writer/palmyra-x6",
+      "ts": 1788612846.9251463
+    },
+    {
+      "latency": 22.476396322250366,
+      "model": "writer/palmyra-x6",
+      "ts": 1788625802.8795865
+    },
+    {
+      "latency": 26.00503945350647,
+      "model": "writer/palmyra-x6",
+      "ts": 1788625828.8907378
+    },
+    {
+      "latency": 19.898921966552734,
+      "model": "writer/palmyra-x6",
+      "ts": 1788634467.8611617
+    },
+    {
+      "latency": 19.260272979736328,
+      "model": "writer/palmyra-x6",
+      "ts": 1788634487.128627
+    },
+    {
+      "latency": 16.918179035186768,
+      "model": "writer/palmyra-x6",
+      "ts": 1788647446.0920806
+    },
+    {
+      "latency": 19.09261131286621,
+      "model": "writer/palmyra-x6",
+      "ts": 1788647465.192037
+    },
+    {
+      "latency": 18.862515687942505,
+      "model": "writer/palmyra-x6",
+      "ts": 1788656106.293397
+    },
+    {
+      "latency": 18.53441023826599,
+      "model": "writer/palmyra-x6",
+      "ts": 1788656124.8349006
+    },
+    {
+      "latency": 18.49587655067444,
+      "model": "writer/palmyra-x6",
+      "ts": 1788669084.046128
+    },
+    {
+      "latency": 27.940723657608032,
+      "model": "writer/palmyra-x6",
+      "ts": 1788669111.9939227
+    },
+    {
+      "latency": 17.287575721740723,
+      "model": "writer/palmyra-x6",
+      "ts": 1788677742.3591158
+    },
+    {
+      "latency": 33.1052827835083,
+      "model": "writer/palmyra-x6",
+      "ts": 1788677775.4705207
+    },
+    {
+      "latency": 19.139828205108643,
+      "model": "writer/palmyra-x6",
+      "ts": 1788690731.4230392
+    },
+    {
+      "latency": 18.026549577713013,
+      "model": "writer/palmyra-x6",
+      "ts": 1788690749.4569151
+    },
+    {
+      "latency": 21.77613091468811,
+      "model": "writer/palmyra-x6",
+      "ts": 1788699397.5012383
+    },
+    {
+      "latency": 18.084800958633423,
+      "model": "writer/palmyra-x6",
+      "ts": 1788699415.5924366
+    },
+    {
+      "latency": 19.610243797302246,
+      "model": "writer/palmyra-x6",
+      "ts": 1788712369.3054419
+    },
+    {
+      "latency": 21.44866371154785,
+      "model": "writer/palmyra-x6",
+      "ts": 1788712390.7605765
+    },
+    {
+      "latency": 18.83236289024353,
+      "model": "writer/palmyra-x6",
+      "ts": 1788721034.7059302
+    },
+    {
+      "latency": 19.75692391395569,
+      "model": "writer/palmyra-x6",
+      "ts": 1788721054.4692483
+    },
+    {
+      "latency": 23.08411192893982,
+      "model": "writer/palmyra-x6",
+      "ts": 1788734014.6864426
+    },
+    {
+      "latency": 17.76298689842224,
+      "model": "writer/palmyra-x6",
+      "ts": 1788734032.4561398
+    },
+    {
+      "latency": 19.759937524795532,
+      "model": "writer/palmyra-x6",
+      "ts": 1788742674.5622032
+    },
+    {
+      "latency": 19.052315950393677,
+      "model": "writer/palmyra-x6",
+      "ts": 1788742693.6214468
+    },
+    {
+      "latency": 19.748605251312256,
+      "model": "writer/palmyra-x6",
+      "ts": 1788755652.4251091
+    },
+    {
+      "latency": 19.344273567199707,
+      "model": "writer/palmyra-x6",
+      "ts": 1788755671.7759533
+    },
+    {
+      "latency": 36.27680206298828,
+      "model": "writer/palmyra-x6",
+      "ts": 1788764330.257892
+    },
+    {
+      "latency": 36.009228229522705,
+      "model": "writer/palmyra-x6",
+      "ts": 1788764366.2735624
+    },
+    {
+      "latency": 19.979218006134033,
+      "model": "writer/palmyra-x6",
+      "ts": 1788777292.0483813
+    },
+    {
+      "latency": 16.02904224395752,
+      "model": "writer/palmyra-x6",
+      "ts": 1788777308.0841205
+    },
+    {
+      "latency": 15.21245551109314,
+      "model": "writer/palmyra-x6",
+      "ts": 1788785981.6994867
+    },
+    {
+      "latency": 18.540884971618652,
+      "model": "writer/palmyra-x6",
+      "ts": 1788786000.247155
+    },
+    {
+      "latency": 19.27239227294922,
+      "model": "writer/palmyra-x6",
+      "ts": 1788798927.6448314
+    },
+    {
+      "latency": 19.01786208152771,
+      "model": "writer/palmyra-x6",
+      "ts": 1788798946.6691084
+    },
+    {
+      "latency": 19.168217420578003,
+      "model": "writer/palmyra-x6",
+      "ts": 1788807619.8802242
+    },
+    {
+      "latency": 32.533207654953,
+      "model": "writer/palmyra-x6",
+      "ts": 1788807652.419872
+    },
+    {
+      "latency": 19.13875126838684,
+      "model": "writer/palmyra-x6",
+      "ts": 1788820566.067112
+    },
+    {
+      "latency": 23.56991672515869,
+      "model": "writer/palmyra-x6",
+      "ts": 1788820589.643632
+    },
+    {
+      "latency": 18.465646505355835,
+      "model": "writer/palmyra-x6",
+      "ts": 1788829271.2462661
+    },
+    {
+      "latency": 34.53972887992859,
+      "model": "writer/palmyra-x6",
+      "ts": 1788829305.792071
+    },
+    {
+      "latency": 19.37762689590454,
+      "model": "writer/palmyra-x6",
+      "ts": 1788842209.250132
+    },
+    {
+      "latency": 20.916839122772217,
+      "model": "writer/palmyra-x6",
+      "ts": 1788842230.1738086
+    },
+    {
+      "latency": 38.02469778060913,
+      "model": "writer/palmyra-x6",
+      "ts": 1788850944.0690491
+    },
+    {
+      "latency": 31.751921892166138,
+      "model": "writer/palmyra-x6",
+      "ts": 1788850975.82771
+    },
+    {
+      "latency": 22.446452856063843,
+      "model": "writer/palmyra-x6",
+      "ts": 1788863853.0018234
+    },
+    {
+      "latency": 19.66124939918518,
+      "model": "writer/palmyra-x6",
+      "ts": 1788863872.6695597
+    },
+    {
+      "latency": 40.19574809074402,
+      "model": "writer/palmyra-x6",
+      "ts": 1788872616.282497
+    },
+    {
+      "latency": 31.616997480392456,
+      "model": "writer/palmyra-x6",
+      "ts": 1788872647.9068105
+    },
+    {
+      "latency": 23.11141276359558,
+      "model": "writer/palmyra-x6",
+      "ts": 1788885496.119551
+    },
+    {
+      "latency": 22.61988067626953,
+      "model": "writer/palmyra-x6",
+      "ts": 1788885518.7457957
+    },
+    {
+      "latency": 21.202599048614502,
+      "model": "writer/palmyra-x6",
+      "ts": 1788894269.473345
+    },
+    {
+      "latency": 26.181463479995728,
+      "model": "writer/palmyra-x6",
+      "ts": 1788894295.6615715
+    },
+    {
+      "latency": 17.00693368911743,
+      "model": "writer/palmyra-x6",
+      "ts": 1788907136.291029
+    },
+    {
+      "latency": 18.6617374420166,
+      "model": "writer/palmyra-x6",
+      "ts": 1788907154.959596
+    },
+    {
+      "latency": 17.801764726638794,
+      "model": "writer/palmyra-x6",
+      "ts": 1788915913.8143737
+    },
+    {
+      "latency": 19.085853815078735,
+      "model": "writer/palmyra-x6",
+      "ts": 1788915932.9069004
+    },
+    {
+      "latency": 21.384466886520386,
+      "model": "writer/palmyra-x6",
+      "ts": 1788928776.6304154
+    },
+    {
+      "latency": 23.129767179489136,
+      "model": "writer/palmyra-x6",
+      "ts": 1788928799.766749
+    },
+    {
+      "latency": 22.74757981300354,
+      "model": "writer/palmyra-x6",
+      "ts": 1788937555.985014
+    },
+    {
+      "latency": 19.619710206985474,
+      "model": "writer/palmyra-x6",
+      "ts": 1788937575.611482
+    },
+    {
+      "latency": 19.03856587409973,
+      "model": "writer/palmyra-x6",
+      "ts": 1788950419.1446488
+    },
+    {
+      "latency": 21.539910554885864,
+      "model": "writer/palmyra-x6",
+      "ts": 1788950440.6908987
+    },
+    {
+      "latency": 20.447665452957153,
+      "model": "writer/palmyra-x6",
+      "ts": 1788959196.4350197
+    },
+    {
+      "latency": 21.7251455783844,
+      "model": "writer/palmyra-x6",
+      "ts": 1788959218.166889
+    },
+    {
+      "latency": 25.20557403564453,
+      "model": "writer/palmyra-x6",
+      "ts": 1788972066.1968436
+    },
+    {
+      "latency": 24.280632972717285,
+      "model": "writer/palmyra-x6",
+      "ts": 1788972090.4855347
+    },
+    {
+      "latency": 22.938474893569946,
+      "model": "writer/palmyra-x6",
+      "ts": 1788980841.4691224
+    },
+    {
+      "latency": 24.181410312652588,
+      "model": "writer/palmyra-x6",
+      "ts": 1788980865.657306
+    },
+    {
+      "latency": 50.32758378982544,
+      "model": "writer/palmyra-x6",
+      "ts": 1788993741.1396868
+    },
+    {
+      "latency": 24.215662479400635,
+      "model": "writer/palmyra-x6",
+      "ts": 1788993765.361859
+    },
+    {
+      "latency": 19.86219549179077,
+      "model": "writer/palmyra-x6",
+      "ts": 1789002485.8114955
+    },
+    {
+      "latency": 20.422563791275024,
+      "model": "writer/palmyra-x6",
+      "ts": 1789002506.2423282
+    },
+    {
+      "latency": 19.808501958847046,
+      "model": "writer/palmyra-x6",
+      "ts": 1789015385.5765252
+    },
+    {
+      "latency": 20.551506519317627,
+      "model": "writer/palmyra-x6",
+      "ts": 1789015406.1349332
+    },
+    {
+      "latency": 29.654802560806274,
+      "model": "writer/palmyra-x6",
+      "ts": 1789022779.3995237
+    },
+    {
+      "latency": 29.084989547729492,
+      "model": "writer/palmyra-x6",
+      "ts": 1789022808.491381
+    },
+    {
+      "latency": 29.278355360031128,
+      "model": "writer/palmyra-x6",
+      "ts": 1789022898.0422964
+    },
+    {
+      "latency": 18.761279344558716,
+      "model": "writer/palmyra-x6",
+      "ts": 1789022916.8116124
+    },
+    {
+      "latency": 19.08902645111084,
+      "model": "writer/palmyra-x6",
+      "ts": 1789087856.6370308
+    },
+    {
+      "latency": 20.518189191818237,
+      "model": "writer/palmyra-x6",
+      "ts": 1789087877.1712203
+    }
+  ],
+  "tool_usage": {},
+  "errors": [
+    {
+      "msg": "Pending update marker on startup \u2014 possible incomplete update",
+      "context": "auto_updater",
+      "ts": 1787429397.7937875
+    }
+  ],
+  "model_usage": {
+    "writer/palmyra-x6": 313
+  }
+}
