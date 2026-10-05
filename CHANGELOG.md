@@ -19,6 +19,15 @@ referenced as F1–F13.
   and TTS-fallback events never reached the journal (F3).
   `backend/tests/test_logging_format.py` now checks every logger call in
   `backend/*.py` for a placeholder/argument mismatch.
+- `web_search`, `search_wiki`, `get_wiki_document`, `search_docs` and
+  `read_doc` made synchronous `httpx.Client` calls (15–30 s timeouts) inside
+  async function tools. Each call froze the LiveKit job's event loop, which
+  also reads microphone audio, runs VAD, and pushes TTS frames, so a slow
+  lookup caused audio stalls and "inference is slower than realtime" (F11).
+  All four helpers now use `httpx.AsyncClient`; timeouts, the X6→X5 fallback,
+  and tool return values are unchanged.
+  `backend/tests/test_tool_http_async.py` drives each tool against a slow mock
+  server and asserts the event loop keeps running.
 - `backend/tests/test_migrations.py` asserted the latest migration was 004 and
   had failed since 005–007 were added. It now asserts contiguous numbering.
 

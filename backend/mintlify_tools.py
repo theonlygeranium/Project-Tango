@@ -38,7 +38,7 @@ def _get_mintlify_base_url() -> str:
     return os.getenv("MINTLIFY_BASE_URL", "https://edstratumlabs.mintlify.site").rstrip("/")
 
 
-def _mcp_call(base_url: str, method: str, params: dict | None = None, *, request_id: int = 1) -> str | None:
+async def _mcp_call(base_url: str, method: str, params: dict | None = None, *, request_id: int = 1) -> str | None:
     """Make a single MCP JSON-RPC call and extract text from the SSE response.
 
     Each call is stateless from the HTTP perspective — the Mintlify MCP server
@@ -52,9 +52,9 @@ def _mcp_call(base_url: str, method: str, params: dict | None = None, *, request
     }
 
     try:
-        with httpx.Client(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=20.0) as client:
             # Step 1: Initialize the MCP session
-            init_response = client.post(
+            init_response = await client.post(
                 mcp_url,
                 headers=headers,
                 json={
@@ -71,7 +71,7 @@ def _mcp_call(base_url: str, method: str, params: dict | None = None, *, request
             init_response.raise_for_status()
 
             # Step 2: Send initialized notification (no response expected)
-            client.post(
+            await client.post(
                 mcp_url,
                 headers=headers,
                 json={"jsonrpc": "2.0", "method": "notifications/initialized"},
@@ -82,7 +82,7 @@ def _mcp_call(base_url: str, method: str, params: dict | None = None, *, request
             if params is not None:
                 payload["params"] = params
 
-            response = client.post(mcp_url, headers=headers, json=payload)
+            response = await client.post(mcp_url, headers=headers, json=payload)
             response.raise_for_status()
 
             return _parse_sse_response(response.text)
@@ -112,7 +112,7 @@ def _parse_sse_response(text: str) -> str | None:
     return None
 
 
-def _discover_tool_names(base_url: str) -> tuple[str | None, str | None]:
+async def _discover_tool_names(base_url: str) -> tuple[str | None, str | None]:
     """Discover the actual search and filesystem tool names from the MCP server.
 
     Tool names include a site-specific suffix (e.g., 'search_threadmark').
@@ -125,9 +125,9 @@ def _discover_tool_names(base_url: str) -> tuple[str | None, str | None]:
     }
 
     try:
-        with httpx.Client(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             # Initialize
-            client.post(
+            await client.post(
                 mcp_url,
                 headers=headers,
                 json={
@@ -142,13 +142,13 @@ def _discover_tool_names(base_url: str) -> tuple[str | None, str | None]:
                 },
             )
             # Notify initialized
-            client.post(
+            await client.post(
                 mcp_url,
                 headers=headers,
                 json={"jsonrpc": "2.0", "method": "notifications/initialized"},
             )
             # List tools
-            response = client.post(
+            response = await client.post(
                 mcp_url,
                 headers=headers,
                 json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
@@ -181,11 +181,11 @@ def _discover_tool_names(base_url: str) -> tuple[str | None, str | None]:
 _cached_tool_names: tuple[str | None, str | None] | None = None
 
 
-def _get_tool_names(base_url: str) -> tuple[str, str]:
+async def _get_tool_names(base_url: str) -> tuple[str, str]:
     """Get the search and filesystem tool names, discovering them if needed."""
     global _cached_tool_names
     if _cached_tool_names is None or _cached_tool_names[0] is None:
-        _cached_tool_names = _discover_tool_names(base_url)
+        _cached_tool_names = await _discover_tool_names(base_url)
     search_name, fs_name = _cached_tool_names
     return search_name or "search_threadmark", fs_name or "query_docs_filesystem_threadmark"
 
@@ -202,9 +202,9 @@ async def search_docs(
     snippets for the most relevant results.
     """
     base_url = _get_mintlify_base_url()
-    search_name, _ = _get_tool_names(base_url)
+    search_name, _ = await _get_tool_names(base_url)
 
-    result = _mcp_call(
+    result = await _mcp_call(
         base_url,
         "tools/call",
         params={"name": search_name, "arguments": {"query": query}},
@@ -236,7 +236,7 @@ async def read_doc(
     include the .mdx extension — it is added automatically.
     """
     base_url = _get_mintlify_base_url()
-    _, fs_name = _get_tool_names(base_url)
+    _, fs_name = await _get_tool_names(base_url)
 
     # Ensure the path starts with / and ends with .mdx
     if not page_path.startswith("/"):
@@ -244,7 +244,7 @@ async def read_doc(
     if not page_path.endswith(".mdx"):
         page_path = page_path + ".mdx"
 
-    result = _mcp_call(
+    result = await _mcp_call(
         base_url,
         "tools/call",
         params={"name": fs_name, "arguments": {"command": f"cat {page_path}"}},
