@@ -131,6 +131,7 @@ referenced as F1–F13.
   proposal and AGENTS.md edits are marked as needing owner authorization
   (AGENTS.md §3.5 and §4); the logging-guard recommendation describes the
   static check that was shipped instead of an ineffective runtime test.
+- Review status line updated to list every finding fixed in this PR.
 
 ---
 
