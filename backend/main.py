@@ -1583,6 +1583,42 @@ async def _account_access_monitor(
             return
 
 
+# Silero VAD settings shared by every session. Tighter than the SDK defaults
+# (0.55 s / 0.5 s): in "stt" turn detection VAD drives barge-in, and in "vad"
+# mode (Tagalog personas) it also ends the turn.
+VAD_MIN_SILENCE_DURATION = 0.3
+VAD_PREFIX_PADDING_DURATION = 0.3
+_PREWARMED_VAD_KEY = "vad"
+
+
+def _load_vad() -> Any:
+    from livekit.plugins import silero
+
+    return silero.VAD.load(
+        min_silence_duration=VAD_MIN_SILENCE_DURATION,
+        prefix_padding_duration=VAD_PREFIX_PADDING_DURATION,
+    )
+
+
+def prewarm(proc: Any) -> None:
+    """Load models once per worker process, before any job is assigned.
+
+    LiveKit keeps idle processes warm (LIVEKIT_NUM_IDLE_PROCESSES), so loading
+    the Silero ONNX model here takes it off the session-start path. This is
+    the pattern LiveKit documents for VAD.
+    """
+    proc.userdata[_PREWARMED_VAD_KEY] = _load_vad()
+
+
+def _session_vad(ctx: Any) -> Any:
+    """The VAD prewarmed for this process, or a fresh load as a fallback."""
+    userdata = getattr(getattr(ctx, "proc", None), "userdata", None)
+    if isinstance(userdata, dict) and userdata.get(_PREWARMED_VAD_KEY) is not None:
+        return userdata[_PREWARMED_VAD_KEY]
+    logger.warning("No prewarmed VAD in this worker process; loading Silero VAD per session")
+    return _load_vad()
+
+
 async def entrypoint(ctx: Any) -> None:
     from jarvis_agent import Jarvis
     from livekit.agents import (
@@ -1593,7 +1629,7 @@ async def entrypoint(ctx: Any) -> None:
         SessionUsageUpdatedEvent,
     )
     from livekit.agents.llm import ChatMessage
-    from livekit.plugins import deepgram, elevenlabs, openai, silero
+    from livekit.plugins import deepgram, elevenlabs, openai
     from vision_context import LiveVideoContext, VisionContextConfig
 
     # Connect the MCP bridge for this worker process if not already connected.
@@ -1799,7 +1835,7 @@ async def entrypoint(ctx: Any) -> None:
         _stt = deepgram.STTv2(**stt_kwargs)
 
     session = AgentSession(
-        vad=silero.VAD.load(min_silence_duration=0.3, prefix_padding_duration=0.3),
+        vad=_session_vad(ctx),
         stt=_stt,
         llm=openai.LLM(
             base_url=LITELLM_BASE_URL,
@@ -2090,6 +2126,7 @@ if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
+            prewarm_fnc=prewarm,
             agent_name=TANGO_AGENT_NAME,
             num_idle_processes=num_idle_processes,
             shutdown_process_timeout=15.0,

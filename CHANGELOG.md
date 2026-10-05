@@ -111,6 +111,12 @@ referenced as F1–F13.
   per chunk, which tends to give Taglish an English accent. ElevenLabs
   ignores unsupported codes rather than failing the request. Disable with
   `TANGO_ELEVENLABS_LANGUAGE_HINTS=false`. English personas are unchanged.
+- Silero VAD is loaded once per worker process in a `prewarm` function
+  (`WorkerOptions(prewarm_fnc=...)`), the pattern LiveKit documents, instead
+  of on every session start (F5). Load takes roughly 40–80 ms on a quiet
+  machine, so this mainly helps when Schubert's CPU is busy. Settings are
+  unchanged (`min_silence_duration=0.3`, `prefix_padding_duration=0.3`). If
+  a process has no prewarmed model, the session logs a warning and loads one.
 
 ---
 

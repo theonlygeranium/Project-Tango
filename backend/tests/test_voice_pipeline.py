@@ -273,3 +273,40 @@ def test_language_hints_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> None
     engine = _built_elevenlabs("pinoy-pride")
 
     assert "language_code" not in el_tts._multi_stream_url(engine._opts)
+
+
+def test_prewarm_loads_vad_once_and_sessions_reuse_it() -> None:
+    from livekit.plugins import silero
+
+    proc = types.SimpleNamespace(userdata={})
+    main.prewarm(proc)
+    vad = proc.userdata["vad"]
+    assert isinstance(vad, silero.VAD)
+    assert vad._opts.min_silence_duration == main.VAD_MIN_SILENCE_DURATION
+    assert vad._opts.prefix_padding_duration == main.VAD_PREFIX_PADDING_DURATION
+
+    ctx = types.SimpleNamespace(proc=proc)
+    assert main._session_vad(ctx) is vad
+    assert main._session_vad(ctx) is vad
+
+
+def test_session_vad_falls_back_to_loading_without_prewarm() -> None:
+    from livekit.plugins import silero
+
+    ctx = types.SimpleNamespace(proc=types.SimpleNamespace(userdata={}))
+    assert isinstance(main._session_vad(ctx), silero.VAD)
+
+
+def test_worker_registers_prewarm() -> None:
+    import ast
+    from pathlib import Path
+
+    tree = ast.parse(Path(main.__file__).read_text())
+    keywords = {
+        kw.arg: kw.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "WorkerOptions"
+        for kw in node.keywords
+    }
+    assert isinstance(keywords.get("prewarm_fnc"), ast.Name)
+    assert keywords["prewarm_fnc"].id == "prewarm"
