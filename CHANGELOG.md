@@ -167,6 +167,25 @@ referenced as F1–F13.
   architecture.md, related ADRs and this release's entries are updated; older entries keep their original numbers. New
   `docs/decisions/README.md` indexes every ADR and names the next free
   number (029). Fleet-only collisions (015, 016, 020) are left as they are.
+- Tango docs now match the code (F10):
+  - README: hosting split (Schubert plus LiveKit Cloud), the SDK pin, Flux
+    turn detection and the TTS fallback; links to the review and ADR index.
+  - architecture.md: pipeline diagram and persona table rebuilt from the code
+    (Chris on `writer/palmyra-x6`, Jeremiah on ElevenLabs, turn-ending
+    settings, thinking sound); decisions table adds ADR-023 and the
+    FallbackAdapter decision.
+  - setup.md: `.env` lives at the repository root; `tango-tts` stays
+    disabled, matching `deploy.sh`; deploys run on every push to `main` and
+    drop live calls; local development needs `python main.py dev` for the
+    worker; new post-deploy log checks.
+  - docs/AGENTS.md: provider rules for Flux/Nova-3 turn detection, the TTS
+    fallback, `style=0`, non-blocking tools and the SDK pin; persona and
+    alias tables corrected.
+  - backend/.env.example: documents 13 runtime variables the code already
+    reads (session TTL, away timeout, PVC-as-IVC, vision frame age,
+    transcription, meditation track, Serper key, DB pool, log levels).
+  - `docs/proposals/2026-10-05-agents-md-updates.md` lists proposed edits to
+    the owner-only root AGENTS.md; none are applied.
 
 ---
 

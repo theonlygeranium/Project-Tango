@@ -46,7 +46,7 @@ voice sessions through the provider and persona constraints below.
 | --- | --- | --- |
 | `3006` | `tango-web` frontend | Use for Project Tango frontend |
 | `8030` | `tango-backend` API | Use for Project Tango backend after confirming it is free |
-| `8020` | `tango-tts` F5-TTS sidecar | Localhost-only Jeremiah pilot; do not expose publicly |
+| `8020` | `tango-tts` F5-TTS sidecar | Localhost-only, optional (no persona uses it by default); do not expose publicly |
 | `8010` | `asr-gateway` | Do not use |
 | `3010` | Schubert homepage | Do not use |
 | `3100` | MeetScribe frontend | Do not use |
@@ -64,10 +64,19 @@ Live inspection on 2026-06-22 showed Docker container `asr-gateway` listening on
 - LLM calls must use OpenAI-compatible routing through LiteLLM at `http://localhost:4000`.
 - Tango authenticates to the proxy with `LITELLM_MASTER_KEY`.
 - Do not add `WRITER_API_KEY` or `PALMYRA_API_KEY` to Tango env files.
-- Deepgram STT must use Nova-3 with interim results enabled for live captions.
-- ElevenLabs TTS must use `eleven_flash_v2_5`.
-- Jeremiah may use the local F5-TTS sidecar when `tts_backend="f5-tts"` and
-  `TANGO_F5_TTS_ENABLED=true`; all other personas remain on ElevenLabs.
+- Deepgram STT: English personas use Flux (`deepgram.STTv2`, `flux-general-en`) with
+  `turn_detection="stt"`, so Flux ends the user's turn (ADR-002, ADR-023). Tagalog personas
+  use Nova-3 `language="tl"` (`deepgram.STT`, `endpointing_ms=300`) with
+  `turn_detection="vad"`; Flux does not support Tagalog (ADR-003). Captions publish as
+  they arrive (`sync_transcription=False`, ADR-028).
+- ElevenLabs TTS must use `eleven_flash_v2_5`, wrapped in `tts.FallbackAdapter` with a
+  Deepgram Aura fallback. Keep voice `style` at 0 (ElevenLabs: non-zero adds latency).
+- All personas currently use ElevenLabs. A persona may use the local F5-TTS sidecar when
+  `tts_backend="f5-tts"` and `TANGO_F5_TTS_ENABLED=true` (ADR-008); none does by default.
+- Function tools must not block the event loop: use `httpx.AsyncClient` (or
+  `asyncio.to_thread`), never a synchronous HTTP client, inside async tools.
+- LiveKit packages are pinned exactly in `backend/requirements.txt`; bump all `livekit*`
+  pins together and rerun `backend/tests`.
 - F5-TTS runs in `/opt/tts-lab/f5-venv` and serves only `127.0.0.1:8020`.
 - Production LiveKit workers default to `LIVEKIT_NUM_IDLE_PROCESSES=1` to reduce
   Schubert memory pressure. Raise it only for expected concurrent voice-session starts.
@@ -81,7 +90,8 @@ Live inspection on 2026-06-22 showed Docker container `asr-gateway` listening on
 | Alias | Actual model | Use |
 | --- | --- | --- |
 | `local/qwen3-fast` | `ollama/qwen3.6:latest` | Default for Damian, Jeremiah, Jeremiah V2, Jacob, and Nathaniel |
-| `writer/palmyra-x5-voice` | Writer Palmyra X5 voice-tuned route | Chris default; selectable override for all personas |
+| `writer/palmyra-x6` | Writer Palmyra X6 | Chris default; selectable override for all personas |
+| `writer/palmyra-x5-voice` | Writer Palmyra X5 voice-tuned route | Selectable override |
 | `groq/llama4-scout` | Groq Llama 4 Scout | Mama Lulu and Tita Baby defaults; selectable override |
 
 Do not use `ollama/qwen3.6`, `ollama/qwen3.6:latest`, or `writer/palmyra` as Tango
@@ -92,9 +102,9 @@ Do not use `ollama/qwen3.6`, `ollama/qwen3.6:latest`, or `writer/palmyra` as Tan
 | Persona | Display Name | ElevenLabs Voice ID | LiteLLM Alias | Deepgram STT Language |
 | --- | --- | --- | --- | --- |
 | Therapy | Damian | `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | `en-US` |
-| General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | `en-US` |
-| General Info | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` via F5-TTS pilot | `local/qwen3-fast` | `en-US` |
-| General Info | Jeremiah V2 | ElevenLabs | `local/qwen3-fast` | `en-US` |
+| General Info | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x6` | `en-US` |
+| General Info | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | `en-US` |
+| General Info | Jeremiah V2 | `lktV9XgoGxRX7e8LLRxv` | `local/qwen3-fast` | `en-US` |
 | General Info | Jacob | `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | `en-US` |
 | General Info | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO` | `groq/llama4-scout` | `tl` |
 | Meditation | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | `en-US` |
@@ -147,12 +157,12 @@ Run these before marking the bootstrap complete:
 2. `cd frontend && npm run dev -- --port 3006`
 3. Open `http://localhost:3006`, sign in, and confirm only the account's assigned personas are selectable.
 4. Select Damian, connect, and confirm LiveKit reaches the listening state.
-5. Speak and confirm interim Deepgram captions render.
+5. Speak and confirm Deepgram captions render.
 6. Confirm ElevenLabs audio playback and speaking animation.
 7. Confirm backend logs show `http://localhost:4000`, not `api.openai.com`.
 8. Confirm worker startup logs show `num_idle_processes=1`.
 9. Confirm Therapy logs show `local/qwen3-fast`.
-10. Switch to Chris and confirm logs show `writer/palmyra-x5-voice`.
+10. Switch to Chris and confirm logs show `writer/palmyra-x6`.
 11. Assign Chris a local-model override in the admin dashboard and confirm logs
     show `local/qwen3-fast`; a regular user must not see a model switcher.
 12. Select Jeremiah with Persona default and confirm logs show

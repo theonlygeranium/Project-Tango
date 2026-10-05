@@ -1,7 +1,7 @@
 # Project Tango — System Architecture
 
 > Keep this document in sync with the actual state of Schubert. Do not add aspirational content.
-> Last updated: 2026-08-20 — Nexus Fleet Model rebuild (v3)
+> Last updated: 2026-10-05 — voice pipeline review fixes (see `docs/reviews/2026-10-05-voice-pipeline-review.md`)
 
 ---
 
@@ -36,7 +36,8 @@ Schubert Nexus (192.168.86.77 / Tailscale)
               FastAPI: accounts, policy, tokens, dispatch, history, memory
               LiveKit Agent Worker: voice pipeline per room
         └── tango-tts.service (127.0.0.1:8020)
-              FastAPI F5-TTS sidecar for Jeremiah pilot only
+              Optional FastAPI F5-TTS sidecar (ADR-008). No persona uses it by
+              default; deploy.sh leaves it stopped and the backend starts it on demand
 ```
 
 ---
@@ -45,43 +46,53 @@ Schubert Nexus (192.168.86.77 / Tailscale)
 
 ```
 User microphone
-        │  WebRTC audio track
+        │  WebRTC audio track (frontend dispatches the agent after room.connect, ADR-006)
         ▼
 LiveKit Cloud  (wss://project-tango-0xs3szq3.livekit.cloud)
         │  Audio frames
         ▼
-Deepgram STT plugin (inside LiveKit Agent Worker on Schubert)
-        ├── English personas → flux-general-en (Flux STTv2)
-        │     Native end-of-turn detection + eager EOT (per-persona threshold)
-        │     EagerEndOfTurn → speculative LLM generation (hundreds of ms saved)
-        └── Tagalog personas → nova-3, language="tl", smart_format=True
-              Correct Taglish orthography and comprehension
+LiveKit Agent Worker on Schubert (livekit-agents 1.8.4, pinned)
+        │  Silero VAD prewarmed once per worker process (min_silence 0.3 s)
+        ▼
+Deepgram STT
+        ├── English personas → deepgram.STTv2 flux-general-en
+        │     Per-persona eot_threshold / eot_timeout_ms / eager_eot_threshold
+        │     EagerEndOfTurn → preemptive LLM generation (ADR-024)
+        └── Tagalog personas → deepgram.STT nova-3, language="tl",
+              smart_format=True, endpointing_ms=300 (ADR-003)
+              stt.FallbackAdapter: with Taglish keyterms → plain (if rejected)
         │  Transcribed text
         ▼
-LiveKit AgentSession (turn_handling={"turn_detection": "stt"})
-        │     Flux EndOfTurn ends English turns; Silero VAD handles barge-in
-        │     Tagalog personas: turn_detection="vad" (ADR-023)
-        │     TANGO_TURN_DETECTION=audio → LiveKit audio TurnDetector (rollback)
-        │  User message
+LiveKit AgentSession
+        │  English: turn_detection="stt" — Flux EndOfTurn ends the turn (ADR-023)
+        │           TANGO_TURN_DETECTION=audio → LiveKit audio TurnDetector (rollback)
+        │  Tagalog: turn_detection="vad", endpointing min_delay=0.7
+        │  Silero VAD handles barge-in in both modes
+        │  preemptive_generation on, preemptive_tts=False (vision does not disable it)
+        │  max_tool_steps=8 (wiki/docs/MCP chains, ADR-028)
+        │  on_user_turn_completed: Control Mode, programs, meditation and
+        │    transcription commands, vision context (encode + request off-loop)
         ▼
 LLM via LiteLLM proxy (localhost:4000)
         ├── local/qwen3-fast         → Ollama qwen3.6:latest (GPU inference)
-        ├── writer/palmyra-x5-voice  → WRITER Palmyra X5
-        └── groq/llama4-scout        → Groq Llama 4 Scout
+        ├── writer/palmyra-x6        → WRITER Palmyra X6 (Chris default)
+        ├── groq/llama4-scout        → Groq Llama 4 Scout (Tagalog personas)
+        └── other allowlisted aliases (admin session override)
+        │  Function tools: web/wiki/docs use httpx.AsyncClient (never block audio)
         │  LLM response text
         ▼
-TTS routing
-        ├── Jeremiah pilot → F5-TTS sidecar (127.0.0.1:8020)
-        │     Reference voice: /opt/Project-Tango/tts-voices/jeremiah_reference.wav
-        │     Runtime reference: short source-sample clip plus matched transcript
-        └── All other personas → ElevenLabs Flash v2.5 (api.us.elevenlabs.io)
+TTS: tts.FallbackAdapter
+        ├── Primary: ElevenLabs Flash v2.5 (api.us.elevenlabs.io), auto_mode,
+        │     style=0 for every persona; Tagalog personas send language_code=fil
+        └── Fallback: Deepgram Aura (per-persona voice) on primary failure
         │  use_tts_aligned_transcript=False
-        │  RoomIO sync_transcription=False  (disables SegmentSynchronizer)
-        │  max_tool_steps=8  (wiki/docs/MCP chains)
+        │  RoomIO sync_transcription=False  (disables SegmentSynchronizer, ADR-028)
         │  Audio stream
         ▼
-LiveKit Cloud  (audio track back to browser)
-        │
+LiveKit Cloud  (agent audio track back to browser)
+        │  plus "background_audio" track: BackgroundAudioPlayer with the
+        │  keyboard thinking sound (off for Damian and Nathaniel) and the
+        │  meditation track, ducked to 30% while the agent speaks
         ▼
 User speakers
 ```
@@ -159,16 +170,20 @@ owner. Legacy rows are adopted by the initial admin during bootstrap.
 
 ## Personas
 
-| Persona Key | Display Name | TTS Backend | LLM Alias | STT Model | Language |
-|---|---|---|---|---|---|
-| `therapy` | Damian | ElevenLabs `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | Flux | `en-US` |
-| `general-info` (Chris) | Chris (British) | ElevenLabs `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x5-voice` | Flux | `en-US` |
-| `jeremiah` | Jeremiah | F5-TTS pilot, short source-sample reference from `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | Flux | `en-US` |
-| `jeremiah-v2` | Jeremiah V2 | ElevenLabs | `local/qwen3-fast` | Flux | `en-US` |
-| `jacob` | Jacob | ElevenLabs `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | Flux | `en-US` |
-| `meditation` | Nathaniel | ElevenLabs `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | Flux | `en-US` |
-| `mama-lulu` | Mama Lulu | ElevenLabs `LF1xMOq6fDVEBEkLP0HO` | `groq/llama4-scout` | Nova-3 | `tl` |
-| `pinoy-pride` | Tita Baby | ElevenLabs `smYFzUb4yrSqprnml7n5` | `groq/llama4-scout` | Nova-3 | `tl` |
+| Persona Key | Display Name | TTS (ElevenLabs voice) | LLM Alias | STT | Turn end | Eager EOT | Thinking sound |
+|---|---|---|---|---|---|---|---|
+| `therapy` | Damian | `QF9HJC7XWnue5c9W3LkY` | `local/qwen3-fast` | Flux `en-US` | Flux 0.8 / 4500 ms | — | off |
+| `general-info` | Chris (British) | `HfRP3cIhYLmeNHeTvkWK` | `writer/palmyra-x6` | Flux `en-US` | Flux 0.7 / 2500 ms | 0.6 | on |
+| `jeremiah` | Jeremiah | `EqHdTYoEuDQCxN1CVbi0` | `local/qwen3-fast` | Flux `en-US` | Flux 0.7 / 2500 ms | 0.6 | on |
+| `jeremiah-v2` | Jeremiah V2 | `lktV9XgoGxRX7e8LLRxv` | `local/qwen3-fast` | Flux `en-US` | Flux 0.75 / 3500 ms | 0.55 | on |
+| `jacob` | Jacob | `qYwy2TckibCF9cBuhI46` | `local/qwen3-fast` | Flux `en-US` | Flux 0.7 / 2500 ms | 0.65 | on |
+| `meditation` | Nathaniel | `pFQStpMdprGFILRDrWR2` | `local/qwen3-fast` | Flux `en-US` | Flux 0.8 / 5500 ms | — | off |
+| `mama-lulu` | Mama Lulu | `LF1xMOq6fDVEBEkLP0HO`, `language_code=fil` | `groq/llama4-scout` | Nova-3 `tl` + keyterms | VAD, min_delay 0.7 s | — | on |
+| `pinoy-pride` | Tita Baby | `smYFzUb4yrSqprnml7n5`, `language_code=fil` | `groq/llama4-scout` | Nova-3 `tl` + keyterms | VAD, min_delay 0.7 s | — | on |
+
+"Turn end" for Flux personas is `eot_threshold` / `eot_timeout_ms`. All personas use
+ElevenLabs Flash v2.5 with `style=0` and Deepgram Aura as the TTS fallback. The source of
+truth is `backend/personas.py`.
 
 Every resolved persona receives the universal Layer 1 voice constraints before
 its identity-specific prompt. The account policy may retain the default above
@@ -562,11 +577,13 @@ See `docs/decisions/` for full ADRs.
 | Cloudflare tunnel direct to localhost | Bypasses Caddy, prevents Error 522 | ADR-005 |
 | POST /api/dispatch after room.connect() | Prevents agent timeout on empty rooms | ADR-006 |
 | LiteLLM proxy for all LLM calls | Centralized credentials, model switching | ADR-007 |
-| F5-TTS sidecar for Jeremiah pilot | Self-hosted TTS without disrupting other personas | ADR-008 |
+| F5-TTS sidecar for Jeremiah pilot | Self-hosted TTS without disrupting other personas (Jeremiah has since moved to ElevenLabs) | ADR-008 |
 | Groq Tagalog defaults + universal voice layer | Reproduce current live persona behavior | ADR-009 |
 | Password accounts + server persona authorization | Protect every browser/API path and isolate account data | ADR-010 |
 | Voice agent MCP knowledge access | Bridge Discord-fleet MCP servers into voice personas | ADR-025 |
 | Control Mode — voice-driven admin override | Adjust persona behavior/tone/prompt mid-conversation, persisted to DB | ADR-026 |
+| Flux owns English turn boundaries (`turn_detection="stt"`) | Per-persona Flux end-of-turn tuning only applies in this mode | ADR-023 |
+| LiveKit `FallbackAdapter` for TTS (and Tagalog STT keyterms) | Fallback must cover the streaming path; keyterm rejection must not silence STT | CHANGELOG 2026-10-05 |
 | Voice-created programs (subroutines) | Derived personas with LLM-generated prompts, created via Control Mode, activated by voice or UI | ADR-027 |
 | Discord fleet constants via `fleet-config.json` | Tunable without editing bot sources; missing file → defaults | 2026-08-20 fleet-config ADRs |
 | Nexus Bus (Redis Streams) for inter-bot communication | Durable, ordered, no rate limits, decoupled from Discord | ADR-018 |
