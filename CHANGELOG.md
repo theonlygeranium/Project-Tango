@@ -82,6 +82,11 @@ referenced as F1–F13.
   loop; the custom TTS fallback never engages on the streaming path; 13 log
   calls use `pcts`/`pctd` and emit nothing; `livekit-agents~=1.5` is unpinned.
   No code changes in this commit.
+- Review corrections after automated review: the SDK-level findings are scoped
+  to `livekit-agents` 1.8.4 (now the pinned version); the dispatch-in-token
+  proposal and AGENTS.md edits are marked as needing owner authorization
+  (AGENTS.md §3.5 and §4); the logging-guard recommendation describes the
+  static check that was shipped instead of an ineffective runtime test.
 
 ---
 
