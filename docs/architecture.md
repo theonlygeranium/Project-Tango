@@ -59,6 +59,9 @@ Deepgram STT plugin (inside LiveKit Agent Worker on Schubert)
         │  Transcribed text
         ▼
 LiveKit AgentSession (turn_handling={"turn_detection": "stt"})
+        │     Flux EndOfTurn ends English turns; Silero VAD handles barge-in
+        │     Tagalog personas: turn_detection="vad" (ADR-023)
+        │     TANGO_TURN_DETECTION=audio → LiveKit audio TurnDetector (rollback)
         │  User message
         ▼
 LLM via LiteLLM proxy (localhost:4000)

@@ -143,3 +143,87 @@ def test_turn_metrics_ms_handles_missing_metrics() -> None:
     assert main._turn_metrics_ms(types.SimpleNamespace()) == {}
     assert main._turn_metrics_ms(types.SimpleNamespace(metrics=None)) == {}
     assert main._format_turn_metrics({}) == "none"
+
+
+def _resolved_turn_detection(turn_handling: dict) -> object:
+    """Mode the real AgentSession resolves from Tango's turn_handling dict."""
+    from livekit.agents import AgentSession
+
+    return AgentSession(turn_handling=turn_handling).turn_detection
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("env_value", [None, "", "stt", "STT", "flux"])
+async def test_english_personas_use_flux_stt_turn_detection(
+    monkeypatch: pytest.MonkeyPatch, env_value: str | None
+) -> None:
+    if env_value is None:
+        monkeypatch.delenv("TANGO_TURN_DETECTION", raising=False)
+    else:
+        monkeypatch.setenv("TANGO_TURN_DETECTION", env_value)
+    persona = main.get_persona("general-info")
+
+    turn_handling = main._turn_handling_for_session(persona, persona.llm_model)
+
+    assert turn_handling["turn_detection"] == "stt"
+    assert main._turn_detection_label(turn_handling) == "stt"
+    # "stt" is the only mode in which LiveKit consumes Flux EndOfTurn events.
+    assert _resolved_turn_detection(turn_handling) == "stt"
+
+
+@pytest.mark.asyncio
+async def test_audio_turn_detector_remains_available_as_rollback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from livekit.agents import inference
+
+    monkeypatch.setenv("TANGO_TURN_DETECTION", "audio")
+    persona = main.get_persona("jeremiah")
+
+    turn_handling = main._turn_handling_for_session(persona, persona.llm_model)
+
+    assert isinstance(turn_handling["turn_detection"], inference.TurnDetector)
+    assert main._turn_detection_label(turn_handling) == "TurnDetector"
+
+
+def test_invalid_turn_detection_value_falls_back_to_stt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TANGO_TURN_DETECTION", "semantic")
+    assert main._turn_detection_strategy() == main.TURN_DETECTION_STT
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("persona_id", ["mama-lulu", "pinoy-pride"])
+@pytest.mark.parametrize("env_value", ["stt", "audio"])
+async def test_tagalog_personas_always_use_vad_turn_detection(
+    monkeypatch: pytest.MonkeyPatch, persona_id: str, env_value: str
+) -> None:
+    monkeypatch.setenv("TANGO_TURN_DETECTION", env_value)
+    persona = main.get_persona(persona_id)
+    assert persona.stt_language == "tl"
+
+    turn_handling = main._turn_handling_for_session(persona, persona.llm_model)
+
+    assert turn_handling["turn_detection"] == "vad"
+    assert _resolved_turn_detection(turn_handling) == "vad"
+
+
+def test_turn_handling_keeps_preemptive_tts_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TANGO_TURN_DETECTION", raising=False)
+    persona = main.get_persona("general-info")
+
+    turn_handling = main._turn_handling_for_session(
+        persona, persona.llm_model, preemptive_generation_enabled=True
+    )
+
+    assert turn_handling["preemptive_generation"] == {"enabled": True, "preemptive_tts": False}
+
+
+@pytest.mark.parametrize("persona_id", sorted(__import__("personas").TANGO_PERSONAS))
+def test_flux_eager_threshold_never_exceeds_eot_threshold(persona_id: str) -> None:
+    # deepgram.STTv2 raises ValueError at session start when eager > eot.
+    persona = main.get_persona(persona_id)
+    if persona.stt_language == "tl" or persona.eager_eot_threshold is None:
+        return
+    assert persona.eager_eot_threshold <= persona.eot_threshold

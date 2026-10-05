@@ -178,28 +178,76 @@ def _room_name(persona: Persona, requested_room: str | None = None) -> str:
     return f"tango_{persona.id}_{uuid.uuid4().hex[:10]}"
 
 
+TURN_DETECTION_STT = "stt"
+TURN_DETECTION_AUDIO = "audio"
+_TURN_DETECTION_ALIASES = {
+    "stt": TURN_DETECTION_STT,
+    "flux": TURN_DETECTION_STT,
+    "audio": TURN_DETECTION_AUDIO,
+    "turn-detector": TURN_DETECTION_AUDIO,
+    "turn_detector": TURN_DETECTION_AUDIO,
+}
+
+
+def _turn_detection_strategy() -> str:
+    """Turn-boundary source for English (Flux) personas.
+
+    ``stt`` (default): Deepgram Flux's EndOfTurn commits the user turn, so the
+    per-persona eot_threshold / eot_timeout_ms / eager_eot_threshold take
+    effect. Silero VAD still handles barge-in. This is LiveKit's documented
+    configuration for Flux.
+
+    ``audio``: LiveKit Inference's audio TurnDetector owns turn boundaries.
+    LiveKit then ignores Flux end-of-speech events, so the per-persona Flux
+    tuning has no effect. Kept as an operator rollback via
+    TANGO_TURN_DETECTION=audio.
+    """
+    raw_value = os.getenv("TANGO_TURN_DETECTION", "").strip().lower()
+    if not raw_value:
+        return TURN_DETECTION_STT
+    strategy = _TURN_DETECTION_ALIASES.get(raw_value)
+    if strategy is None:
+        logger.warning(
+            "Invalid TANGO_TURN_DETECTION=%r; expected stt or audio. Using stt.",
+            raw_value,
+        )
+        return TURN_DETECTION_STT
+    return strategy
+
+
+def _uses_tagalog_stt(persona: Persona) -> bool:
+    return persona.stt_language in ("tl",)
+
+
 def _turn_handling_for_session(
     persona: Persona,
     llm_model: str,
     *,
     preemptive_generation_enabled: bool = True,
 ) -> dict[str, Any]:
-    from livekit.agents import inference
-    # Use LiveKit's audio TurnDetector for state-of-the-art end-of-turn detection.
-    # The audio turn detector processes user audio directly (intonation, pitch, rhythm)
-    # rather than relying on STT transcript timing, eliminating the VAD/STT race
-    # condition that produced "stt end of speech received while vad is still in a
-    # speech segment" warnings on every utterance.
-    #
-    # Deepgram Flux's eot_threshold and eot_timeout_ms are still passed to STTv2
-    # for STT-internal endpointing, but turn boundary decisions are now owned by
-    # the audio TurnDetector.
     turn_handling: dict[str, Any] = {}
-    turn_handling["turn_detection"] = inference.TurnDetector()
+    if _uses_tagalog_stt(persona):
+        # Nova-3 `tl` has no turn model, and neither Flux nor LiveKit's turn
+        # detector supports Tagalog, so Silero VAD silence ends the turn.
+        # This is what the SDK auto-selected before; it is now explicit.
+        turn_handling["turn_detection"] = "vad"
+    elif _turn_detection_strategy() == TURN_DETECTION_AUDIO:
+        from livekit.agents import inference
+
+        turn_handling["turn_detection"] = inference.TurnDetector()
+    else:
+        turn_handling["turn_detection"] = TURN_DETECTION_STT
     turn_handling["preemptive_generation"] = _preemptive_generation_options(
         enabled=preemptive_generation_enabled
     )
     return turn_handling
+
+
+def _turn_detection_label(turn_handling: dict[str, Any]) -> str:
+    detector = turn_handling.get("turn_detection")
+    if isinstance(detector, str):
+        return detector
+    return type(detector).__name__ if detector is not None else "auto"
 
 
 def _preemptive_generation_options(*, enabled: bool) -> dict[str, Any]:
@@ -1742,17 +1790,19 @@ async def entrypoint(ctx: Any) -> None:
     )
     max_tool_steps = _max_tool_steps()
     sync_transcription = _sync_transcription()
-    _use_nova3 = persona.stt_language in ("tl",)
-    _flux_model = "flux-general-en" if not _use_nova3 else "nova-3-multi"
+    _use_nova3 = _uses_tagalog_stt(persona)
+    _flux_model = "flux-general-en"
+    _stt_model_label = "nova-3:tl" if _use_nova3 else _flux_model
 
     logger.info(
-        "Starting Tango agent room=%s persona_id=%s model=%s tts_backend=%s is_sip=%s flux_stt=%s eot_threshold=%s eot_timeout_ms=%s eager_eot_threshold=%s preemptive_generation=%s preemptive_tts=False sync_transcription=%s max_tool_steps=%s llm_base_url=%s",
+        "Starting Tango agent room=%s persona_id=%s model=%s tts_backend=%s is_sip=%s stt=%s turn_detection=%s eot_threshold=%s eot_timeout_ms=%s eager_eot_threshold=%s preemptive_generation=%s preemptive_tts=False sync_transcription=%s max_tool_steps=%s llm_base_url=%s",
         room_name,
         persona.id,
         llm_model,
         persona.tts_backend,
         is_sip,
-        _flux_model,
+        _stt_model_label,
+        _turn_detection_label(turn_handling),
         persona.eot_threshold,
         persona.eot_timeout_ms,
         persona.eager_eot_threshold,
@@ -1793,7 +1843,6 @@ async def entrypoint(ctx: Any) -> None:
     vision_context = LiveVideoContext(ctx.room, vision_config)
     if _use_nova3:
         _stt = deepgram.STT(model="nova-3", language="tl", smart_format=True)
-        turn_handling.pop("turn_detection", None)
     else:
         stt_kwargs: dict[str, Any] = {
             "model": _flux_model,

@@ -55,6 +55,18 @@ referenced as F1–F13.
   `tts_node_ttfb`, `e2e_latency`, `playback_latency`), including interrupted
   turns, which were previously skipped. Session `error` events (STT, LLM, TTS)
   are logged with source and `recoverable`. History recording is unchanged.
+- **Turn detection (behaviour change).** English personas now use
+  `turn_detection="stt"`, so Deepgram Flux's EndOfTurn ends the user turn and
+  the per-persona `eot_threshold`, `eot_timeout_ms` and `eager_eot_threshold`
+  take effect. Since 2026-08-16 the session used LiveKit's audio
+  `TurnDetector`, which made LiveKit ignore Flux end-of-turn events, so those
+  settings (ADR-002, ADR-011) had no effect (F1). Damian and Nathaniel now
+  wait for their longer pause windows; eager EOT drives preemptive LLM
+  generation for Chris, Jeremiah, Jeremiah V2 and Jacob. Tagalog personas use
+  `turn_detection="vad"` explicitly (unchanged behaviour). Rollback:
+  `TANGO_TURN_DETECTION=audio`. See ADR-023. The informational warning
+  "stt end of speech received while vad is still in a speech segment" is
+  expected again in this mode.
 
 ---
 
