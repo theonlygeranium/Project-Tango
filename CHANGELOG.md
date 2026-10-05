@@ -28,6 +28,19 @@ referenced as F1–F13.
   PR to `main`. Previously only the Nexus tests ran, so the voice-pipeline
   guards never gated a merge.
 
+### Changed
+- LiveKit packages are pinned exactly in `backend/requirements.txt` and
+  `backend/pyproject.toml`: `livekit-agents==1.8.4` (and its four plugins),
+  `livekit-api==1.2.1`, `livekit==1.1.20`. The old `~=1.5` range allowed any
+  1.x release from 1.5 up, and turn handling, RoomIO and preemptive-TTS
+  defaults changed across it (F4). The worker now logs installed LiveKit
+  versions on startup, and a test fails if the installed `livekit-agents`
+  differs from the pin.
+  **Deploy note:** `scripts/deploy.sh` runs `pip install -r requirements.txt`,
+  so the next deploy moves Schubert to exactly these versions. The version
+  previously installed on Schubert was never recorded; check the first
+  `Starting LiveKit worker ... versions=` line after deploy.
+
 ---
 
 ## [Unreleased] Voice pipeline review

@@ -102,3 +102,13 @@ def test_livekit_roomio_skips_synchronizer_when_sync_is_false() -> None:
     source = inspect.getsource(room_io_mod.RoomIO.start)
     assert "sync_transcription is not False" in source
     assert "TranscriptSynchronizer" in source
+
+
+def test_installed_livekit_agents_matches_requirements_pin() -> None:
+    import re
+    from pathlib import Path
+
+    requirements = (Path(main.__file__).parent / "requirements.txt").read_text()
+    pinned = re.search(r"^livekit-agents\[[^\]]*\]==([\w.]+)$", requirements, re.M)
+    assert pinned is not None, "livekit-agents must be pinned with == in requirements.txt"
+    assert main._livekit_package_versions()["livekit-agents"] == pinned.group(1)

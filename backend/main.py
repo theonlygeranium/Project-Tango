@@ -2009,11 +2009,35 @@ async def entrypoint(ctx: Any) -> None:
             )
 
 
+def _livekit_package_versions() -> dict[str, str]:
+    """Installed versions of the LiveKit packages, for the startup log line."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    versions: dict[str, str] = {}
+    for package in (
+        "livekit-agents",
+        "livekit-plugins-deepgram",
+        "livekit-plugins-elevenlabs",
+        "livekit-plugins-openai",
+        "livekit-plugins-silero",
+        "livekit",
+    ):
+        try:
+            versions[package] = version(package)
+        except PackageNotFoundError:
+            versions[package] = "missing"
+    return versions
+
+
 if __name__ == "__main__":
     from livekit.agents import WorkerOptions, cli
 
     num_idle_processes = _livekit_num_idle_processes()
-    logger.info("Starting LiveKit worker num_idle_processes=%d", num_idle_processes)
+    logger.info(
+        "Starting LiveKit worker num_idle_processes=%d versions=%s",
+        num_idle_processes,
+        " ".join(f"{name}=={ver}" for name, ver in _livekit_package_versions().items()),
+    )
 
     cli.run_app(
         WorkerOptions(
