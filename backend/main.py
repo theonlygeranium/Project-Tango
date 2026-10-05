@@ -237,10 +237,55 @@ def _turn_handling_for_session(
         turn_handling["turn_detection"] = inference.TurnDetector()
     else:
         turn_handling["turn_detection"] = TURN_DETECTION_STT
+    if persona.min_endpointing_delay is not None:
+        turn_handling["endpointing"] = {"min_delay": persona.min_endpointing_delay}
     turn_handling["preemptive_generation"] = _preemptive_generation_options(
         enabled=preemptive_generation_enabled
     )
     return turn_handling
+
+
+def _build_tagalog_stt(persona: Persona, deepgram: Any) -> Any:
+    """Deepgram Nova-3 `tl` STT for Tagalog personas.
+
+    Keyterms (Taglish words and slang) are sent when the persona defines
+    them. Deepgram documents keyterm prompting for Nova-3 monolingual models
+    but does not list `tl` explicitly, so the keyterm instance is wrapped in
+    LiveKit's stt.FallbackAdapter with a plain Nova-3 `tl` instance behind
+    it: if Deepgram rejects the keyterm request, the session falls back
+    instead of losing speech recognition. TANGO_TAGALOG_KEYTERMS=false
+    sends no keyterms.
+    """
+    stt_kwargs: dict[str, Any] = {
+        "model": "nova-3",
+        "language": "tl",
+        "smart_format": True,
+    }
+    if persona.stt_endpointing_ms is not None:
+        stt_kwargs["endpointing_ms"] = persona.stt_endpointing_ms
+    plain = deepgram.STT(**stt_kwargs)
+
+    if not persona.keyterms or not _env_bool("TANGO_TAGALOG_KEYTERMS", default=True):
+        return plain
+
+    from livekit.agents import stt as lk_stt
+
+    boosted = deepgram.STT(**stt_kwargs, keyterm=list(persona.keyterms))
+    adapter = lk_stt.FallbackAdapter([boosted, plain])
+
+    def on_availability_changed(ev: Any) -> None:
+        engine = getattr(ev, "stt", None)
+        label = "keyterms" if engine is boosted else "plain"
+        logger.log(
+            logging.INFO if getattr(ev, "available", False) else logging.WARNING,
+            "Tagalog STT engine availability persona=%s engine=%s available=%s",
+            persona.id,
+            label,
+            getattr(ev, "available", None),
+        )
+
+    adapter.on("stt_availability_changed", on_availability_changed)
+    return adapter
 
 
 def _turn_detection_label(turn_handling: dict[str, Any]) -> str:
@@ -1820,7 +1865,7 @@ async def entrypoint(ctx: Any) -> None:
 
     vision_context = LiveVideoContext(ctx.room, vision_config)
     if _use_nova3:
-        _stt = deepgram.STT(model="nova-3", language="tl", smart_format=True)
+        _stt = _build_tagalog_stt(persona, deepgram)
     else:
         stt_kwargs: dict[str, Any] = {
             "model": _flux_model,

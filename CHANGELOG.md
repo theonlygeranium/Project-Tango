@@ -147,6 +147,16 @@ referenced as F1–F13.
   Nathaniel (meditation) via a new `Persona.thinking_sound` flag (F9). Their
   personas are designed around calm, unhurried presence; other personas are
   unchanged. `TANGO_THINKING_SOUND=false` still turns it off everywhere.
+- Tagalog personas (Mama Lulu, Tita Baby) now use the endpointing their
+  docs already specified but the code never applied (F7): Nova-3
+  `endpointing_ms=300` (ADR-003; the plugin default is 25 ms, which splits
+  Taglish phrases) and LiveKit `min_delay=0.7` (the 2026-06-25 review in
+  `docs/PLAN.md`, for late finals). Their keyterms are now sent to Deepgram.
+  Deepgram does not list `tl` for keyterm prompting, so the keyterm instance
+  sits in LiveKit's `stt.FallbackAdapter` ahead of a plain Nova-3 `tl`
+  instance; a rejected request falls back instead of losing STT. Disable
+  with `TANGO_TAGALOG_KEYTERMS=false`. New `Persona.min_endpointing_delay`
+  and `Persona.stt_endpointing_ms` fields; English personas are unchanged.
 
 ---
 

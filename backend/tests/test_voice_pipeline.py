@@ -366,3 +366,58 @@ async def test_background_audio_thinking_sound_selection(
 
     assert isinstance(player, FakePlayer)  # meditation needs it even without thinking sound
     assert (captured["thinking_sound"] is not None) is expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("persona_id", ["mama-lulu", "pinoy-pride"])
+async def test_tagalog_sessions_use_documented_endpointing(persona_id: str) -> None:
+    from livekit.agents import AgentSession
+
+    persona = main.get_persona(persona_id)
+    turn_handling = main._turn_handling_for_session(persona, persona.llm_model)
+
+    session = AgentSession(turn_handling=turn_handling)
+    assert session.turn_detection == "vad"
+    assert session._opts.endpointing["min_delay"] == 0.7
+
+
+@pytest.mark.parametrize(
+    "persona_id", ["therapy", "general-info", "jeremiah", "jeremiah-v2", "jacob", "meditation"]
+)
+def test_english_sessions_keep_sdk_endpointing_defaults(persona_id: str) -> None:
+    persona = main.get_persona(persona_id)
+    assert "endpointing" not in main._turn_handling_for_session(persona, persona.llm_model)
+
+
+def test_tagalog_stt_sends_keyterms_with_plain_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    from livekit.agents import stt as lk_stt
+    from livekit.plugins import deepgram
+
+    monkeypatch.setenv("DEEPGRAM_API_KEY", "test-key")
+    monkeypatch.delenv("TANGO_TAGALOG_KEYTERMS", raising=False)
+    persona = main.get_persona("pinoy-pride")
+
+    engine = main._build_tagalog_stt(persona, deepgram)
+
+    assert isinstance(engine, lk_stt.FallbackAdapter)
+    boosted, plain = engine._stt_instances
+    for instance in (boosted, plain):
+        assert instance._opts.model == "nova-3"
+        assert instance._opts.language.language == "tl"
+        assert instance._opts.endpointing_ms == 300
+        assert instance._opts.smart_format is True
+    assert boosted._opts.keyterm == list(persona.keyterms)
+    assert plain._opts.keyterm == []
+
+
+def test_tagalog_keyterms_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    from livekit.plugins import deepgram
+
+    monkeypatch.setenv("DEEPGRAM_API_KEY", "test-key")
+    monkeypatch.setenv("TANGO_TAGALOG_KEYTERMS", "false")
+
+    engine = main._build_tagalog_stt(main.get_persona("mama-lulu"), deepgram)
+
+    assert isinstance(engine, deepgram.STT)
+    assert engine._opts.keyterm == []
+    assert engine._opts.endpointing_ms == 300

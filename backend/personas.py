@@ -110,6 +110,15 @@ class Persona:
     # Keyboard-typing sound while the agent is thinking. Off for personas
     # whose design favours calm presence (therapy, meditation).
     thinking_sound: bool = True
+    # LiveKit endpointing floor (seconds since the user stopped speaking)
+    # before the turn ends. None = SDK default (0.5). Tagalog personas use
+    # 0.7: a 2026-06-25 production review found late Nova-3 finals and split
+    # Taglish phrases at the default (docs/PLAN.md).
+    min_endpointing_delay: float | None = None
+    # Deepgram Nova-3 endpointing (ms of silence before a final transcript)
+    # for Tagalog personas. ADR-003 specifies 300; the plugin default is 25,
+    # which fragments Taglish utterances.
+    stt_endpointing_ms: int | None = None
     # Optional custom opening line spoken on session start.
     greeting: str | None = None
     # Flux end-of-turn detection tuning.
@@ -358,6 +367,8 @@ TANGO_PERSONAS: dict[str, Persona] = {
         llm_model="groq/llama4-scout",
         stt_language="tl",
         tts_language="fil",
+        min_endpointing_delay=0.7,
+        stt_endpointing_ms=300,
         eot_threshold=0.7,
         eot_timeout_ms=3000,
         keyterms=(
@@ -433,6 +444,8 @@ TANGO_PERSONAS: dict[str, Persona] = {
         llm_model="groq/llama4-scout",
         stt_language="tl",
         tts_language="fil",
+        min_endpointing_delay=0.7,
+        stt_endpointing_ms=300,
         eot_threshold=0.7,
         eot_timeout_ms=2500,
         keyterms=(
