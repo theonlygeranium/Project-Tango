@@ -76,6 +76,11 @@ referenced as F1–F13.
   `TANGO_TURN_DETECTION=audio`. See ADR-023. The informational warning
   "stt end of speech received while vad is still in a speech segment" is
   expected again in this mode.
+- ElevenLabs `style` is now `0.0` for every persona. Chris, Jeremiah and Jacob
+  were at 0.15, Jeremiah V2 at 0.20, Mama Lulu and Tita Baby at 0.25.
+  ElevenLabs documents that any non-zero `style` adds computation and may
+  increase latency, and recommends 0 for real-time agents. Voices may sound
+  slightly less exaggerated; stability and similarity are unchanged.
 
 ---
 

@@ -227,3 +227,9 @@ def test_flux_eager_threshold_never_exceeds_eot_threshold(persona_id: str) -> No
     if persona.stt_language == "tl" or persona.eager_eot_threshold is None:
         return
     assert persona.eager_eot_threshold <= persona.eot_threshold
+
+
+@pytest.mark.parametrize("persona_id", sorted(__import__("personas").TANGO_PERSONAS))
+def test_elevenlabs_style_is_zero_for_latency(persona_id: str) -> None:
+    # ElevenLabs: non-zero style "might increase latency"; recommended 0.
+    assert main.get_persona(persona_id).voice_settings.get("style", 0.0) == 0.0

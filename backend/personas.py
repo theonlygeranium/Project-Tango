@@ -99,6 +99,8 @@ class Persona:
     voice_id: str
     llm_model: str
     stt_language: str
+    # ElevenLabs VoiceSettings. Keep "style" at 0.0: ElevenLabs documents that
+    # any non-zero style adds latency and recommends 0 for real-time agents.
     voice_settings: dict[str, float | bool]
     system_prompt: str
     tts_backend: str = "elevenlabs"
@@ -186,7 +188,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_settings={
             "stability": 0.60,
             "similarity_boost": 0.80,
-            "style": 0.15,
+            "style": 0.0,
             "use_speaker_boost": False,
         },
         enabled_mcp_servers=("github", "postgres", "redis"),
@@ -234,7 +236,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_settings={
             "stability": 0.60,
             "similarity_boost": 0.80,
-            "style": 0.15,
+            "style": 0.0,
             "use_speaker_boost": False,
         },
         enabled_mcp_servers=("github", "postgres", "redis"),
@@ -297,7 +299,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_settings={
             "stability": 0.55,
             "similarity_boost": 0.80,
-            "style": 0.20,
+            "style": 0.0,
             "use_speaker_boost": False,
         },
         enabled_mcp_servers=("github", "postgres", "redis"),
@@ -317,7 +319,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_settings={
             "stability": 0.60,
             "similarity_boost": 0.80,
-            "style": 0.15,
+            "style": 0.0,
             "use_speaker_boost": False,
         },
         enabled_mcp_servers=("github", "postgres"),
@@ -358,7 +360,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_settings={
             "stability": 0.55,
             "similarity_boost": 0.80,
-            "style": 0.25,
+            "style": 0.0,
             "use_speaker_boost": False,
         },
         enabled_mcp_servers=("postgres",),
@@ -433,7 +435,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_settings={
             "stability": 0.55,
             "similarity_boost": 0.80,
-            "style": 0.25,
+            "style": 0.0,
             "use_speaker_boost": False,
         },
         enabled_mcp_servers=(),
