@@ -324,3 +324,45 @@ def test_worker_registers_prewarm() -> None:
     }
     assert isinstance(keywords.get("prewarm_fnc"), ast.Name)
     assert keywords["prewarm_fnc"].id == "prewarm"
+
+
+def test_thinking_sound_is_off_for_calm_personas() -> None:
+    off = {pid for pid in __import__("personas").TANGO_PERSONAS if not main.get_persona(pid).thinking_sound}
+    assert off == {"therapy", "meditation"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("persona_id", "env_value", "expected"),
+    [
+        ("general-info", None, True),
+        ("general-info", "false", False),
+        ("therapy", None, False),
+        ("meditation", None, False),
+    ],
+)
+async def test_background_audio_thinking_sound_selection(
+    monkeypatch: pytest.MonkeyPatch, persona_id: str, env_value: str | None, expected: bool
+) -> None:
+    from livekit import agents as lk_agents
+
+    captured: dict[str, object] = {}
+
+    class FakePlayer:
+        def __init__(self, *, thinking_sound: object = None) -> None:
+            captured["thinking_sound"] = thinking_sound
+
+        async def start(self, **_kwargs: object) -> None:
+            return None
+
+    monkeypatch.setattr(lk_agents, "BackgroundAudioPlayer", FakePlayer)
+    if env_value is None:
+        monkeypatch.delenv("TANGO_THINKING_SOUND", raising=False)
+    else:
+        monkeypatch.setenv("TANGO_THINKING_SOUND", env_value)
+
+    ctx = types.SimpleNamespace(room=object())
+    player = await main._start_background_audio(ctx, object(), main.get_persona(persona_id))
+
+    assert isinstance(player, FakePlayer)  # meditation needs it even without thinking sound
+    assert (captured["thinking_sound"] is not None) is expected

@@ -143,6 +143,10 @@ referenced as F1–F13.
   (100 ms per-stream timeout) does not drop the stream. One
   `BackgroundAudioPlayer` is now started for every session; the thinking
   sound is still controlled by `TANGO_THINKING_SOUND`.
+- The keyboard-typing thinking sound is off for Damian (therapy) and
+  Nathaniel (meditation) via a new `Persona.thinking_sound` flag (F9). Their
+  personas are designed around calm, unhurried presence; other personas are
+  unchanged. `TANGO_THINKING_SOUND=false` still turns it off everywhere.
 
 ---
 

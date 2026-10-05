@@ -107,6 +107,9 @@ class Persona:
     # ElevenLabs language_code hint (e.g. "fil"). Enforces the language for
     # pronunciation and text normalisation on Flash v2.5. None = auto-detect.
     tts_language: str | None = None
+    # Keyboard-typing sound while the agent is thinking. Off for personas
+    # whose design favours calm presence (therapy, meditation).
+    thinking_sound: bool = True
     # Optional custom opening line spoken on session start.
     greeting: str | None = None
     # Flux end-of-turn detection tuning.
@@ -144,6 +147,7 @@ class Persona:
 TANGO_PERSONAS: dict[str, Persona] = {
     "therapy": Persona(
         id="therapy",
+        thinking_sound=False,
         label="Therapy",
         display_name="Damian",
         role_description="Wellness companion",
@@ -386,6 +390,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
     ),
     "meditation": Persona(
         id="meditation",
+        thinking_sound=False,
         label="Meditation",
         display_name="Nathaniel",
         role_description="Meditation guide",

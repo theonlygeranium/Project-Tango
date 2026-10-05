@@ -2091,7 +2091,7 @@ async def _start_background_audio(ctx: Any, session: Any, persona: Persona) -> A
                 AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.6),
                 AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.5),
             ]
-            if _thinking_sound_enabled()
+            if _thinking_sound_enabled() and persona.thinking_sound
             else None
         )
         background_audio = BackgroundAudioPlayer(thinking_sound=thinking_sound)
