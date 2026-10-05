@@ -2067,32 +2067,48 @@ async def entrypoint(ctx: Any) -> None:
         raise
     logger.info("Tango agent session started.")
 
-    # Audible thinking indicator — plays keyboard-typing sound while the agent
-    # is in the "thinking" state (LLM round-trips, tool calls, agent handoffs).
-    # Auto-triggered by LiveKit session lifecycle events; stops when the agent
-    # speaks. Env-gated via TANGO_THINKING_SOUND (default true).
-    if os.getenv("TANGO_THINKING_SOUND", "true").lower() in {"1", "true", "yes"}:
-        try:
-            from livekit.agents import (
-                AudioConfig,
-                BackgroundAudioPlayer,
-                BuiltinAudioClip,
-            )
+    # One BackgroundAudioPlayer per session, on its own "background_audio"
+    # track. It plays the keyboard-typing thinking sound while the agent is in
+    # the "thinking" state (TANGO_THINKING_SOUND, default true) and mixes the
+    # meditation track, ducked under agent speech, when one is requested.
+    background_audio = await _start_background_audio(ctx, session, persona)
+    if background_audio is not None:
+        _tango_agent.attach_background_audio(background_audio, session)
+        ctx.add_shutdown_callback(background_audio.aclose)
 
-            background_audio = BackgroundAudioPlayer(
-                thinking_sound=[
-                    AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.6),
-                    AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.5),
-                ],
-            )
-            await background_audio.start(room=ctx.room, agent_session=session)
-            logger.info("Audible thinking indicator enabled persona=%s", persona.id)
-        except Exception:
-            logger.warning(
-                "Could not start BackgroundAudioPlayer; thinking indicator disabled persona=%s",
-                persona.id,
-                exc_info=True,
-            )
+
+def _thinking_sound_enabled() -> bool:
+    return os.getenv("TANGO_THINKING_SOUND", "true").lower() in {"1", "true", "yes"}
+
+
+async def _start_background_audio(ctx: Any, session: Any, persona: Persona) -> Any | None:
+    """Start the session's BackgroundAudioPlayer, or return None on failure."""
+    try:
+        from livekit.agents import AudioConfig, BackgroundAudioPlayer, BuiltinAudioClip
+
+        thinking_sound = (
+            [
+                AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.6),
+                AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.5),
+            ]
+            if _thinking_sound_enabled()
+            else None
+        )
+        background_audio = BackgroundAudioPlayer(thinking_sound=thinking_sound)
+        await background_audio.start(room=ctx.room, agent_session=session)
+    except Exception:
+        logger.warning(
+            "Could not start BackgroundAudioPlayer; thinking sound and meditation playback disabled persona=%s",
+            persona.id,
+            exc_info=True,
+        )
+        return None
+    logger.info(
+        "Background audio started persona=%s thinking_sound=%s",
+        persona.id,
+        thinking_sound is not None,
+    )
+    return background_audio
 
 
 def _livekit_package_versions() -> dict[str, str]:

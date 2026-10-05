@@ -133,6 +133,16 @@ referenced as F1–F13.
   All other turns regain the latency benefit. The resize and JPEG encode now
   run in the same worker thread as the vision request. ADR-012 and
   `docs/AGENTS.md` are updated.
+- The meditation track now plays through the session's
+  `BackgroundAudioPlayer` instead of a separately published track (F9). It
+  is decoded and resampled by LiveKit's decoder (the old player picked the
+  nearest sample, which aliased on 44.1 kHz files), ducks to 30% while the
+  agent speaks and ramps back over about 250 ms
+  (`TANGO_MEDITATION_DUCK_GAIN`), and pause takes effect within about half a
+  second instead of up to a second. Pause emits silence so LiveKit's mixer
+  (100 ms per-stream timeout) does not drop the stream. One
+  `BackgroundAudioPlayer` is now started for every session; the thinking
+  sound is still controlled by `TANGO_THINKING_SOUND`.
 
 ---
 

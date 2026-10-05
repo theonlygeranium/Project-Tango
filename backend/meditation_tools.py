@@ -12,13 +12,12 @@ import asyncio
 import logging
 import os
 import wave
-from typing import Annotated
+from collections.abc import AsyncIterator
+from typing import Any
 
 import numpy as np
 from livekit import rtc
-from livekit.agents import function_tool, get_job_context
-from livekit.agents.llm import function_tool as _ft  # noqa: F811 — re-export for clarity
-from livekit.rtc import AudioFrame, AudioSource, LocalAudioTrack
+from livekit.agents import function_tool
 
 logger = logging.getLogger("project-tango.meditation-tools")
 
@@ -31,11 +30,19 @@ MEDITATION_TRACK_PATH = os.getenv(
     "/opt/Project-Tango/assets/meditation/nathaniel_deep_return_mixed.wav",
 )
 
-TRACK_NAME = "meditation-track"
-SAMPLE_RATE = 48000          # LiveKit's native audio rate
-NUM_CHANNELS = 1             # Mono — simpler and sufficient for meditation
-FRAME_MS = 20                # 20 ms frames (standard LiveKit frame size)
-SAMPLES_PER_FRAME = SAMPLE_RATE * FRAME_MS // 1000  # 960 samples per 20 ms frame
+# BackgroundAudioPlayer mixes at 48 kHz mono.
+SAMPLE_RATE = 48000
+NUM_CHANNELS = 1
+# Silence emitted per mixer pull while paused. The mixer cancels a stream
+# that yields nothing for 100 ms, which would end playback, so a paused
+# track must keep producing (silent) frames.
+PAUSE_FRAME_MS = 10
+PAUSE_SAMPLES = SAMPLE_RATE * PAUSE_FRAME_MS // 1000
+
+# Track gain while the agent is speaking, so the persona stays intelligible.
+DUCKED_GAIN = float(os.getenv("TANGO_MEDITATION_DUCK_GAIN", "0.3"))
+# How quickly the gain moves toward its target (full swing in ~250 ms).
+GAIN_STEP_PER_SECOND = 4.0
 
 MEDITATION_AVAILABLE = os.path.exists(MEDITATION_TRACK_PATH)
 
@@ -106,43 +113,76 @@ def detect_meditation_command(text: str, meditation_active: bool = False) -> str
 # ---------------------------------------------------------------------------
 
 
-class MeditationPlayer:
-    """Streams a meditation audio track to the LiveKit room.
+def _track_duration_seconds(path: str) -> float:
+    """Duration of a WAV file, or 0.0 when it cannot be read cheaply."""
+    try:
+        with wave.open(path, "rb") as w:
+            return w.getnframes() / float(w.getframerate())
+    except Exception:
+        return 0.0
 
-    Creates a dedicated AudioSource → LocalAudioTrack → room publication,
-    then reads the WAV file in 20 ms frames and pushes them via
-    capture_frame (which provides natural real-time pacing through queue
-    backpressure).  An asyncio.Event gates pause/resume; task cancellation
-    handles stop.
+
+def _decode_track(path: str) -> AsyncIterator[rtc.AudioFrame]:
+    """Decode *path* to 48 kHz mono frames with LiveKit's decoder.
+
+    The decoder resamples properly; the previous player picked the nearest
+    sample instead, which aliased audibly on 44.1 kHz sources.
+    """
+    from livekit.agents.utils.audio import audio_frames_from_file
+
+    return audio_frames_from_file(path, sample_rate=SAMPLE_RATE, num_channels=NUM_CHANNELS)
+
+
+class MeditationPlayer:
+    """Plays the meditation track through the session's BackgroundAudioPlayer.
+
+    The track is mixed onto the agent's background-audio track (the same one
+    the thinking sound uses) instead of a separately published track. While
+    the agent is speaking the track is ducked to ``DUCKED_GAIN`` so the
+    persona stays intelligible; it ramps back up when the agent stops. Pause
+    holds the read position and emits silence; stop ends the stream.
+
+    ``attach()`` must be called once the session's BackgroundAudioPlayer is
+    running; until then ``start()`` reports that playback is unavailable.
     """
 
-    def __init__(self) -> None:
-        self._audio_source: AudioSource | None = None
-        self._track: LocalAudioTrack | None = None
-        self._publication: rtc.LocalTrackPublication | None = None
-        self._playback_task: asyncio.Task | None = None
+    def __init__(self, track_path: str | None = None) -> None:
+        self._track_path = track_path or MEDITATION_TRACK_PATH
+        self._background_audio: Any | None = None
+        self._handle: Any | None = None
+        self._stream: Any | None = None
         self._paused = asyncio.Event()
-        self._paused.set()  # not paused initially
+        self._paused.set()  # set == playing
         self._stopped = False
+        self._agent_speaking = False
+        self._gain = 1.0
         self._position_sec: float = 0.0
         self._total_duration_sec: float = 0.0
-        self._room: rtc.Room | None = None
 
-    # -- state queries -------------------------------------------------------
+    # -- wiring ----------------------------------------------------------------
+
+    def attach(self, background_audio: Any, session: Any | None = None) -> None:
+        """Use *background_audio* for playback and duck under *session* speech."""
+        self._background_audio = background_audio
+        if session is not None:
+            session.on("agent_state_changed", self._on_agent_state_changed)
+
+    def _on_agent_state_changed(self, ev: Any) -> None:
+        self._agent_speaking = getattr(ev, "new_state", None) == "speaking"
+
+    # -- state queries ---------------------------------------------------------
 
     @property
     def is_active(self) -> bool:
-        """True if a playback task exists and hasn't finished."""
-        return self._playback_task is not None and not self._playback_task.done()
+        """True if a track is playing or paused."""
+        return self._handle is not None and not self._handle.done()
 
     @property
     def is_playing(self) -> bool:
-        """True if actively playing (not paused)."""
         return self.is_active and self._paused.is_set()
 
     @property
     def is_paused(self) -> bool:
-        """True if paused but task still alive."""
         return self.is_active and not self._paused.is_set()
 
     @property
@@ -153,153 +193,99 @@ class MeditationPlayer:
     def duration_sec(self) -> float:
         return self._total_duration_sec
 
-    # -- playback control ----------------------------------------------------
+    # -- audio generation ------------------------------------------------------
+
+    def _next_gain(self, frame_seconds: float) -> float:
+        target = DUCKED_GAIN if self._agent_speaking else 1.0
+        step = GAIN_STEP_PER_SECOND * frame_seconds
+        if self._gain < target:
+            self._gain = min(target, self._gain + step)
+        elif self._gain > target:
+            self._gain = max(target, self._gain - step)
+        return self._gain
+
+    @staticmethod
+    def _apply_gain(frame: rtc.AudioFrame, gain: float) -> rtc.AudioFrame:
+        if gain >= 0.999:
+            return frame
+        samples = np.frombuffer(frame.data, dtype=np.int16).astype(np.float32)
+        scaled = np.clip(samples * gain, -32768, 32767).astype(np.int16)
+        return rtc.AudioFrame(
+            data=scaled.tobytes(),
+            sample_rate=frame.sample_rate,
+            num_channels=frame.num_channels,
+            samples_per_channel=frame.samples_per_channel,
+        )
+
+    @staticmethod
+    def _silence() -> rtc.AudioFrame:
+        return rtc.AudioFrame(
+            data=bytes(PAUSE_SAMPLES * NUM_CHANNELS * 2),
+            sample_rate=SAMPLE_RATE,
+            num_channels=NUM_CHANNELS,
+            samples_per_channel=PAUSE_SAMPLES,
+        )
+
+    async def _frames(self, source: AsyncIterator[rtc.AudioFrame]) -> AsyncIterator[rtc.AudioFrame]:
+        try:
+            async for frame in source:
+                while not self._paused.is_set():
+                    if self._stopped:
+                        return
+                    yield self._silence()
+                if self._stopped:
+                    return
+                frame_seconds = frame.samples_per_channel / frame.sample_rate
+                # Count the frame before handing it to the mixer, so the
+                # position reported at pause time includes it.
+                self._position_sec += frame_seconds
+                yield self._apply_gain(frame, self._next_gain(frame_seconds))
+            logger.info("Meditation track reached end at %.1f sec", self._position_sec)
+        finally:
+            aclose = getattr(source, "aclose", None)
+            if aclose is not None:
+                await aclose()
+
+    # -- playback control ------------------------------------------------------
 
     async def start(self) -> str:
         """Start playing the meditation track from the beginning."""
         if self.is_active:
             await self.stop()
 
-        if not os.path.exists(MEDITATION_TRACK_PATH):
-            logger.error("Meditation track not found: %s", MEDITATION_TRACK_PATH)
-            return f"Meditation track not found at {MEDITATION_TRACK_PATH}."
+        if not os.path.exists(self._track_path):
+            logger.error("Meditation track not found: %s", self._track_path)
+            return f"Meditation track not found at {self._track_path}."
+        if self._background_audio is None:
+            logger.warning("Meditation requested but background audio is not running")
+            return "Meditation playback is unavailable in this session."
 
-        try:
-            ctx = get_job_context()
-            self._room = ctx.room
-        except RuntimeError:
-            return "Cannot start meditation: no room context available."
-
-        try:
-            with wave.open(MEDITATION_TRACK_PATH, "rb") as w:
-                wav_channels = w.getnchannels()
-                wav_sample_rate = w.getframerate()
-                wav_sample_width = w.getsampwidth()
-                self._total_duration_sec = w.getnframes() / w.getframerate()
-        except Exception as exc:
-            logger.error("Failed to read meditation WAV: %s", exc)
-            return f"Failed to read meditation track: {exc}."
-
-        logger.info(
-            "Starting meditation track: %s (channels=%d, rate=%d, duration=%.1f sec)",
-            MEDITATION_TRACK_PATH,
-            wav_channels,
-            wav_sample_rate,
-            self._total_duration_sec,
-        )
-
-        # Create audio source and publish track
-        self._audio_source = AudioSource(SAMPLE_RATE, NUM_CHANNELS, queue_size_ms=1000)
-        self._track = LocalAudioTrack.create_audio_track(TRACK_NAME, self._audio_source)
-        self._publication = await self._room.local_participant.publish_track(
-            self._track, rtc.TrackPublishOptions()
-        )
-
-        # Reset state
         self._stopped = False
         self._paused.set()
         self._position_sec = 0.0
+        self._gain = DUCKED_GAIN if self._agent_speaking else 1.0
+        self._total_duration_sec = _track_duration_seconds(self._track_path)
 
-        # Launch playback task
-        self._playback_task = asyncio.create_task(
-            self._playback_loop(wav_channels, wav_sample_rate, wav_sample_width)
-        )
-
-        mins = int(self._total_duration_sec // 60)
-        secs = int(self._total_duration_sec % 60)
-        return f"Meditation track started. Duration: {mins} minutes {secs} seconds."
-
-    async def _playback_loop(
-        self, wav_channels: int, wav_sample_rate: int, wav_sample_width: int
-    ) -> None:
-        """Background task: read WAV → convert to mono 48 kHz → push frames."""
         try:
-            with wave.open(MEDITATION_TRACK_PATH, "rb") as w:
-                while not self._stopped:
-                    # Block while paused
-                    await self._paused.wait()
-                    if self._stopped:
-                        break
-
-                    # Read one frame's worth of samples
-                    raw = w.readframes(SAMPLES_PER_FRAME)
-                    if not raw:
-                        logger.info("Meditation track reached end of file")
-                        break
-
-                    # Convert bytes → numpy int16
-                    samples = np.frombuffer(raw, dtype=np.int16)
-
-                    # Stereo (or more) → mono by averaging channels
-                    if wav_channels > 1:
-                        samples = samples.reshape(-1, wav_channels)
-                        samples = samples.mean(axis=1).astype(np.int16)
-
-                    # Resample if WAV rate ≠ LiveKit rate
-                    if wav_sample_rate != SAMPLE_RATE:
-                        samples = self._resample(
-                            samples, wav_sample_rate, SAMPLE_RATE
-                        )
-
-                    # Build and push the audio frame
-                    frame = AudioFrame(
-                        data=samples.tobytes(),
-                        sample_rate=SAMPLE_RATE,
-                        num_channels=NUM_CHANNELS,
-                        samples_per_channel=len(samples),
-                    )
-                    if self._audio_source is not None:
-                        await self._audio_source.capture_frame(frame)
-
-                    # Advance position
-                    self._position_sec += len(samples) / SAMPLE_RATE
-
-            logger.info(
-                "Meditation playback loop ended at position %.1f sec",
-                self._position_sec,
-            )
-        except asyncio.CancelledError:
-            logger.info("Meditation playback loop cancelled")
+            self._stream = self._frames(_decode_track(self._track_path))
+            self._handle = self._background_audio.play(self._stream)
         except Exception as exc:
-            logger.error("Meditation playback loop error: %s", exc)
-        finally:
-            await self._cleanup()
+            logger.exception("Could not start meditation playback")
+            return f"Failed to start the meditation track: {exc}."
 
-    @staticmethod
-    def _resample(
-        samples: np.ndarray, input_rate: int, output_rate: int
-    ) -> np.ndarray:
-        """Simple linear-interpolation resample for int16 mono audio."""
-        if input_rate == output_rate:
-            return samples
-        ratio = output_rate / input_rate
-        n_out = int(len(samples) * ratio)
-        indices = np.arange(n_out) / ratio
-        indices = np.clip(indices, 0, len(samples) - 1).astype(int)
-        return samples[indices].astype(np.int16)
-
-    async def _cleanup(self) -> None:
-        """Clean up audio resources after playback ends or is stopped."""
-        if self._audio_source is not None:
-            try:
-                self._audio_source.clear_queue()
-            except Exception:
-                pass
-
-        if self._room is not None and self._publication is not None:
-            try:
-                await self._room.local_participant.unpublish_track(
-                    self._publication.sid
-                )
-            except Exception as exc:
-                logger.warning("Failed to unpublish meditation track: %s", exc)
-
-        self._publication = None
-        self._track = None
-        self._audio_source = None
+        logger.info(
+            "Meditation started path=%s duration=%.1f sec",
+            self._track_path,
+            self._total_duration_sec,
+        )
+        if self._total_duration_sec > 0:
+            mins = int(self._total_duration_sec // 60)
+            secs = int(self._total_duration_sec % 60)
+            return f"Meditation track started. Duration: {mins} minutes {secs} seconds."
+        return "Meditation track started."
 
     async def pause(self) -> str:
-        """Pause the meditation playback."""
+        """Pause playback, holding the current position."""
         if not self.is_active:
             return "No meditation track is currently playing."
         if self.is_paused:
@@ -309,7 +295,7 @@ class MeditationPlayer:
         return f"Meditation paused at {int(self._position_sec)} seconds."
 
     async def resume(self) -> str:
-        """Resume the meditation playback from pause."""
+        """Resume playback from the paused position."""
         if not self.is_active:
             return "No meditation track is currently playing."
         if not self.is_paused:
@@ -319,26 +305,33 @@ class MeditationPlayer:
         return f"Meditation resumed from {int(self._position_sec)} seconds."
 
     async def stop(self) -> str:
-        """Stop the meditation playback and clean up."""
+        """Stop playback."""
         if not self.is_active:
             return "No meditation track is currently playing."
-
         self._stopped = True
-        self._paused.set()  # unblock any pause wait
-
-        if self._playback_task is not None and not self._playback_task.done():
-            self._playback_task.cancel()
+        self._paused.set()
+        handle = self._handle
+        if handle is not None:
+            handle.stop()
             try:
-                await self._playback_task
-            except asyncio.CancelledError:
-                pass
-
+                await asyncio.wait_for(handle.wait_for_playout(), timeout=2.0)
+            except asyncio.TimeoutError:
+                logger.warning("Meditation stream did not finish within 2 s of stop")
+        # The mixer stops pulling a stopped stream but does not close it; close
+        # it here so the file decoder task is released now, not at GC time.
+        stream, self._stream = self._stream, None
+        if stream is not None:
+            try:
+                await stream.aclose()
+            except RuntimeError:
+                pass  # still mid-pull in the mixer; it returns on its next pull
         logger.info("Meditation stopped at %.1f sec", self._position_sec)
         return "Meditation track stopped."
 
     async def aclose(self) -> None:
-        """Graceful shutdown — called on agent exit."""
-        await self.stop()
+        """Stop playback on agent shutdown."""
+        if self.is_active:
+            await self.stop()
 
 
 # ---------------------------------------------------------------------------

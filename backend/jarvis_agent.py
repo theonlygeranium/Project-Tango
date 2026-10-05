@@ -251,6 +251,11 @@ class Jarvis(Agent):
         self._meditation_player = MeditationPlayer()
         return build_meditation_tools(self._meditation_player)
 
+    def attach_background_audio(self, background_audio: Any, session: Any) -> None:
+        """Give the meditation player the session's BackgroundAudioPlayer."""
+        if self._meditation_player is not None:
+            self._meditation_player.attach(background_audio, session)
+
     def _build_transcription_tools(self) -> list:
         """Build transcription recording tools if enabled."""
         if not TRANSCRIPTION_ENABLED:
