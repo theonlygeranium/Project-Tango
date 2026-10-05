@@ -186,6 +186,10 @@ referenced as F1–F13.
     transcription, meditation track, Serper key, DB pool, log levels).
   - `docs/proposals/2026-10-05-agents-md-updates.md` lists proposed edits to
     the owner-only root AGENTS.md; none are applied.
+- Frontend persona metadata: Chris's local fallback model is now
+  `writer/palmyra-x6` and Jeremiah's TTS backend `elevenlabs`. The main page
+  now takes `tts_backend` from the backend catalog instead of letting the
+  stale local `f5-tts` value win.
 
 ---
 
