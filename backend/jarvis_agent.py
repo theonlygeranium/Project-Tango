@@ -103,8 +103,13 @@ class Jarvis(Agent):
         vision_context: Any | None = None,
         db_pool: Any | None = None,
         initial_program: str | None = None,
+        prompt_extras: str = "",
     ):
         self.persona = persona
+        # Per-session text appended after the persona prompt (memory context,
+        # SIP greeting addendum). Kept separate so persona overrides can be
+        # re-applied mid-session without losing it.
+        self._prompt_extras = prompt_extras
         self.llm_model = llm_model
         self.vision_context = vision_context
         self._db_pool = db_pool
@@ -132,8 +137,11 @@ class Jarvis(Agent):
         # keep their original system prompt unchanged.
         mcp_guidance = MCP_SUMMARY_GUIDANCE if mcp_tools else ""
 
-        base_instructions = (
-            f"{persona.system_prompt}\n\n"
+        # Everything after the persona prompt: the shared Tango preamble and
+        # tool guidance. Stored so _compose_instructions can rebuild the full
+        # prompt when Control Mode changes the persona prompt.
+        self._instructions_tail = (
+            "\n\n"
             "You are part of Project Tango, a voice-first AI companion running through "
             "LiveKit WebRTC. Keep spoken answers natural, concise, and useful. When a "
             "tool is unavailable on this Linux deployment, explain that limitation plainly. "
@@ -163,6 +171,7 @@ class Jarvis(Agent):
             + MEDITATION_INSTRUCTIONS
             + TRANSCRIPTION_INSTRUCTIONS
         )
+        base_instructions = self._compose_instructions(persona.system_prompt)
 
         # Build control mode tools if enabled and DB pool is available.
         control_mode_tools: list[Any] = []
@@ -200,6 +209,40 @@ class Jarvis(Agent):
             + self._build_meditation_tools()
             + self._build_transcription_tools(),
         )
+
+    def _compose_instructions(self, persona_prompt: str) -> str:
+        """Full agent instructions for a given persona prompt."""
+        return f"{persona_prompt}{self._prompt_extras}{self._instructions_tail}"
+
+    async def apply_persona_overrides(self, overrides: list[dict[str, str]]) -> str:
+        """Rebuild the persona instructions with *overrides* and apply them.
+
+        The persona prompt is recomposed from scratch (Layer 1 constraints +
+        persona prompt + overrides, as at session start), so overrides are
+        never applied twice. Where the result goes depends on the mode:
+
+        - ``"live"``: normal conversation; instructions updated now.
+        - ``"on_exit"``: Control Mode is active; the live prompt stays the
+          Control Mode prompt and the new persona prompt is what "Exit Control
+          Mode" restores.
+        - ``"after_program"``: a program is active; the new persona prompt is
+          what deactivating the program restores.
+        """
+        from personas import get_persona
+
+        instructions = self._compose_instructions(
+            get_persona(self.persona.id, overrides=overrides).system_prompt
+        )
+        if self._active_program is not None:
+            self._base_instructions = instructions
+            if self._control_mode_active:
+                return "on_exit"
+            return "after_program"
+        if self._control_mode_active:
+            self._control_mode_saved_instructions = instructions
+            return "on_exit"
+        await self.update_instructions(instructions)
+        return "live"
 
     def _build_meditation_tools(self) -> list:
         """Build meditation playback tools if the track is available."""

@@ -1694,7 +1694,10 @@ async def entrypoint(ctx: Any) -> None:
             )
             ctx.shutdown("account access revoked")
             return
-    augmented_system_prompt = persona.system_prompt
+    # Per-session text appended after the persona prompt. Passed to the agent
+    # separately so Control Mode can re-apply persona overrides mid-session
+    # without dropping it.
+    prompt_extras = ""
     prior_context = ""
     if account_user_id:
         try:
@@ -1708,18 +1711,12 @@ async def entrypoint(ctx: Any) -> None:
                 persona.id,
             )
     if prior_context:
-        augmented_system_prompt = f"{augmented_system_prompt}{prior_context}"
+        prompt_extras = f"{prompt_extras}{prior_context}"
     if is_sip:
-        augmented_system_prompt = f"{augmented_system_prompt}{SIP_GREETING_ADDENDUM}"
+        prompt_extras = f"{prompt_extras}{SIP_GREETING_ADDENDUM}"
     persona_for_agent = (
-        replace(
-            persona,
-            system_prompt=augmented_system_prompt,
-            greeting=(persona.greeting or _sip_greeting(persona))
-            if is_sip
-            else persona.greeting,
-        )
-        if prior_context or is_sip
+        replace(persona, greeting=persona.greeting or _sip_greeting(persona))
+        if is_sip
         else persona
     )
     vision_config = VisionContextConfig.from_env(LITELLM_BASE_URL, LITELLM_MASTER_KEY)
@@ -2005,6 +2002,7 @@ async def entrypoint(ctx: Any) -> None:
         vision_context=vision_context,
         db_pool=await get_pool(),
         initial_program=participant_context.get("program_name"),
+        prompt_extras=prompt_extras,
     )
 
     # Set user email on the transcription recorder if available

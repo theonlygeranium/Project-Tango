@@ -37,6 +37,18 @@ referenced as F1–F13.
   Failover and recovery are logged ("TTS engine unavailable; failing
   over ..."). `backend/tests/test_tts_fallback.py` covers streaming and
   non-streaming primary failures; both fail on the old wrapper.
+- Control Mode destroyed the live prompt. `update_persona_behavior` rebuilt
+  instructions from `_base_instructions`, which only programs set, so the
+  first change replaced the entire prompt (Control Mode instructions, persona,
+  Tango preamble) with just the override line, and "Exit Control Mode"
+  restored the old prompt without the change (F13). `Jarvis` now has
+  `apply_persona_overrides`, which recomposes the persona prompt once from
+  scratch and applies it live, on Control Mode exit, or on program
+  deactivation as appropriate. Per-session prompt text (memory context, SIP
+  addendum) is passed to `Jarvis` as `prompt_extras` so it survives; the
+  session-start prompt is byte-identical to before. The tool now reports a
+  failed save instead of claiming success, and a failed reload no longer
+  wipes earlier overrides from the live prompt.
 - `backend/tests/test_migrations.py` asserted the latest migration was 004 and
   had failed since 005–007 were added. It now asserts contiguous numbering.
 
