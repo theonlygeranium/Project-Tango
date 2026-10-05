@@ -28,6 +28,15 @@ referenced as F1–F13.
   and tool return values are unchanged.
   `backend/tests/test_tool_http_async.py` drives each tool against a slow mock
   server and asserts the event loop keeps running.
+- The Deepgram Aura TTS fallback never engaged for ElevenLabs personas: the
+  custom `FallbackTTS` wrapper forwarded `stream()` (the path `AgentSession`
+  uses) straight to the primary, and its non-streaming path also produced no
+  audio after a primary failure (F2). It is replaced by LiveKit's
+  `tts.FallbackAdapter([primary, aura])`, which fails over on both paths,
+  resamples between engines, and probes the primary until it recovers.
+  Failover and recovery are logged ("TTS engine unavailable; failing
+  over ..."). `backend/tests/test_tts_fallback.py` covers streaming and
+  non-streaming primary failures; both fail on the old wrapper.
 - `backend/tests/test_migrations.py` asserted the latest migration was 004 and
   had failed since 005–007 were added. It now asserts contiguous numbering.
 

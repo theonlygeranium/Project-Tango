@@ -607,116 +607,39 @@ def _build_deepgram_tts(persona: Persona) -> Any:
 
 
 def _build_fallback_tts(primary: Any, fallback: Any, persona: Persona) -> Any:
-    """Wrap a primary TTS engine with a fallback that activates on failure.
+    """Wrap the primary TTS with LiveKit's FallbackAdapter (Deepgram Aura second).
 
-    When the primary TTS (ElevenLabs or F5-TTS) fails -- for example due to
-    billing issues, rate limits, or a stopped sidecar -- the FallbackTTS
-    wrapper transparently retries the same text on the secondary engine
-    (Deepgram Aura). This prevents the "no audio frames were pushed" error
-    that silences all voice agents when a single TTS provider has an outage.
+    When the primary engine (ElevenLabs or F5-TTS) fails, for example on a
+    billing problem, rate limit, or stopped sidecar, the adapter replays the
+    request on the fallback and marks the primary unavailable until a
+    background probe sees it recover. It covers both the streaming path that
+    AgentSession uses for ElevenLabs and the non-streaming F5-TTS path, and
+    resamples when the engines' sample rates differ.
+
+    The previous hand-written wrapper delegated stream() straight to the
+    primary, so the fallback never engaged for ElevenLabs personas.
     """
-    from livekit.agents import APIError, tts as lk_tts
-    from livekit.agents.types import APIConnectOptions, DEFAULT_API_CONNECT_OPTIONS
-    from livekit.agents.utils import shortuuid as gen_shortuuid
+    from livekit.agents import tts as lk_tts
 
-    primary_model = getattr(primary, "model", "primary")
-    primary_provider = getattr(primary, "provider", "unknown")
-    fallback_provider = getattr(fallback, "provider", "unknown")
+    adapter = lk_tts.FallbackAdapter([primary, fallback])
+    primary_label = getattr(primary, "label", type(primary).__name__)
 
-    class FallbackTTS(lk_tts.TTS):
-        def __init__(self) -> None:
-            primary_caps = getattr(primary, "_capabilities", None)
-            super().__init__(
-                capabilities=primary_caps or lk_tts.TTSCapabilities(streaming=True),
-                sample_rate=getattr(primary, "_sample_rate", 24000),
-                num_channels=getattr(primary, "_num_channels", 1),
-            )
-            self._primary = primary
-            self._fallback = fallback
-            self._persona_id = persona.id
-
-        @property
-        def model(self) -> str:
-            return primary_model
-
-        @property
-        def provider(self) -> str:
-            return f"{primary_provider}+{fallback_provider}"
-
-        def synthesize(
-            self,
-            text: str,
-            *,
-            conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS,
-        ) -> lk_tts.ChunkedStream:
-            return FallbackChunkedStream(
-                tts=self, input_text=text, conn_options=conn_options,
+    def on_availability_changed(ev: Any) -> None:
+        engine = getattr(ev, "tts", None)
+        label = getattr(engine, "label", type(engine).__name__)
+        if getattr(ev, "available", False):
+            logger.info("TTS engine available again persona=%s engine=%s", persona.id, label)
+        else:
+            logger.warning(
+                "TTS engine unavailable; failing over persona=%s engine=%s primary=%s",
+                persona.id,
+                label,
+                primary_label,
             )
 
-        def stream(
-            self,
-            *,
-            conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS,
-        ) -> lk_tts.SynthesizeStream:
-            # Delegate streaming directly to the primary TTS engine.
-            # The primary (ElevenLabs) supports streaming natively and has its
-            # own retry logic in SynthesizeStream._main_task. The Deepgram Aura
-            # fallback applies to the non-streaming synthesize() path.
-            return self._primary.stream(conn_options=conn_options)
+    adapter.on("tts_availability_changed", on_availability_changed)
+    return adapter
 
-        async def aclose(self) -> None:
-            for engine in (self._primary, self._fallback):
-                close_fn = getattr(engine, "aclose", None)
-                if close_fn is not None:
-                    with suppress(Exception):
-                        await close_fn()
-
-    class FallbackChunkedStream(lk_tts.ChunkedStream):
-        def __init__(self, *, tts, input_text, conn_options):
-            super().__init__(tts=tts, input_text=input_text, conn_options=conn_options)
-            self._fb_tts = tts
-
-        async def _run(self, output_emitter: lk_tts.AudioEmitter) -> None:
-            primary_stream = self._fb_tts._primary.synthesize(
-                self._input_text, conn_options=self._conn_options
-            )
-            try:
-                output_emitter.initialize(
-                    request_id=gen_shortuuid(),
-                    sample_rate=self._fb_tts._primary.sample_rate,
-                    num_channels=self._fb_tts._primary.num_channels,
-                    mime_type="audio/pcm",
-                )
-                async for ev in primary_stream:
-                    output_emitter.push(ev.frame.data.tobytes())
-                output_emitter.flush()
-                return
-            except APIError as exc:
-                logger.warning(
-                    "Primary TTS failed persona=%s primary=%s error=%s; falling back to %s",
-                    self._fb_tts._persona_id, primary_provider, exc, fallback_provider,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Primary TTS failed persona=%s primary=%s error=%s; falling back to %s",
-                    self._fb_tts._persona_id, primary_provider, exc, fallback_provider,
-                )
-            with suppress(Exception):
-                await primary_stream.aclose()
-            fallback_stream = self._fb_tts._fallback.synthesize(
-                self._input_text, conn_options=self._conn_options
-            )
-            output_emitter.initialize(
-                request_id=gen_shortuuid(),
-                sample_rate=self._fb_tts._fallback.sample_rate,
-                num_channels=self._fb_tts._fallback.num_channels,
-                mime_type="audio/pcm",
-            )
-            async for ev in fallback_stream:
-                output_emitter.push(ev.frame.data.tobytes())
-            output_emitter.flush()
-
-    return FallbackTTS()
 
 def _build_tts(persona: Persona, elevenlabs: Any) -> Any:
     tts_backend = getattr(persona, "tts_backend", "elevenlabs")
