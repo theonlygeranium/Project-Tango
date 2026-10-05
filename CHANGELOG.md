@@ -94,7 +94,7 @@ referenced as F1–F13.
   the per-persona `eot_threshold`, `eot_timeout_ms` and `eager_eot_threshold`
   take effect. Since 2026-08-16 the session used LiveKit's audio
   `TurnDetector`, which made LiveKit ignore Flux end-of-turn events, so those
-  settings (ADR-002, ADR-011) had no effect (F1). Damian and Nathaniel now
+  settings (ADR-002, ADR-024 formerly ADR-011) had no effect (F1). Damian and Nathaniel now
   wait for their longer pause windows; eager EOT drives preemptive LLM
   generation for Chris, Jeremiah, Jeremiah V2 and Jacob. Tagalog personas use
   `turn_detection="vad"` explicitly (unchanged behaviour). Rollback:
@@ -124,14 +124,14 @@ referenced as F1–F13.
   shutdown budget), so a dropped call keeps its transcript. The agent now
   says the transcript "is being" saved and emailed.
 - Vision no longer turns off preemptive generation, and frame encoding runs
-  off the event loop (F8). Since ADR-012 every turn lost preemptive LLM
+  off the event loop (F8). Since ADR-028 (formerly ADR-012) every turn lost preemptive LLM
   generation whenever `TANGO_VISION_ENABLED=true` (the `.env.example`
   default). In the default `auto` mode only turns that mention something
   visual inject a frame description; for those, LiveKit discards the
   preemptive draft because the chat context changed and regenerates with
   the description, and `preemptive_tts=False` means nothing was spoken.
   All other turns regain the latency benefit. The resize and JPEG encode now
-  run in the same worker thread as the vision request. ADR-012 and
+  run in the same worker thread as the vision request. ADR-028 and
   `docs/AGENTS.md` are updated.
 - The meditation track now plays through the session's
   `BackgroundAudioPlayer` instead of a separately published track (F9). It
@@ -158,6 +158,16 @@ referenced as F1–F13.
   with `TANGO_TAGALOG_KEYTERMS=false`. New `Persona.min_endpointing_delay`
   and `Persona.stt_endpointing_ms` fields; English personas are unchanged.
 
+### Documentation
+- Five Tango ADRs reused numbers already taken by Discord-fleet ADRs, so
+  "ADR-012" meant three decisions. They are renumbered 024–028 with a
+  "formerly ADR-0xx" line in each file (F10): flux-eager-eot 011→024,
+  voice-mcp-access 012→025, control-mode 013→026, voice-programs 014→027,
+  disable-sync-transcription 012→028. References in REVERT.md,
+  architecture.md, related ADRs and this release's entries are updated; older entries keep their original numbers. New
+  `docs/decisions/README.md` indexes every ADR and names the next free
+  number (029). Fleet-only collisions (015, 016, 020) are left as they are.
+
 ---
 
 ## [Unreleased] Voice pipeline review
@@ -167,7 +177,7 @@ referenced as F1–F13.
   voice pipeline against current LiveKit Agents, ElevenLabs, and Deepgram
   documentation (Context7) and the installed SDK. Thirteen findings with
   prioritised recommendations. Headline items: Flux end-of-turn is ignored
-  because the session uses `inference.TurnDetector()` (ADR-002/ADR-011 not in
+  because the session uses `inference.TurnDetector()` (ADR-002/ADR-024 not in
   effect); five function tools make synchronous HTTP calls on the job event
   loop; the custom TTS fallback never engages on the streaming path; 13 log
   calls use `pcts`/`pctd` and emit nothing; `livekit-agents~=1.5` is unpinned.

@@ -290,7 +290,7 @@ qualitative summaries rather than raw technical output.
 | Mama Lulu | `("postgres",)` |
 | Tita Baby | `()` — no MCP access |
 
-See ADR-012 and SPEC-006 for full details.
+See ADR-025 and SPEC-006 for full details.
 
 ---
 
@@ -326,7 +326,7 @@ conversation.
 - `tone`, `instruction_addition`, `behavior_rule`: appended to the base prompt
   as labeled sections, in creation order.
 
-Master switch: `TANGO_CONTROL_MODE` (default true). See ADR-013.
+Master switch: `TANGO_CONTROL_MODE` (default true). See ADR-026.
 
 ---
 
@@ -413,7 +413,7 @@ Index: `idx_programs_persona` on `(base_persona_id, active, created_at DESC)`.
   available in Control Mode, ensuring the user is in an administrative state.
 - **Activation by voice AND UI**: Both paths use the same underlying mechanism.
 
-Master switch: `TANGO_PROGRAMS` (default true). See ADR-014.
+Master switch: `TANGO_PROGRAMS` (default true). See ADR-027.
 
 ---
 
@@ -557,17 +557,17 @@ See `docs/decisions/` for full ADRs.
 | Flux STT for English | Native EOT detection, lowest latency | ADR-002 |
 | Nova-3 `tl` for Tagalog | Flux Multilingual doesn't support Tagalog | ADR-003 |
 | `use_tts_aligned_transcript=False` | Do not feed ElevenLabs word timings into the transcription node | ADR-004 |
-| `sync_transcription=False` | Do not construct `_SegmentSynchronizerImpl`; captions still publish, unsynced | ADR-012 |
-| `max_tool_steps=8` | Tool-heavy Chris/wiki/docs/MCP turns finish before `tool_choice='none'` | ADR-012 |
+| `sync_transcription=False` | Do not construct `_SegmentSynchronizerImpl`; captions still publish, unsynced | ADR-028 |
+| `max_tool_steps=8` | Tool-heavy Chris/wiki/docs/MCP turns finish before `tool_choice='none'` | ADR-028 |
 | Cloudflare tunnel direct to localhost | Bypasses Caddy, prevents Error 522 | ADR-005 |
 | POST /api/dispatch after room.connect() | Prevents agent timeout on empty rooms | ADR-006 |
 | LiteLLM proxy for all LLM calls | Centralized credentials, model switching | ADR-007 |
 | F5-TTS sidecar for Jeremiah pilot | Self-hosted TTS without disrupting other personas | ADR-008 |
 | Groq Tagalog defaults + universal voice layer | Reproduce current live persona behavior | ADR-009 |
 | Password accounts + server persona authorization | Protect every browser/API path and isolate account data | ADR-010 |
-| Voice agent MCP knowledge access | Bridge Discord-fleet MCP servers into voice personas | ADR-012 |
-| Control Mode — voice-driven admin override | Adjust persona behavior/tone/prompt mid-conversation, persisted to DB | ADR-013 |
-| Voice-created programs (subroutines) | Derived personas with LLM-generated prompts, created via Control Mode, activated by voice or UI | ADR-014 |
+| Voice agent MCP knowledge access | Bridge Discord-fleet MCP servers into voice personas | ADR-025 |
+| Control Mode — voice-driven admin override | Adjust persona behavior/tone/prompt mid-conversation, persisted to DB | ADR-026 |
+| Voice-created programs (subroutines) | Derived personas with LLM-generated prompts, created via Control Mode, activated by voice or UI | ADR-027 |
 | Discord fleet constants via `fleet-config.json` | Tunable without editing bot sources; missing file → defaults | 2026-08-20 fleet-config ADRs |
 | Nexus Bus (Redis Streams) for inter-bot communication | Durable, ordered, no rate limits, decoupled from Discord | ADR-018 |
 | Self-healing foundation (9 modules) | Defense-in-depth automated recovery for fleet failures | ADR-019 |

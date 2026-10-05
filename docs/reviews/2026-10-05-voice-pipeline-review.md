@@ -9,13 +9,13 @@
 
 ## 1. Summary
 
-The pipeline is structurally sound and follows the documented LiveKit Agents 1.x shape: `AgentSession` + `deepgram.STTv2` (Flux) / `deepgram.STT` (Nova-3 `tl`) + `elevenlabs.TTS` (Flash v2.5, US routing, `auto_mode`) + `openai.LLM` via LiteLLM, with explicit dispatch. The September fix (ADR-012, `sync_transcription=False`) addressed one real cutout path.
+The pipeline is structurally sound and follows the documented LiveKit Agents 1.x shape: `AgentSession` + `deepgram.STTv2` (Flux) / `deepgram.STT` (Nova-3 `tl`) + `elevenlabs.TTS` (Flash v2.5, US routing, `auto_mode`) + `openai.LLM` via LiteLLM, with explicit dispatch. The September fix (ADR-028, `sync_transcription=False`) addressed one real cutout path.
 
 However, the review found four defects that directly affect audio behaviour, and several more that undermine the project's ability to diagnose audio issues at all:
 
 | # | Finding | Severity | Effect on audio |
 |---|---|---|---|
-| F1 | Flux end-of-turn is silently ignored: the session uses the cloud audio `TurnDetector`, so `eot_threshold` / `eager_eot_threshold` / `eot_timeout_ms` never affect turn boundaries. ADR-002 and ADR-011 are not actually in effect. | High | Turn-taking is driven by Silero VAD (0.3 s silence) + cloud model, not Flux. Agent can cut in during natural pauses; eager EOT latency win is not realised. |
+| F1 | Flux end-of-turn is silently ignored: the session uses the cloud audio `TurnDetector`, so `eot_threshold` / `eager_eot_threshold` / `eot_timeout_ms` never affect turn boundaries. ADR-002 and ADR-024 are not actually in effect. | High | Turn-taking is driven by Silero VAD (0.3 s silence) + cloud model, not Flux. Agent can cut in during natural pauses; eager EOT latency win is not realised. |
 | F2 | The TTS fallback wrapper never engages on the streaming path, so an ElevenLabs outage still produces "no audio frames were pushed". Its warning log calls are also malformed and emit nothing. | High | Fallback is dead code in production. |
 | F3 | 13 log calls use `pcts`/`pctd` instead of `%s`/`%d`. Python logging discards the record and prints a traceback to stderr. Control Mode, programs, and TTS-fallback events are invisible in `journalctl`. | High (observability) | Post-incident analysis of cutouts is missing exactly the events that mutate the session mid-turn. |
 | F4 | The dependency pin `livekit-agents~=1.5` currently resolves to 1.8.4. Schubert's venv version is unknown from this repo. Behaviour differs across that range (turn handling, preemptive TTS default, RoomIO). **Resolved by pinning to 1.8.4 (see §2 F4).** | High (reproducibility) | Cannot reason about production behaviour without pinning. |
@@ -69,7 +69,7 @@ session = AgentSession(
 Consequences:
 
 - Per-persona `eot_threshold` values (0.7–0.8) and the therapy/meditation `eot_timeout_ms` of 4.5–5.5 s are inert. Damian and Nathaniel, which were tuned for long reflective pauses, actually get a 0.3 s VAD silence window plus the generic audio model. This is a plausible root cause for "the agent cuts in while I'm still thinking" reports.
-- Eager EOT (ADR-011) can still fire a `PREFLIGHT_TRANSCRIPT` for preemptive LLM generation, but the turn is not committed on Flux's `EndOfTurn`, so the latency benefit is partial at best, and the extra LLM calls are still paid for.
+- Eager EOT (ADR-024) can still fire a `PREFLIGHT_TRANSCRIPT` for preemptive LLM generation, but the turn is not committed on Flux's `EndOfTurn`, so the latency benefit is partial at best, and the extra LLM calls are still paid for.
 - The in-code comment claims the TurnDetector change was made to eliminate the "stt end of speech received while vad is still in a speech segment" warning. That warning disappeared because Flux EOS is now ignored, not because the race was fixed. In `"stt"` mode that warning is benign: the SDK flushes VAD precisely so that VAD can correct a premature Flux EOT.
 - The code also logs `flux_stt=nova-3-multi` for Tagalog personas; the string is never used for anything but logging and is wrong (the Tagalog path uses `nova-3` with `language="tl"`).
 
@@ -101,7 +101,7 @@ Example (`jarvis_agent.py`):
 logger.info("Control Mode enabled persona=pcts tools=pctd", persona.id, len(control_mode_tools))
 ```
 
-Verified behaviour: the handler emits nothing and Python prints `--- Logging error ---` plus `Arguments: ('jeremiah', 3)` to stderr. Affected events: legacy tool loading, Control Mode enable/activate/deactivate, program pre-activation/activation/deactivation/not-found, and both TTS-fallback warnings. These are exactly the mid-session mutations ADR-012 identified as cutout triggers ("chat context or tools have changed after on_user_turn_completed"), so the current logs cannot show when they happen.
+Verified behaviour: the handler emits nothing and Python prints `--- Logging error ---` plus `Arguments: ('jeremiah', 3)` to stderr. Affected events: legacy tool loading, Control Mode enable/activate/deactivate, program pre-activation/activation/deactivation/not-found, and both TTS-fallback warnings. These are exactly the mid-session mutations ADR-028 identified as cutout triggers ("chat context or tools have changed after on_user_turn_completed"), so the current logs cannot show when they happen.
 
 This is a mechanical find-and-replace (`pcts` → `%s`, `pctd` → `%d`) and should be guarded by a test that imports each module with logging configured to raise on formatting errors.
 
@@ -160,11 +160,11 @@ Separately, the keyboard-typing "thinking" sound is enabled by default for all p
 | AGENTS.md 3.4: `turn_detection="stt"` must be nested in `turn_handling` | `turn_handling["turn_detection"] = inference.TurnDetector()`; `"stt"` is never used |
 | AGENTS.md 3.3: Flux via `deepgram.STT(model="flux-general-en")` | `deepgram.STTv2(...)` (correct for current plugin) |
 | AGENTS.md 3.4: ADR-004 flag alone does not prevent pauses (correct) | — |
-| ADR-002 / ADR-011: Flux native turn detection and eager EOT drive turns | Ignored at runtime (F1) |
+| ADR-002 / ADR-024: Flux native turn detection and eager EOT drive turns | Ignored at runtime (F1) |
 | AGENTS.md 4: `backend/main.py`, `history.py` are the backend | 20+ modules; `jarvis_agent.py` owns the `Agent` subclass |
 | README: project is "self-hosted on Schubert" | LiveKit is LiveKit Cloud (`*.livekit.cloud`); only the worker and web app are on Schubert |
 | CHANGELOG `[Unreleased]` | Four separate `[Unreleased]` sections, three of them Fleet Command |
-| ADR-012 "preemptive_tts defaults to false in current LiveKit Agents" | Correct for ≥ 1.7; unknown for Schubert's version (F4) |
+| ADR-028 "preemptive_tts defaults to false in current LiveKit Agents" | Correct for ≥ 1.7; unknown for Schubert's version (F4) |
 
 ### F11. Synchronous HTTP inside async tools (High)
 
@@ -196,7 +196,7 @@ Fix: switch all four modules to `httpx.AsyncClient` (one shared client per modul
 - Env vars used by code but absent from every `.env.example`: `TANGO_SESSION_TTL_MINUTES`, `TANGO_USER_AWAY_TIMEOUT`, `TANGO_ELEVENLABS_USE_PVC_AS_IVC`, `TANGO_MEDITATION_TRACK`, `TANGO_TRANSCRIPTION_ENABLED`, `TANGO_TRANSCRIPTION_EMAIL_FROM`, `TANGO_DB_POOL_MIN/MAX`, `TANGO_DB_SOCKET_DIR`, `LOG_LEVEL`, `LIVEKIT_LOG_LEVEL`.
 - `frontend/hooks/useDebug.ts` sets the livekit-client log level to `debug` unconditionally in production.
 - The Welcome screen's `MeditationTile` (plain `<audio>` element) stays mounted and can keep playing into the microphone during a voice session.
-- ADR numbers 011, 012, 013, 014, 015, 016, 020 are each used by two or three files; "ADR-012" currently means three different decisions.
+- ADR numbers 011, 012, 013, 014, 015, 016, 020 are each used by two or three files; "ADR-012" currently means three different decisions. *(Fixed for Tango ADRs: renumbered to 024–028 with "formerly" aliases; index in `docs/decisions/README.md`. The 015, 016 and 020 collisions are between Discord-fleet ADRs and were left alone.)*
 - Chris's LLM, Jeremiah's TTS backend, and the Tagalog personas' LLM are documented differently in `docs/architecture.md`, `docs/AGENTS.md`, `deploy/README.md`, and `frontend/lib/personas.ts` than they are set in `backend/personas.py`.
 
 ---
@@ -226,7 +226,7 @@ Fix: switch all four modules to `httpx.AsyncClient` (one shared client per modul
    ```
 
    Keep Silero VAD for interruption detection (that is its documented role in `"stt"` mode). Note that `min_delay` is added on top of Flux's own EOT delay, so personas tuned for pauses should get a small `min_delay` and a high `eot_threshold`, not a large `min_delay`.
-7. Re-validate per-persona Flux values against Deepgram's documented presets: conversational `eot_threshold=0.7–0.8`, tool-heavy/RAG personas (Chris) `eager_eot_threshold=0.4, eot_threshold=0.85, eot_timeout_ms=7000`. `eager_eot_threshold` must be ≤ `eot_threshold` or the plugin raises. Measure before and after with the per-turn metrics from P0 item 3; eager EOT roughly doubles LLM calls, and the ADR-011 cost/benefit claim has never been measured because the setting was inert.
+7. Re-validate per-persona Flux values against Deepgram's documented presets: conversational `eot_threshold=0.7–0.8`, tool-heavy/RAG personas (Chris) `eager_eot_threshold=0.4, eot_threshold=0.85, eot_timeout_ms=7000`. `eager_eot_threshold` must be ≤ `eot_threshold` or the plugin raises. Measure before and after with the per-turn metrics from P0 item 3; eager EOT roughly doubles LLM calls, and the ADR-024 cost/benefit claim has never been measured because the setting was inert.
 8. For Tagalog personas set `turn_detection="vad"` explicitly with a persona-level `min_endpointing_delay` (start at 0.8 s; Taglish has longer intra-sentence pauses), forward `keyterms` to `deepgram.STT`, and record whether keyterms change accuracy on `tl`.
 9. Move `silero.VAD.load()` into `WorkerOptions(prewarm_fnc=...)` and make `min_silence_duration` a persona field.
 
@@ -248,7 +248,7 @@ Fix: switch all four modules to `httpx.AsyncClient` (one shared client per modul
 
 ### P5. Bring the docs back to reality
 
-17. AGENTS.md is owner-only (§4 ownership table), so the AGENTS.md items here are proposals for the owner, not agent tasks. Proposed: update AGENTS.md 3.3/3.4 (STTv2, `turn_handling=TurnHandlingOptions(turn_detection="stt")`), the repository map in AGENTS.md 4, README's hosting description, and consolidate CHANGELOG `[Unreleased]`. Mark ADR-002 and ADR-011 as "Accepted — not in effect between <date of TurnDetector change> and <fix date>" with a pointer to this review. Add an ADR for the dispatch-in-token change (P3) and for the FallbackAdapter change (P2).
+17. AGENTS.md is owner-only (§4 ownership table), so the AGENTS.md items here are proposals for the owner, not agent tasks. Proposed: update AGENTS.md 3.3/3.4 (STTv2, `turn_handling=TurnHandlingOptions(turn_detection="stt")`), the repository map in AGENTS.md 4, README's hosting description, and consolidate CHANGELOG `[Unreleased]`. Mark ADR-002 and ADR-024 as "Accepted — not in effect between <date of TurnDetector change> and <fix date>" with a pointer to this review. Add an ADR for the dispatch-in-token change (P3) and for the FallbackAdapter change (P2).
 18. Fix F12 (reset `userInitiatedDisconnect` on connect; make the failure paths actually retry) and F13 (set `_base_instructions` on Control Mode entry, or have `update_persona_behavior` read the saved prompt).
 
 ### Deliberately not recommended
@@ -264,7 +264,7 @@ Fix: switch all four modules to `httpx.AsyncClient` (one shared client per modul
 - Flux is built with `deepgram.STTv2`, the correct class for the v2 endpoint; `eager_eot_threshold ≤ eot_threshold` is validated by the plugin.
 - Nova-3 `language="tl"` with `smart_format=True` is the right Tagalog configuration; Flux does not support Tagalog on any model.
 - `eleven_flash_v2_5` with `auto_mode=True` and `api.us.elevenlabs.io` routing matches ElevenLabs' latency guidance. `use_pvc_as_ivc` is a real ElevenLabs option for PVC latency; the plugin's `VoiceSettings` does not expose it, and the code handles that `TypeError` correctly.
-- `RoomOptions(text_output=TextOutputOptions(sync_transcription=False))` is the documented way to disable playback-paced captions (ADR-012). The test `test_livekit_roomio_skips_synchronizer_when_sync_is_false` guards it.
+- `RoomOptions(text_output=TextOutputOptions(sync_transcription=False))` is the documented way to disable playback-paced captions (ADR-028). The test `test_livekit_roomio_skips_synchronizer_when_sync_is_false` guards it.
 - `preemptive_generation={"enabled": ..., "preemptive_tts": False}` is the documented shape and the right choice given mid-turn context mutation.
 - `max_tool_steps=8` is reasonable for the search → read → read chains and is operator-tunable.
 - `user_away_timeout=None` is the documented way to disable the 15 s away state.

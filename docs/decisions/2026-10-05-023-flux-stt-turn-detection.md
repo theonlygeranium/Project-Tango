@@ -7,7 +7,7 @@
 ## Context
 
 ADR-002 chose Deepgram Flux for English personas because of its built-in
-end-of-turn model. ADR-011 then tuned `eot_threshold`, `eot_timeout_ms` and
+end-of-turn model. ADR-024 then tuned `eot_threshold`, `eot_timeout_ms` and
 `eager_eot_threshold` per persona (for example 4.5 s and 5.5 s timeouts for
 Damian and Nathaniel, so reflective pauses are not cut off).
 
@@ -21,7 +21,7 @@ In LiveKit Agents, `AudioRecognition` only consumes STT `END_OF_SPEECH` and
 `TurnDetector` instance the mode is `None`, so Flux's end-of-turn events are
 discarded. Turn boundaries were therefore decided by Silero VAD
 (`min_silence_duration=0.3`) plus the audio model. None of the per-persona
-Flux settings had any effect. Because `48dd55c` predates ADR-011, eager
+Flux settings had any effect. Because `48dd55c` predates ADR-024, eager
 end-of-turn was never in effect as designed. The warning went away because
 Flux was ignored, not because a race was fixed. In `"stt"` mode that warning
 is expected: LiveKit flushes VAD so that a VAD start-of-speech can correct a
@@ -63,7 +63,7 @@ Full analysis: `docs/reviews/2026-10-05-voice-pipeline-review.md`, finding F1.
 ## Rationale
 
 - It is the vendor-documented configuration for Flux on LiveKit.
-- It makes the tuning in ADR-002 and ADR-011 real, which is the only way to
+- It makes the tuning in ADR-002 and ADR-024 real, which is the only way to
   give therapy and meditation personas long pause tolerance.
 - The env switch makes the change reversible within one service restart.
 
@@ -80,8 +80,8 @@ Full analysis: `docs/reviews/2026-10-05-voice-pipeline-review.md`, finding F1.
 
 - Turn-taking changes for all English personas. Pauses shorter than a
   persona's Flux threshold no longer end the turn. Damian and Nathaniel will
-  wait noticeably longer before replying, which is what ADR-011 intended.
-- Eager end-of-turn now drives preemptive LLM generation. ADR-011 estimates
+  wait noticeably longer before replying, which is what ADR-024 intended.
+- Eager end-of-turn now drives preemptive LLM generation. ADR-024 estimates
   50–70% more LLM calls on personas with `eager_eot_threshold` set (Chris,
   Jeremiah, Jeremiah V2, Jacob).
 - The `stt end of speech received while vad is still in a speech segment,
@@ -102,6 +102,6 @@ Full analysis: `docs/reviews/2026-10-05-voice-pipeline-review.md`, finding F1.
 
 - `docs/reviews/2026-10-05-voice-pipeline-review.md` (F1)
 - ADR-002 `2026-06-26-002-deepgram-flux-stt.md`
-- ADR-011 `2026-08-20-011-flux-eager-eot.md`
+- ADR-024 `2026-08-20-024-flux-eager-eot.md` (formerly ADR-011)
 - LiveKit Agents: Deepgram Flux turn detection, `TurnHandlingOptions`
 - Deepgram Flux: `eot_threshold`, `eager_eot_threshold`, `eot_timeout_ms`

@@ -1,5 +1,7 @@
 # ADR: Disable RoomIO transcript sync and raise the tool-step ceiling
 
+**Number:** ADR-028 (formerly ADR-012; renumbered 2026-10-05 because ADR-012 was already `2026-08-18-012-slack-mcp-server.md`. See `docs/decisions/README.md`.)
+
 **Date:** 2026-09-12
 **Status:** Accepted. Decision 4's "vision disables preemptive generation" was reversed on 2026-10-05:
 with `preemptive_tts=False`, LiveKit discards a preemptive draft whose chat context changed, so vision
@@ -71,7 +73,7 @@ final generation — matching the ~68s silence after tool-heavy work.
 | Rely on ADR-004 alone | Production still fired 21 SegmentSynchronizer warnings |
 | Disable text output entirely | Frontend captions and MeetScribe-adjacent UX would break |
 | Keep `max_tool_steps=3` and add spoken fillers | Prioritize audio continuity; thinking sound already exists |
-| Disable preemptive generation globally | Would regress ADR-011 eager-EOT latency for simple turns |
+| Disable preemptive generation globally | Would regress ADR-024 eager-EOT latency for simple turns |
 | Faster TTS model / chunking | Flash v2.5 + `auto_mode=True` already in use; sync was the stall |
 
 ## Consequences

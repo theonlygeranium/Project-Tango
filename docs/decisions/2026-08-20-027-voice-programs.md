@@ -1,5 +1,7 @@
 # ADR: Voice-Created Programs (Subroutines)
 
+**Number:** ADR-027 (formerly ADR-014; renumbered 2026-10-05 because ADR-014 was already `2026-08-19-014-writer-playbook-integration.md`. See `docs/decisions/README.md`.)
+
 **Date:** 2026-08-20
 **Status:** Accepted
 **Decided by:** Writer Agent (WRITER Agent platform)
@@ -7,7 +9,7 @@
 ## Context
 
 Project Tango personas have fixed system prompts defined in
-`backend/personas.py`. While Control Mode (ADR-013) allows adjusting a
+`backend/personas.py`. While Control Mode (ADR-026) allows adjusting a
 persona's behavior mid-conversation, there is no mechanism for the user to
 create entirely new conversation modes — specialized profiles that change what
 the persona talks about and how, while keeping the same voice, TTS engine, STT
@@ -136,6 +138,6 @@ Implement voice-created derived personas (programs) with the following design:
 - `backend/jarvis_agent.py` — Jarvis agent with program integration
 - `backend/migrations/007_programs.sql` — Database migration
 - `frontend/components/ProgramLibrary.tsx` — Frontend program library
-- ADR-013 — Control Mode (precedent for voice-driven persona modification)
-- ADR-012 — Voice Agent MCP Knowledge Access (precedent for persona-scoped
+- ADR-026 — Control Mode (precedent for voice-driven persona modification)
+- ADR-025 — Voice Agent MCP Knowledge Access (precedent for persona-scoped
   features)
