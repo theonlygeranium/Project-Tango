@@ -112,3 +112,34 @@ def test_installed_livekit_agents_matches_requirements_pin() -> None:
     pinned = re.search(r"^livekit-agents\[[^\]]*\]==([\w.]+)$", requirements, re.M)
     assert pinned is not None, "livekit-agents must be pinned with == in requirements.txt"
     assert main._livekit_package_versions()["livekit-agents"] == pinned.group(1)
+
+
+def test_turn_metrics_ms_converts_known_keys_and_skips_junk() -> None:
+    item = types.SimpleNamespace(
+        metrics={
+            "transcription_delay": 0.21,
+            "end_of_turn_delay": 0.4,
+            "llm_node_ttft": 0.8,
+            "tts_node_ttfb": 0.15,
+            "e2e_latency": 1.25,
+            "started_speaking_at": 1_700_000_000.0,  # timestamp, not a duration
+            "playback_latency": -1.0,  # negative values are dropped
+            "on_user_turn_completed_delay": True,  # bool is not a duration
+        }
+    )
+    assert main._turn_metrics_ms(item) == {
+        "transcription_delay": 210,
+        "end_of_turn_delay": 400,
+        "llm_node_ttft": 800,
+        "tts_node_ttfb": 150,
+        "e2e_latency": 1250,
+    }
+    assert main._format_turn_metrics(main._turn_metrics_ms(item)).startswith(
+        "transcription_delay_ms=210 end_of_turn_delay_ms=400"
+    )
+
+
+def test_turn_metrics_ms_handles_missing_metrics() -> None:
+    assert main._turn_metrics_ms(types.SimpleNamespace()) == {}
+    assert main._turn_metrics_ms(types.SimpleNamespace(metrics=None)) == {}
+    assert main._format_turn_metrics({}) == "none"

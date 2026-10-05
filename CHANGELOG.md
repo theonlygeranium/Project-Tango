@@ -40,6 +40,12 @@ referenced as F1–F13.
   so the next deploy moves Schubert to exactly these versions. The version
   previously installed on Schubert was never recorded; check the first
   `Starting LiveKit worker ... versions=` line after deploy.
+- Every user and agent turn now logs a `Turn metrics` line with the
+  LiveKit per-turn timings in milliseconds (`transcription_delay`,
+  `end_of_turn_delay`, `on_user_turn_completed_delay`, `llm_node_ttft`,
+  `tts_node_ttfb`, `e2e_latency`, `playback_latency`), including interrupted
+  turns, which were previously skipped. Session `error` events (STT, LLM, TTS)
+  are logged with source and `recoverable`. History recording is unchanged.
 
 ---
 

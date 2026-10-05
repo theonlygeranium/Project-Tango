@@ -1429,6 +1429,39 @@ def _message_latency_ms(item: Any) -> int | None:
     return None
 
 
+# Per-turn timings LiveKit records on ChatMessage.metrics (seconds). User turns
+# carry the STT / end-of-turn fields, agent turns the LLM / TTS / e2e fields.
+TURN_METRIC_KEYS: tuple[str, ...] = (
+    "transcription_delay",
+    "end_of_turn_delay",
+    "on_user_turn_completed_delay",
+    "llm_node_ttft",
+    "tts_node_ttfb",
+    "e2e_latency",
+    "playback_latency",
+)
+
+
+def _turn_metrics_ms(item: Any) -> dict[str, int]:
+    """Return the known per-turn timings from a ChatMessage, in milliseconds."""
+    metrics = getattr(item, "metrics", {}) or {}
+    if not hasattr(metrics, "get"):
+        return {}
+
+    timings: dict[str, int] = {}
+    for key in TURN_METRIC_KEYS:
+        value = metrics.get(key)
+        if isinstance(value, int | float) and not isinstance(value, bool) and value >= 0:
+            timings[key] = int(value * 1000)
+    return timings
+
+
+def _format_turn_metrics(timings: dict[str, int]) -> str:
+    if not timings:
+        return "none"
+    return " ".join(f"{key}_ms={value}" for key, value in timings.items())
+
+
 def _usage_total_tokens(usage: Any) -> int:
     total = 0
     for model_usage in getattr(usage, "model_usage", []) or []:
@@ -1804,12 +1837,24 @@ async def entrypoint(ctx: Any) -> None:
     def on_conversation_item_added(ev: ConversationItemAddedEvent) -> None:
         if not isinstance(ev.item, ChatMessage):
             return
-        if getattr(ev.item, "interrupted", False):
-            return
 
         role = getattr(ev.item, "role", None)
         speaker = "agent" if role == "assistant" else role
         if speaker not in {"user", "agent"}:
+            return
+
+        # Log timings for every turn, interrupted ones included: those are the
+        # turns that matter when diagnosing cutouts and barge-in behaviour.
+        interrupted = bool(getattr(ev.item, "interrupted", False))
+        logger.info(
+            "Turn metrics speaker=%s interrupted=%s persona=%s room=%s %s",
+            speaker,
+            interrupted,
+            persona.id,
+            room_name,
+            _format_turn_metrics(_turn_metrics_ms(ev.item)),
+        )
+        if interrupted:
             return
 
         # Record agent turns for transcription
@@ -1838,6 +1883,19 @@ async def entrypoint(ctx: Any) -> None:
                 persona.id,
                 room_name,
             )
+
+    @session.on("error")
+    def on_session_error(ev: Any) -> None:
+        error = getattr(ev, "error", None)
+        source = getattr(ev, "source", None)
+        logger.warning(
+            "Session pipeline error source=%s recoverable=%s persona=%s room=%s error=%s",
+            type(source).__name__ if source is not None else "unknown",
+            getattr(error, "recoverable", "unknown"),
+            persona.id,
+            room_name,
+            getattr(error, "error", error),
+        )
 
     @session.on("session_usage_updated")
     def on_session_usage_updated(ev: SessionUsageUpdatedEvent) -> None:
