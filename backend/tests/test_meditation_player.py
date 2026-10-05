@@ -20,6 +20,10 @@ from meditation_tools import MeditationPlayer
 SOURCE_RATE = 44100  # deliberately not 48 kHz, to exercise resampling
 AMPLITUDE = 10000
 MIXER_TIMEOUT = 0.1  # rtc.AudioMixer default stream_timeout_ms=100
+# The real mixer is paced by its AudioSource (real time). The fake runs at a
+# fixed 10x real time so test timing does not depend on machine speed; an
+# unpaced fake let a fast CI runner finish the track before stop().
+PLAYBACK_SPEEDUP = 10.0
 
 
 def _write_tone(path: Path, seconds: float) -> None:
@@ -55,7 +59,9 @@ class _FakeBackgroundAudio:
                         self.timed_out = True
                         break
                     self.frames.append(frame)
-                    await asyncio.sleep(0)
+                    await asyncio.sleep(
+                        frame.samples_per_channel / frame.sample_rate / PLAYBACK_SPEEDUP
+                    )
             finally:
                 try:
                     await stream.aclose()

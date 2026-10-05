@@ -190,6 +190,10 @@ referenced as F1–F13.
   `writer/palmyra-x6` and Jeremiah's TTS backend `elevenlabs`. The main page
   now takes `tts_backend` from the backend catalog instead of letting the
   stale local `f5-tts` value win.
+- `backend/tests/test_meditation_player.py`: the fake mixer now plays at a
+  fixed 10x real time. Unpaced, it let a fast CI runner finish the test
+  track before `stop()` was called (test-only; the real mixer is paced by
+  its audio source).
 
 ---
 
