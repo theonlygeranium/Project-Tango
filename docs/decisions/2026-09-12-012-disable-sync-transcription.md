@@ -1,7 +1,9 @@
 # ADR: Disable RoomIO transcript sync and raise the tool-step ceiling
 
 **Date:** 2026-09-12
-**Status:** Accepted
+**Status:** Accepted. Decision 4's "vision disables preemptive generation" was reversed on 2026-10-05:
+with `preemptive_tts=False`, LiveKit discards a preemptive draft whose chat context changed, so vision
+turns still answer with visual context while other turns keep the latency gain. See CHANGELOG.
 **Decided by:** Cursor Cloud Agent
 
 ## Context

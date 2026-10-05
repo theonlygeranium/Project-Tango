@@ -116,10 +116,12 @@ For text-heavy visual turns such as terminal output, logs, command results, or c
 uses the OCR path: larger frames, high image detail, and `TANGO_VISION_OCR_MODEL`
 (`openai/gpt-4o` by default). Software/app/editor/interface identification also uses this OCR
 path because the relevant clues often live in small title, tab, menu, or workspace text.
-`AgentSession` disables preemptive generation inside `turn_handling` while vision is enabled so
-the visual/OCR context is injected before the persona model starts answering. When preemptive
-generation is on, `preemptive_tts` stays false so speculative replies cannot start speaking
-before `on_user_turn_completed` mutates context (transcription, Control Mode, programs).
+Preemptive generation stays on when vision is enabled (since 2026-10-05). When
+`on_user_turn_completed` injects visual/OCR context, LiveKit sees the chat context differ from
+the preemptive request, discards that draft, and answers with the visual context included.
+`preemptive_tts` stays false so a speculative reply can never start speaking before
+`on_user_turn_completed` mutates context (vision, transcription, Control Mode, programs). Frame
+encoding and the vision request both run in a worker thread, off the audio event loop.
 RoomIO must start with `sync_transcription=False`; `use_tts_aligned_transcript=False` alone
 does not disable `_SegmentSynchronizerImpl`. Tool-heavy personas use `max_tool_steps=8`
 (`TANGO_MAX_TOOL_STEPS`). Set

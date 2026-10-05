@@ -280,14 +280,18 @@ def _sync_transcription() -> bool:
     return _env_bool("TANGO_SYNC_TRANSCRIPTION", default=False)
 
 
-def _preemptive_generation_enabled(*, vision_enabled: bool) -> bool:
+def _preemptive_generation_enabled() -> bool:
     """Whether speculative LLM generation may start before end-of-turn.
 
-    Disabled while vision is injecting context (must land before the reply).
-    Otherwise follows TANGO_PREEMPTIVE_GENERATION (default true).
+    Follows TANGO_PREEMPTIVE_GENERATION (default true). Vision no longer
+    forces it off: when on_user_turn_completed injects visual context (or
+    Control Mode, programs, or transcription change the turn), LiveKit sees
+    the chat context differ from the preemptive request, cancels that
+    generation, and generates again with the new context. preemptive_tts is
+    always False, so the discarded attempt never reached the speaker. Turns
+    without a visual reference, which in the default "auto" injection mode
+    is most turns, keep the latency benefit.
     """
-    if vision_enabled:
-        return False
     return _env_bool("TANGO_PREEMPTIVE_GENERATION", default=True)
 
 
@@ -1756,9 +1760,7 @@ async def entrypoint(ctx: Any) -> None:
         else persona
     )
     vision_config = VisionContextConfig.from_env(LITELLM_BASE_URL, LITELLM_MASTER_KEY)
-    preemptive_generation_enabled = _preemptive_generation_enabled(
-        vision_enabled=vision_config.enabled
-    )
+    preemptive_generation_enabled = _preemptive_generation_enabled()
     turn_handling = _turn_handling_for_session(
         persona,
         llm_model,

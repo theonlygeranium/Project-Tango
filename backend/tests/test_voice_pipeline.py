@@ -71,14 +71,28 @@ def test_max_tool_steps_override_and_invalid(monkeypatch: pytest.MonkeyPatch) ->
     assert main._max_tool_steps() == main.DEFAULT_MAX_TOOL_STEPS
 
 
-def test_preemptive_generation_disabled_when_vision_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_preemptive_generation_follows_env_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Vision no longer forces it off; see _preemptive_generation_enabled.
     monkeypatch.delenv("TANGO_PREEMPTIVE_GENERATION", raising=False)
-    assert main._preemptive_generation_enabled(vision_enabled=True) is False
-    assert main._preemptive_generation_enabled(vision_enabled=False) is True
+    assert main._preemptive_generation_enabled() is True
     monkeypatch.setenv("TANGO_PREEMPTIVE_GENERATION", "false")
-    assert main._preemptive_generation_enabled(vision_enabled=False) is False
+    assert main._preemptive_generation_enabled() is False
+
+
+def test_context_injection_invalidates_a_preemptive_request() -> None:
+    # LiveKit reuses a preemptive generation only if the chat context after
+    # on_user_turn_completed is_equivalent() to the one it was started with.
+    # Injecting visual context must break that equivalence so the stale
+    # draft is discarded and the reply is generated with the frame summary.
+    from livekit.agents.llm import ChatContext
+
+    before = ChatContext()
+    before.add_message(role="user", content="what's on my screen?")
+    after = before.copy()
+    after.add_message(role="system", content="Visual context from the user's screen: ...")
+
+    assert before.copy().is_equivalent(before)
+    assert not before.is_equivalent(after)
 
 
 def test_preemptive_generation_never_starts_tts() -> None:

@@ -123,6 +123,16 @@ referenced as F1–F13.
   shutdown still waits for pending saves (up to 10 s, inside LiveKit's 15 s
   shutdown budget), so a dropped call keeps its transcript. The agent now
   says the transcript "is being" saved and emailed.
+- Vision no longer turns off preemptive generation, and frame encoding runs
+  off the event loop (F8). Since ADR-012 every turn lost preemptive LLM
+  generation whenever `TANGO_VISION_ENABLED=true` (the `.env.example`
+  default). In the default `auto` mode only turns that mention something
+  visual inject a frame description; for those, LiveKit discards the
+  preemptive draft because the chat context changed and regenerates with
+  the description, and `preemptive_tts=False` means nothing was spoken.
+  All other turns regain the latency benefit. The resize and JPEG encode now
+  run in the same worker thread as the vision request. ADR-012 and
+  `docs/AGENTS.md` are updated.
 
 ---
 

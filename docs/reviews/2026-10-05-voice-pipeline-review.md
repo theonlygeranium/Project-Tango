@@ -145,6 +145,8 @@ Two smaller client issues: `RoomAudioRenderer` is mounted conditionally on `canP
 
 The documented pattern is: do the mutation that must precede the reply (instruction/context changes) inline; move side effects (DB write, email, memory) to `asyncio.create_task` or a shutdown callback; and for vision, inject the latest frame description from a background sampler rather than requesting it synchronously per turn.
 
+*Correction (2026-10-05):* a background sampler is not recommended. In the default `auto` injection mode the vision model is only called on turns that refer to something visual, and those replies need the description, so a sampler would add continuous vision-model calls without shortening those turns. The real costs were the JPEG encode running on the event loop and preemptive generation being disabled for every turn whenever vision was enabled. Both are fixed: the encode runs in the worker thread with the request, and preemptive generation stays on because LiveKit discards a draft whose context changed.
+
 ### F9. Meditation player (Low)
 
 `MeditationPlayer._resample` is nearest-neighbour index selection despite the docstring saying linear interpolation; for a 44.1 kHz source into 48 kHz it aliases audibly. `AudioSource(queue_size_ms=1000)` means pause/stop take up to a second to be heard. The track is published as a second LiveKit audio track with no ducking, so when Nathaniel speaks the two overlap at full volume. `BackgroundAudioPlayer.play()` in the SDK already handles file decoding, resampling, fade in/out and volume on a dedicated track; it is the simpler replacement (`await background_audio.play(path, volume=...)` returns a `PlayHandle` with `stop()`), and its `ambient_sound`/`thinking_sound` mixing is documented.
