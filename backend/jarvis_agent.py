@@ -505,7 +505,7 @@ class Jarvis(Agent):
                 if transcript:
                     new_message.content = [
                         "The transcription has been stopped. "
-                        "The transcript has been saved to the database "
+                        "The transcript is being saved to the database "
                         "and emailed to the user. Acknowledge this briefly."
                     ]
                 else:

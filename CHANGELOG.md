@@ -117,6 +117,12 @@ referenced as F1–F13.
   machine, so this mainly helps when Schubert's CPU is busy. Settings are
   unchanged (`min_silence_duration=0.3`, `prefix_padding_duration=0.3`). If
   a process has no prewarmed model, the session logs a warning and loads one.
+- "Stop transcription" no longer delays the agent's reply. The recorder used
+  to await the Postgres insert and the `sendmail` subprocess inside
+  `on_user_turn_completed`; both now run in a background task (F8). Session
+  shutdown still waits for pending saves (up to 10 s, inside LiveKit's 15 s
+  shutdown budget), so a dropped call keeps its transcript. The agent now
+  says the transcript "is being" saved and emailed.
 
 ---
 
