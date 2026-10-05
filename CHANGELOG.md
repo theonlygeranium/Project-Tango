@@ -49,6 +49,19 @@ referenced as F1–F13.
   session-start prompt is byte-identical to before. The tool now reports a
   failed save instead of claiming success, and a failed reload no longer
   wipes earlier overrides from the live prompt.
+- Frontend auto-reconnect never ran (F12). The connect effect's cleanup set
+  `userInitiatedDisconnect` before the first connect and nothing reset it,
+  so every network drop ended the session; the "Retrying..." toasts on
+  connect or dispatch failure also stopped the session instead of retrying.
+  `frontend/components/app.tsx` now decides from LiveKit's `DisconnectReason`
+  (`frontend/lib/disconnect.ts`): hang-up, the agent-join timeout, account
+  revocation (`PARTICIPANT_REMOVED`) and room closure end the session;
+  network and server failures retry with a fresh token up to 3 times.
+  Connect failures, dispatch failures and unexpected drops share one retry
+  path, the old room is fully left before refetching a token, and a
+  hang-up during a pending connect ends the session. A failed
+  `/api/connection-details` request now ends the session with a toast
+  instead of leaving the UI on "connecting".
 - `backend/tests/test_migrations.py` asserted the latest migration was 004 and
   had failed since 005–007 were added. It now asserts contiguous numbering.
 
