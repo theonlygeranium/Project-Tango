@@ -9,7 +9,10 @@ def test_migration_versions_are_unique_and_ordered() -> None:
     migrations = migrate.discover_migrations()
     versions = [version for version, _, _ in migrations]
     assert versions == sorted(set(versions))
-    assert versions[-1] == 4
+    # Contiguous from 001 so a gap or a skipped number fails loudly, without
+    # hard-coding the latest version (which broke when 005-007 were added).
+    assert versions == list(range(1, len(versions) + 1))
+    assert versions[-1] >= 4  # 004 introduced the account/auth tables below
     assert all(re.fullmatch(r"[0-9a-f]{64}", checksum) for _, _, checksum in migrations)
 
 

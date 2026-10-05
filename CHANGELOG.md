@@ -19,6 +19,14 @@ referenced as F1–F13.
   and TTS-fallback events never reached the journal (F3).
   `backend/tests/test_logging_format.py` now checks every logger call in
   `backend/*.py` for a placeholder/argument mismatch.
+- `backend/tests/test_migrations.py` asserted the latest migration was 004 and
+  had failed since 005–007 were added. It now asserts contiguous numbering.
+
+### Added
+- CI: `backend-tests` job in `.github/workflows/test-gate.yml` installs
+  `backend/requirements.txt` on Python 3.12 and runs `backend/tests` on every
+  PR to `main`. Previously only the Nexus tests ran, so the voice-pipeline
+  guards never gated a merge.
 
 ---
 
