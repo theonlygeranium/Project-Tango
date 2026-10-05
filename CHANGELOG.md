@@ -7,6 +7,21 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ---
 
+## [Unreleased] Voice pipeline review
+
+### Added
+- `docs/reviews/2026-10-05-voice-pipeline-review.md` — full audit of the Tango
+  voice pipeline against current LiveKit Agents, ElevenLabs, and Deepgram
+  documentation (Context7) and the installed SDK. Thirteen findings with
+  prioritised recommendations. Headline items: Flux end-of-turn is ignored
+  because the session uses `inference.TurnDetector()` (ADR-002/ADR-011 not in
+  effect); five function tools make synchronous HTTP calls on the job event
+  loop; the custom TTS fallback never engages on the streaming path; 13 log
+  calls use `pcts`/`pctd` and emit nothing; `livekit-agents~=1.5` is unpinned.
+  No code changes in this commit.
+
+---
+
 ## [Unreleased] Fleet Command — Palmyra x6 defaults
 
 ### Changed
