@@ -70,10 +70,10 @@ def _load_tools() -> tuple[Any, ...]:
             module = importlib.import_module(module_name)
             module_tools = getattr(module, variable_name)
         except ModuleNotFoundError as exc:
-            logger.info("Skipping optional legacy tool module pcts: pcts", module_name, exc)
+            logger.info("Skipping optional legacy tool module %s: %s", module_name, exc)
             continue
         except Exception as exc:
-            logger.warning("Skipping optional tool module pcts: pcts", module_name, exc)
+            logger.warning("Skipping optional tool module %s: %s", module_name, exc)
             continue
 
         if isinstance(module_tools, Iterable):
@@ -171,7 +171,7 @@ class Jarvis(Agent):
                 agent=self, persona_id=persona.id, pool=db_pool
             )
             logger.info(
-                "Control Mode enabled persona=pcts tools=pctd",
+                "Control Mode enabled persona=%s tools=%d",
                 persona.id,
                 len(control_mode_tools),
             )
@@ -183,7 +183,7 @@ class Jarvis(Agent):
                 agent=self, persona_id=persona.id, pool=db_pool
             )
             logger.info(
-                "Programs enabled persona=pcts tools=pctd",
+                "Programs enabled persona=%s tools=%d",
                 persona.id,
                 len(program_tools),
             )
@@ -248,13 +248,13 @@ class Jarvis(Agent):
                 await self.update_instructions(new_instructions)
                 self._active_program = program["name"]
                 logger.info(
-                    "Program pre-activated persona=pcts program=pcts",
+                    "Program pre-activated persona=%s program=%s",
                     self.persona.id,
                     program["name"],
                 )
             else:
                 logger.warning(
-                    "Program not found for pre-activation persona=pcts program=pcts",
+                    "Program not found for pre-activation persona=%s program=%s",
                     self.persona.id,
                     self._initial_program,
                 )
@@ -324,7 +324,7 @@ class Jarvis(Agent):
                     "Acknowledge this briefly and ask what they would like to change "
                     "about the persona's behavior, tone, or instructions."
                 ]
-                logger.info("Control Mode activated persona=pcts", self.persona.id)
+                logger.info("Control Mode activated persona=%s", self.persona.id)
                 return
 
             if action == "exit" and self._control_mode_active:
@@ -336,7 +336,7 @@ class Jarvis(Agent):
                     "The user has exited Control Mode. "
                     "Acknowledge this briefly and resume normal conversation."
                 ]
-                logger.info("Control Mode deactivated persona=pcts", self.persona.id)
+                logger.info("Control Mode deactivated persona=%s", self.persona.id)
                 return
 
         # --- Program activation/deactivation detection ---
@@ -359,7 +359,7 @@ class Jarvis(Agent):
                         f"{self.persona.display_name}."
                     ]
                     logger.info(
-                        "Program deactivated persona=pcts program=pcts",
+                        "Program deactivated persona=%s program=%s",
                         self.persona.id,
                         deactivated_name,
                     )
@@ -388,7 +388,7 @@ class Jarvis(Agent):
                             f"just confirm the switch naturally."
                         ]
                         logger.info(
-                            "Program activated persona=pcts program=pcts",
+                            "Program activated persona=%s program=%s",
                             self.persona.id,
                             program["name"],
                         )
@@ -402,7 +402,7 @@ class Jarvis(Agent):
                             f"by entering Control Mode."
                         ]
                         logger.info(
-                            "Program not found persona=pcts requested=pcts",
+                            "Program not found persona=%s requested=%s",
                             self.persona.id,
                             program_name,
                         )

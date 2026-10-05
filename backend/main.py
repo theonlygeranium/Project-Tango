@@ -645,12 +645,12 @@ def _build_fallback_tts(primary: Any, fallback: Any, persona: Persona) -> Any:
                 return
             except APIError as exc:
                 logger.warning(
-                    "Primary TTS failed persona=pctpcts primary=pctpcts error=pctpcts; falling back to pctpcts",
+                    "Primary TTS failed persona=%s primary=%s error=%s; falling back to %s",
                     self._fb_tts._persona_id, primary_provider, exc, fallback_provider,
                 )
             except Exception as exc:
                 logger.warning(
-                    "Primary TTS failed persona=pctpcts primary=pctpcts error=pctpcts; falling back to pctpcts",
+                    "Primary TTS failed persona=%s primary=%s error=%s; falling back to %s",
                     self._fb_tts._persona_id, primary_provider, exc, fallback_provider,
                 )
             with suppress(Exception):

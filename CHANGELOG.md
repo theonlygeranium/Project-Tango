@@ -7,6 +7,21 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ---
 
+## [Unreleased] Voice pipeline fixes (review follow-up)
+
+See `docs/reviews/2026-10-05-voice-pipeline-review.md` for the findings
+referenced as F1–F13.
+
+### Fixed
+- 13 logger calls in `backend/jarvis_agent.py` and `backend/main.py` used
+  `pcts`/`pctd` instead of `%s`/`%d`. Python logging dropped every one of
+  them and wrote a traceback to stderr, so Control Mode, program, legacy-tool
+  and TTS-fallback events never reached the journal (F3).
+  `backend/tests/test_logging_format.py` now checks every logger call in
+  `backend/*.py` for a placeholder/argument mismatch.
+
+---
+
 ## [Unreleased] Voice pipeline review
 
 ### Added
