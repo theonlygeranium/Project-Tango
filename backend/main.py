@@ -578,6 +578,11 @@ def _build_elevenlabs_tts(persona: Persona, elevenlabs: Any) -> Any:
                 persona.id,
             )
 
+    tts_kwargs: dict[str, Any] = {}
+    tts_language = _elevenlabs_language(persona)
+    if tts_language:
+        tts_kwargs["language"] = tts_language
+
     return elevenlabs.TTS(
         model="eleven_flash_v2_5",
         voice_id=persona.voice_id,
@@ -585,7 +590,22 @@ def _build_elevenlabs_tts(persona: Persona, elevenlabs: Any) -> Any:
         base_url=ELEVENLABS_BASE_URL,
         voice_settings=voice_settings,
         auto_mode=True,
+        **tts_kwargs,
     )
+
+
+def _elevenlabs_language(persona: Persona) -> str | None:
+    """ElevenLabs language_code for this persona, or None for auto-detect.
+
+    Flash v2.5 supports Filipino; without a hint it guesses the language per
+    chunk, which gives Taglish an English accent and English number reading.
+    ElevenLabs ignores unsupported codes rather than rejecting the request,
+    so a wrong hint cannot silence the voice. Disable all hints with
+    TANGO_ELEVENLABS_LANGUAGE_HINTS=false.
+    """
+    if not _env_bool("TANGO_ELEVENLABS_LANGUAGE_HINTS", default=True):
+        return None
+    return persona.tts_language or None
 
 
 

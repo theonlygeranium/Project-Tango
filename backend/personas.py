@@ -104,6 +104,9 @@ class Persona:
     voice_settings: dict[str, float | bool]
     system_prompt: str
     tts_backend: str = "elevenlabs"
+    # ElevenLabs language_code hint (e.g. "fil"). Enforces the language for
+    # pronunciation and text normalisation on Flash v2.5. None = auto-detect.
+    tts_language: str | None = None
     # Optional custom opening line spoken on session start.
     greeting: str | None = None
     # Flux end-of-turn detection tuning.
@@ -350,6 +353,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="LF1xMOq6fDVEBEkLP0HO",
         llm_model="groq/llama4-scout",
         stt_language="tl",
+        tts_language="fil",
         eot_threshold=0.7,
         eot_timeout_ms=3000,
         keyterms=(
@@ -423,6 +427,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="smYFzUb4yrSqprnml7n5",
         llm_model="groq/llama4-scout",
         stt_language="tl",
+        tts_language="fil",
         eot_threshold=0.7,
         eot_timeout_ms=2500,
         keyterms=(

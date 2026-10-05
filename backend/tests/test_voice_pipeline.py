@@ -233,3 +233,43 @@ def test_flux_eager_threshold_never_exceeds_eot_threshold(persona_id: str) -> No
 def test_elevenlabs_style_is_zero_for_latency(persona_id: str) -> None:
     # ElevenLabs: non-zero style "might increase latency"; recommended 0.
     assert main.get_persona(persona_id).voice_settings.get("style", 0.0) == 0.0
+
+
+def _built_elevenlabs(persona_id: str):
+    from livekit.plugins import elevenlabs
+
+    return main._build_elevenlabs_tts(main.get_persona(persona_id), elevenlabs)
+
+
+@pytest.mark.parametrize("persona_id", ["mama-lulu", "pinoy-pride"])
+def test_tagalog_personas_send_filipino_language_code(
+    monkeypatch: pytest.MonkeyPatch, persona_id: str
+) -> None:
+    from livekit.plugins.elevenlabs import tts as el_tts
+
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key")
+    monkeypatch.delenv("TANGO_ELEVENLABS_LANGUAGE_HINTS", raising=False)
+
+    engine = _built_elevenlabs(persona_id)
+
+    # The streaming WebSocket URL is what production uses for synthesis.
+    assert "language_code=fil" in el_tts._multi_stream_url(engine._opts)
+
+
+def test_english_personas_send_no_language_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    from livekit.plugins.elevenlabs import tts as el_tts
+
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key")
+    engine = _built_elevenlabs("general-info")
+
+    assert "language_code" not in el_tts._multi_stream_url(engine._opts)
+
+
+def test_language_hints_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    from livekit.plugins.elevenlabs import tts as el_tts
+
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key")
+    monkeypatch.setenv("TANGO_ELEVENLABS_LANGUAGE_HINTS", "false")
+    engine = _built_elevenlabs("pinoy-pride")
+
+    assert "language_code" not in el_tts._multi_stream_url(engine._opts)

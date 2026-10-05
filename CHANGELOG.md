@@ -81,6 +81,11 @@ referenced as F1–F13.
   ElevenLabs documents that any non-zero `style` adds computation and may
   increase latency, and recommends 0 for real-time agents. Voices may sound
   slightly less exaggerated; stability and similarity are unchanged.
+- Mama Lulu and Tita Baby now send ElevenLabs `language_code=fil` (new
+  `Persona.tts_language` field). Without it Flash v2.5 guessed the language
+  per chunk, which tends to give Taglish an English accent. ElevenLabs
+  ignores unsupported codes rather than failing the request. Disable with
+  `TANGO_ELEVENLABS_LANGUAGE_HINTS=false`. English personas are unchanged.
 
 ---
 
