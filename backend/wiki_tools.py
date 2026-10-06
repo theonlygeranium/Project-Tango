@@ -37,12 +37,12 @@ def _get_outline_config() -> tuple[str, str]:
     return base_url, api_key
 
 
-def _outline_request(base_url: str, api_key: str, method: str, body: dict) -> dict | None:
+async def _outline_request(base_url: str, api_key: str, method: str, body: dict) -> dict | None:
     """Make a POST request to the Outline RPC API and return the JSON response."""
     url = f"{base_url}/api/{method}"
     try:
-        with httpx.Client(timeout=15.0) as client:
-            response = client.post(
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
                 url,
                 headers={
                     "Authorization": f"Bearer {api_key}",
@@ -86,7 +86,7 @@ async def search_wiki(
     if not api_key:
         return "EL Wiki search is not configured. Set OUTLINE_API_KEY in the environment to enable it."
 
-    result = _outline_request(
+    result = await _outline_request(
         base_url, api_key, "documents.search", {"query": query, "limit": 5}
     )
     if result is None:
@@ -131,7 +131,7 @@ async def get_wiki_document(
     if not api_key:
         return "EL Wiki is not configured. Set OUTLINE_API_KEY in the environment to enable it."
 
-    result = _outline_request(
+    result = await _outline_request(
         base_url, api_key, "documents.info", {"id": document_id}
     )
     if result is None:

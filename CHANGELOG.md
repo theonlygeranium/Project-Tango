@@ -7,6 +7,217 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.co
 
 ---
 
+## [Unreleased] Voice pipeline fixes (review follow-up)
+
+See `docs/reviews/2026-10-05-voice-pipeline-review.md` for the findings
+referenced as F1–F13.
+
+### Fixed
+- 13 logger calls in `backend/jarvis_agent.py` and `backend/main.py` used
+  `pcts`/`pctd` instead of `%s`/`%d`. Python logging dropped every one of
+  them and wrote a traceback to stderr, so Control Mode, program, legacy-tool
+  and TTS-fallback events never reached the journal (F3).
+  `backend/tests/test_logging_format.py` now checks every logger call in
+  `backend/*.py` for a placeholder/argument mismatch.
+- `web_search`, `search_wiki`, `get_wiki_document`, `search_docs` and
+  `read_doc` made synchronous `httpx.Client` calls (15–30 s timeouts) inside
+  async function tools. Each call froze the LiveKit job's event loop, which
+  also reads microphone audio, runs VAD, and pushes TTS frames, so a slow
+  lookup caused audio stalls and "inference is slower than realtime" (F11).
+  All four helpers now use `httpx.AsyncClient`; timeouts, the X6→X5 fallback,
+  and tool return values are unchanged.
+  `backend/tests/test_tool_http_async.py` drives each tool against a slow mock
+  server and asserts the event loop keeps running.
+- The Deepgram Aura TTS fallback never engaged for ElevenLabs personas: the
+  custom `FallbackTTS` wrapper forwarded `stream()` (the path `AgentSession`
+  uses) straight to the primary, and its non-streaming path also produced no
+  audio after a primary failure (F2). It is replaced by LiveKit's
+  `tts.FallbackAdapter([primary, aura])`, which fails over on both paths,
+  resamples between engines, and probes the primary until it recovers.
+  Failover and recovery are logged ("TTS engine unavailable; failing
+  over ..."). `backend/tests/test_tts_fallback.py` covers streaming and
+  non-streaming primary failures; both fail on the old wrapper.
+- Control Mode destroyed the live prompt. `update_persona_behavior` rebuilt
+  instructions from `_base_instructions`, which only programs set, so the
+  first change replaced the entire prompt (Control Mode instructions, persona,
+  Tango preamble) with just the override line, and "Exit Control Mode"
+  restored the old prompt without the change (F13). `Jarvis` now has
+  `apply_persona_overrides`, which recomposes the persona prompt once from
+  scratch and applies it live, on Control Mode exit, or on program
+  deactivation as appropriate. Per-session prompt text (memory context, SIP
+  addendum) is passed to `Jarvis` as `prompt_extras` so it survives; the
+  session-start prompt is byte-identical to before. The tool now reports a
+  failed save instead of claiming success, and a failed reload no longer
+  wipes earlier overrides from the live prompt.
+- Frontend auto-reconnect never ran (F12). The connect effect's cleanup set
+  `userInitiatedDisconnect` before the first connect and nothing reset it,
+  so every network drop ended the session; the "Retrying..." toasts on
+  connect or dispatch failure also stopped the session instead of retrying.
+  `frontend/components/app.tsx` now decides from LiveKit's `DisconnectReason`
+  (`frontend/lib/disconnect.ts`): hang-up, the agent-join timeout, account
+  revocation (`PARTICIPANT_REMOVED`) and room closure end the session;
+  network and server failures retry with a fresh token up to 3 times.
+  Connect failures, dispatch failures and unexpected drops share one retry
+  path, the old room is fully left before refetching a token, and a
+  hang-up during a pending connect ends the session. A failed
+  `/api/connection-details` request now ends the session with a toast
+  instead of leaving the UI on "connecting".
+- `backend/tests/test_migrations.py` asserted the latest migration was 004 and
+  had failed since 005–007 were added. It now asserts contiguous numbering.
+
+### Added
+- CI: `backend-tests` job in `.github/workflows/test-gate.yml` installs
+  `backend/requirements.txt` on Python 3.12 and runs `backend/tests` on every
+  PR to `main`. Previously only the Nexus tests ran, so the voice-pipeline
+  guards never gated a merge.
+
+### Changed
+- LiveKit packages are pinned exactly in `backend/requirements.txt` and
+  `backend/pyproject.toml`: `livekit-agents==1.8.4` (and its four plugins),
+  `livekit-api==1.2.1`, `livekit==1.1.20`. The old `~=1.5` range allowed any
+  1.x release from 1.5 up, and turn handling, RoomIO and preemptive-TTS
+  defaults changed across it (F4). The worker now logs installed LiveKit
+  versions on startup, and a test fails if the installed `livekit-agents`
+  differs from the pin.
+  **Deploy note:** `scripts/deploy.sh` runs `pip install -r requirements.txt`,
+  so the next deploy moves Schubert to exactly these versions. The version
+  previously installed on Schubert was never recorded; check the first
+  `Starting LiveKit worker ... versions=` line after deploy.
+- Every user and agent turn now logs a `Turn metrics` line with the
+  LiveKit per-turn timings in milliseconds (`transcription_delay`,
+  `end_of_turn_delay`, `on_user_turn_completed_delay`, `llm_node_ttft`,
+  `tts_node_ttfb`, `e2e_latency`, `playback_latency`), including interrupted
+  turns, which were previously skipped. Session `error` events (STT, LLM, TTS)
+  are logged with source and `recoverable`. History recording is unchanged.
+- **Turn detection (behaviour change).** English personas now use
+  `turn_detection="stt"`, so Deepgram Flux's EndOfTurn ends the user turn and
+  the per-persona `eot_threshold`, `eot_timeout_ms` and `eager_eot_threshold`
+  take effect. Since 2026-08-16 the session used LiveKit's audio
+  `TurnDetector`, which made LiveKit ignore Flux end-of-turn events, so those
+  settings (ADR-002, ADR-024 formerly ADR-011) had no effect (F1). Damian and Nathaniel now
+  wait for their longer pause windows; eager EOT drives preemptive LLM
+  generation for Chris, Jeremiah, Jeremiah V2 and Jacob. Tagalog personas use
+  `turn_detection="vad"` explicitly (unchanged behaviour). Rollback:
+  `TANGO_TURN_DETECTION=audio`. See ADR-023. The informational warning
+  "stt end of speech received while vad is still in a speech segment" is
+  expected again in this mode.
+- ElevenLabs `style` is now `0.0` for every persona. Chris, Jeremiah and Jacob
+  were at 0.15, Jeremiah V2 at 0.20, Mama Lulu and Tita Baby at 0.25.
+  ElevenLabs documents that any non-zero `style` adds computation and may
+  increase latency, and recommends 0 for real-time agents. Voices may sound
+  slightly less exaggerated; stability and similarity are unchanged.
+- Mama Lulu and Tita Baby now send ElevenLabs `language_code=fil` (new
+  `Persona.tts_language` field). Without it Flash v2.5 guessed the language
+  per chunk, which tends to give Taglish an English accent. ElevenLabs
+  ignores unsupported codes rather than failing the request. Disable with
+  `TANGO_ELEVENLABS_LANGUAGE_HINTS=false`. English personas are unchanged.
+- Silero VAD is loaded once per worker process in a `prewarm` function
+  (`WorkerOptions(prewarm_fnc=...)`), the pattern LiveKit documents, instead
+  of on every session start (F5). Load takes roughly 40–80 ms on a quiet
+  machine, so this mainly helps when Schubert's CPU is busy. Settings are
+  unchanged (`min_silence_duration=0.3`, `prefix_padding_duration=0.3`). If
+  a process has no prewarmed model, the session logs a warning and loads one.
+- "Stop transcription" no longer delays the agent's reply. The recorder used
+  to await the Postgres insert and the `sendmail` subprocess inside
+  `on_user_turn_completed`; both now run in a background task (F8). Session
+  shutdown still waits for pending saves (up to 10 s, inside LiveKit's 15 s
+  shutdown budget), so a dropped call keeps its transcript. The agent now
+  says the transcript "is being" saved and emailed.
+- Vision no longer turns off preemptive generation, and frame encoding runs
+  off the event loop (F8). Since ADR-028 (formerly ADR-012) every turn lost preemptive LLM
+  generation whenever `TANGO_VISION_ENABLED=true` (the `.env.example`
+  default). In the default `auto` mode only turns that mention something
+  visual inject a frame description; for those, LiveKit discards the
+  preemptive draft because the chat context changed and regenerates with
+  the description, and `preemptive_tts=False` means nothing was spoken.
+  All other turns regain the latency benefit. The resize and JPEG encode now
+  run in the same worker thread as the vision request. ADR-028 and
+  `docs/AGENTS.md` are updated.
+- The meditation track now plays through the session's
+  `BackgroundAudioPlayer` instead of a separately published track (F9). It
+  is decoded and resampled by LiveKit's decoder (the old player picked the
+  nearest sample, which aliased on 44.1 kHz files), ducks to 30% while the
+  agent speaks and ramps back over about 250 ms
+  (`TANGO_MEDITATION_DUCK_GAIN`), and pause takes effect within about half a
+  second instead of up to a second. Pause emits silence so LiveKit's mixer
+  (100 ms per-stream timeout) does not drop the stream. One
+  `BackgroundAudioPlayer` is now started for every session; the thinking
+  sound is still controlled by `TANGO_THINKING_SOUND`.
+- The keyboard-typing thinking sound is off for Damian (therapy) and
+  Nathaniel (meditation) via a new `Persona.thinking_sound` flag (F9). Their
+  personas are designed around calm, unhurried presence; other personas are
+  unchanged. `TANGO_THINKING_SOUND=false` still turns it off everywhere.
+- Tagalog personas (Mama Lulu, Tita Baby) now use the endpointing their
+  docs already specified but the code never applied (F7): Nova-3
+  `endpointing_ms=300` (ADR-003; the plugin default is 25 ms, which splits
+  Taglish phrases) and LiveKit `min_delay=0.7` (the 2026-06-25 review in
+  `docs/PLAN.md`, for late finals). Their keyterms are now sent to Deepgram.
+  Deepgram does not list `tl` for keyterm prompting, so the keyterm instance
+  sits in LiveKit's `stt.FallbackAdapter` ahead of a plain Nova-3 `tl`
+  instance; a rejected request falls back instead of losing STT. Disable
+  with `TANGO_TAGALOG_KEYTERMS=false`. New `Persona.min_endpointing_delay`
+  and `Persona.stt_endpointing_ms` fields; English personas are unchanged.
+
+### Documentation
+- Five Tango ADRs reused numbers already taken by Discord-fleet ADRs, so
+  "ADR-012" meant three decisions. They are renumbered 024–028 with a
+  "formerly ADR-0xx" line in each file (F10): flux-eager-eot 011→024,
+  voice-mcp-access 012→025, control-mode 013→026, voice-programs 014→027,
+  disable-sync-transcription 012→028. References in REVERT.md,
+  architecture.md, related ADRs and this release's entries are updated; older entries keep their original numbers. New
+  `docs/decisions/README.md` indexes every ADR and names the next free
+  number (029). Fleet-only collisions (015, 016, 020) are left as they are.
+- Tango docs now match the code (F10):
+  - README: hosting split (Schubert plus LiveKit Cloud), the SDK pin, Flux
+    turn detection and the TTS fallback; links to the review and ADR index.
+  - architecture.md: pipeline diagram and persona table rebuilt from the code
+    (Chris on `writer/palmyra-x6`, Jeremiah on ElevenLabs, turn-ending
+    settings, thinking sound); decisions table adds ADR-023 and the
+    FallbackAdapter decision.
+  - setup.md: `.env` lives at the repository root; `tango-tts` stays
+    disabled, matching `deploy.sh`; deploys run on every push to `main` and
+    drop live calls; local development needs `python main.py dev` for the
+    worker; new post-deploy log checks.
+  - docs/AGENTS.md: provider rules for Flux/Nova-3 turn detection, the TTS
+    fallback, `style=0`, non-blocking tools and the SDK pin; persona and
+    alias tables corrected.
+  - backend/.env.example: documents 13 runtime variables the code already
+    reads (session TTL, away timeout, PVC-as-IVC, vision frame age,
+    transcription, meditation track, Serper key, DB pool, log levels).
+  - `docs/proposals/2026-10-05-agents-md-updates.md` lists proposed edits to
+    the owner-only root AGENTS.md; none are applied.
+- Frontend persona metadata: Chris's local fallback model is now
+  `writer/palmyra-x6` and Jeremiah's TTS backend `elevenlabs`. The main page
+  now takes `tts_backend` from the backend catalog instead of letting the
+  stale local `f5-tts` value win.
+- `backend/tests/test_meditation_player.py`: the fake mixer now plays at a
+  fixed 10x real time. Unpaced, it let a fast CI runner finish the test
+  track before `stop()` was called (test-only; the real mixer is paced by
+  its audio source).
+
+---
+
+## [Unreleased] Voice pipeline review
+
+### Added
+- `docs/reviews/2026-10-05-voice-pipeline-review.md` — full audit of the Tango
+  voice pipeline against current LiveKit Agents, ElevenLabs, and Deepgram
+  documentation (Context7) and the installed SDK. Thirteen findings with
+  prioritised recommendations. Headline items: Flux end-of-turn is ignored
+  because the session uses `inference.TurnDetector()` (ADR-002/ADR-024 not in
+  effect); five function tools make synchronous HTTP calls on the job event
+  loop; the custom TTS fallback never engages on the streaming path; 13 log
+  calls use `pcts`/`pctd` and emit nothing; `livekit-agents~=1.5` is unpinned.
+  No code changes in this commit.
+- Review corrections after automated review: the SDK-level findings are scoped
+  to `livekit-agents` 1.8.4 (now the pinned version); the dispatch-in-token
+  proposal and AGENTS.md edits are marked as needing owner authorization
+  (AGENTS.md §3.5 and §4); the logging-guard recommendation describes the
+  static check that was shipped instead of an ineffective runtime test.
+- Review status line updated to list every finding fixed in this PR.
+
+---
+
 ## [Unreleased] Fleet Command — Palmyra x6 defaults
 
 ### Changed

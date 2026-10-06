@@ -1,5 +1,7 @@
 # ADR: Voice Agent MCP Knowledge Access
 
+**Number:** ADR-025 (formerly ADR-012; renumbered 2026-10-05 because ADR-012 was already `2026-08-18-012-slack-mcp-server.md`. See `docs/decisions/README.md`.)
+
 **Date:** 2026-08-20
 **Status:** Accepted
 **Decided by:** Writer Agent (WRITER Agent platform)

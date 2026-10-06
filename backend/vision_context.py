@@ -17,6 +17,10 @@ logger = logging.getLogger("project-tango.vision")
 
 DEFAULT_VISION_MODEL = "openai/gpt-4o-mini"
 DEFAULT_VISION_OCR_MODEL = "openai/gpt-4o"
+class _FrameEncodeError(Exception):
+    """Raised when a video frame cannot be encoded for the vision model."""
+
+
 VISUAL_REFERENCE_TERMS = (
     "app",
     "camera",
@@ -287,20 +291,16 @@ class LiveVideoContext:
             return None
 
         mode = "ocr" if self._should_use_ocr(user_text) else "scene"
-        try:
-            data_url = self._encode_frame(frame, mode)
-        except Exception:
-            logger.exception("Could not encode LiveKit video frame for vision context.")
-            return None
-
+        source = self._latest_frame_source
+        # Encode in the worker thread too: resizing and JPEG-encoding a frame
+        # up to OCR resolution on the event loop stalls audio for tens of ms.
         try:
             summary = await asyncio.to_thread(
-                self._request_summary,
-                data_url,
-                self._latest_frame_source,
-                user_text,
-                mode,
+                self._encode_and_request, frame, source, user_text, mode
             )
+        except _FrameEncodeError:
+            logger.exception("Could not encode LiveKit video frame for vision context.")
+            return None
         except Exception:
             logger.exception("Vision model request failed.")
             return None
@@ -553,6 +553,16 @@ class LiveVideoContext:
         if mode == "ocr":
             return self.config.ocr_frame_width, self.config.ocr_frame_height
         return self.config.frame_width, self.config.frame_height
+
+    def _encode_and_request(
+        self, frame: Any, source: str, user_text: str, mode: str
+    ) -> str | None:
+        """Encode *frame* and ask the vision model about it. Runs in a thread."""
+        try:
+            data_url = self._encode_frame(frame, mode)
+        except Exception as exc:
+            raise _FrameEncodeError from exc
+        return self._request_summary(data_url, source, user_text, mode)
 
     def _encode_frame(self, frame: Any, mode: str) -> str:
         from livekit.agents.utils.images import EncodeOptions, ResizeOptions, encode

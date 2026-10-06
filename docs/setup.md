@@ -45,7 +45,8 @@ cd Project-Tango
 cp backend/.env.example .env
 ```
 
-Edit `backend/.env` and set:
+Edit the repository-root `.env` (`/opt/Project-Tango/.env` on Schubert). Both
+`tango-backend.service` and `tango-web.service` load it through `EnvironmentFile`. Set:
 
 ```bash
 # LiveKit (cloud)
@@ -63,7 +64,8 @@ ELEVENLABS_API_KEY=<your key>
 LITELLM_MASTER_KEY=<key from /opt/watson-ai/.credentials>
 LITELLM_BASE_URL=http://localhost:4000
 
-# F5-TTS Jeremiah pilot
+# F5-TTS sidecar (optional; no persona uses it by default since Jeremiah moved
+# to ElevenLabs — only needed if a persona sets tts_backend="f5-tts")
 TANGO_F5_TTS_ENABLED=true
 TANGO_F5_TTS_BASE_URL=http://127.0.0.1:8020
 TANGO_F5_TTS_SAMPLE_RATE=24000
@@ -211,9 +213,13 @@ sudo cp deploy/tango-backend.service /etc/systemd/system/
 sudo cp deploy/tango-tts.service /etc/systemd/system/
 sudo cp deploy/tango-web.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable tango-tts tango-backend tango-web
-sudo systemctl start tango-tts tango-backend tango-web
+sudo systemctl enable tango-backend tango-web
+sudo systemctl start tango-backend tango-web
 ```
+
+`tango-tts` is installed but left disabled and stopped, matching `scripts/deploy.sh`. The
+backend starts it on demand the first time a persona with `tts_backend="f5-tts"` speaks
+(none do by default). Set `TANGO_F5_TTS_START_ON_DEPLOY=true` to start it during deploys.
 
 ---
 
@@ -221,9 +227,16 @@ sudo systemctl start tango-tts tango-backend tango-web
 
 ```bash
 # Services active
-systemctl is-active tango-tts tango-backend tango-web
+systemctl is-active tango-backend tango-web
 
-# F5-TTS health
+# Pinned LiveKit SDK actually installed (expect livekit-agents==1.8.4)
+sudo journalctl -u tango-backend -n 200 --no-pager | grep "Starting LiveKit worker"
+
+# Per-session pipeline after one call: stt=, turn_detection= (stt for English,
+# vad for Tagalog) and per-turn timings
+sudo journalctl -u tango-backend -n 200 --no-pager | grep -E "Starting Tango agent|Turn metrics"
+
+# F5-TTS health (only if a persona uses F5-TTS)
 curl -s http://127.0.0.1:8020/healthz
 # Expected: {"status":"ok", ...}
 
@@ -239,7 +252,7 @@ curl -sI https://project-tango.schubert.life | head -3
 sudo journalctl -u tango-backend -n 30 --no-pager | grep "llm_base_url"
 # Expected: llm_base_url=http://localhost:4000
 
-# Confirm Jeremiah F5 routing after a Jeremiah session
+# Only if a persona uses F5-TTS: confirm routing after one of its sessions
 sudo journalctl -u tango-backend -n 80 --no-pager | grep -i "Using F5-TTS"
 sudo journalctl -u tango-tts -n 80 --no-pager | grep "Synthesized"
 ```
@@ -248,7 +261,10 @@ sudo journalctl -u tango-tts -n 80 --no-pager | grep "Synthesized"
 
 ## Updating an Existing Deployment
 
-**Via CI/CD (recommended):** Trigger the `Deploy to Schubert` workflow in GitHub Actions.
+**Via CI/CD (recommended):** The `Deploy to Schubert` workflow runs automatically on every
+push to `main` (including PR merges) and can also be started manually with `workflow_dispatch`.
+It restarts `tango-backend` without draining the LiveKit worker, so a merge ends any live
+voice calls.
 
 **Manual update on Schubert:**
 
@@ -318,8 +334,13 @@ cd backend
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example ../.env  # Fill in dev values; set secure cookies false for HTTP
-uvicorn main:app --host 127.0.0.1 --port 8030 --reload
+uvicorn main:app --host 127.0.0.1 --port 8030 --reload   # API
+python main.py dev                                         # LiveKit worker, second terminal
+python -m pytest tests -q                                  # backend tests (also run in CI)
 ```
+
+The API and the LiveKit worker are separate processes; production runs both through
+`backend/run_production.py`. Without the worker, sessions connect but no agent joins.
 
 **Frontend:**
 

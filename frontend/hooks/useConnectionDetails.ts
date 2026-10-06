@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ConnectionDetails } from '@/app/api/connection-details/route';
 import type { LlmModelId } from '@/lib/llm-models';
 import { DEFAULT_PERSONA_ID, type PersonaId } from '@/lib/personas';
@@ -7,7 +7,8 @@ export default function useConnectionDetails(
   personaId: PersonaId = DEFAULT_PERSONA_ID,
   enabled = true,
   llmModel?: LlmModelId,
-  programName?: string
+  programName?: string,
+  onError?: (error: Error) => void
 ) {
   // Generate room connection details, including:
   //   - A random Room name
@@ -19,6 +20,11 @@ export default function useConnectionDetails(
   // own participant name, and possibly to choose from existing rooms to join.
 
   const [connectionDetails, setConnectionDetails] = useState<ConnectionDetails | null>(null);
+  // Held in a ref so a new callback identity never re-triggers the fetch.
+  const onErrorRef = useRef(onError);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   const fetchConnectionDetails = useCallback(() => {
     setConnectionDetails(null);
@@ -47,6 +53,7 @@ export default function useConnectionDetails(
       })
       .catch((error) => {
         console.error('Error fetching connection details:', error);
+        onErrorRef.current?.(error instanceof Error ? error : new Error(String(error)));
       });
   }, [llmModel, personaId, programName]);
 

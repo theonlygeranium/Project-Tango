@@ -24,7 +24,13 @@ export default async function Page() {
         displayName: entry.display_name,
         roleDescription: entry.role_description,
         defaultLlmModel: isLlmModelId(defaultModel) ? defaultModel : local.defaultLlmModel,
-        ttsBackend: entry.tts_backend === 'f5-tts' ? 'f5-tts' : local.ttsBackend,
+        // The backend catalog is the source of truth; the local value is only a
+        // fallback for an older backend that omits tts_backend.
+        ttsBackend: entry.tts_backend
+          ? entry.tts_backend === 'f5-tts'
+            ? 'f5-tts'
+            : 'elevenlabs'
+          : local.ttsBackend,
       },
     ];
   });

@@ -9,7 +9,6 @@ persona.  Saying "Exit Control Mode" restores the normal persona prompt.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 from typing import Any
@@ -271,25 +270,30 @@ def build_control_mode_tools(agent: Any, persona_id: str, pool: asyncpg.Pool) ->
 
         # Persist to database for future sessions.
         override_id = await save_persona_override(pool, persona_id, change_type, content)
+        if override_id is None:
+            return "The change could not be saved, so nothing was changed. Please try again."
 
-        # Apply to the current session immediately.
-        # Rebuild the full instructions with all overrides (including the new one).
+        # Apply to the current session. The agent rebuilds its persona prompt
+        # from scratch with every active override, so nothing is applied twice.
         overrides = await load_persona_overrides(pool, persona_id)
-
-        # Get the base instructions (stored when entering Control Mode).
-        base = getattr(agent, "_base_instructions", None) or ""
-
-        # For instruction_replacement, the base is replaced entirely.
-        # For other types, we append to the base.
-        new_prompt = apply_overrides_to_prompt(base, overrides)
+        if override_id not in {ov["id"] for ov in overrides}:
+            # load_persona_overrides returns [] on a DB error; applying that
+            # would silently drop earlier overrides from the live prompt.
+            logger.warning(
+                "Override saved but not reloaded; live session unchanged persona_id=%s override_id=%s",
+                persona_id,
+                override_id,
+            )
+            return "The change was saved for future sessions, but could not be applied to the current session."
 
         try:
-            await agent.update_instructions(new_prompt)
+            applied = await agent.apply_persona_overrides(overrides)
             logger.info(
-                "Applied persona override to live session persona_id=%s type=%s override_id=%s",
+                "Applied persona override persona_id=%s type=%s override_id=%s applied=%s",
                 persona_id,
                 change_type,
                 override_id,
+                applied,
             )
         except Exception:
             logger.exception(
@@ -306,6 +310,11 @@ def build_control_mode_tools(agent: Any, persona_id: str, pool: asyncpg.Pool) ->
             "behavior_rule": "Behavior rule added",
         }
         label = type_labels.get(change_type, change_type)
-        return f"{label} applied successfully. The change is now active and will persist for all future sessions with this persona."
+        when = {
+            "live": "It is active now",
+            "on_exit": "It takes effect in this conversation when you exit Control Mode",
+            "after_program": "It takes effect in this conversation when the current program is deactivated",
+        }.get(applied, "It is active now")
+        return f"{label} saved. {when}, and it will apply to all future sessions with this persona."
 
     return [update_persona_behavior]

@@ -25,9 +25,10 @@ logger = logging.getLogger("project-tango.search-tools")
 
 # Default model for summarizing search results. Palmyra X6 is the dev-only
 # cutting-edge model; it is used here because web search summarization is a
-# high-value task that benefits from the strongest available model, and the
-# summarization leg is separate from the conversational model so using X6
-# here does not affect real-time voice latency.
+# high-value task that benefits from the strongest available model. The
+# summarization leg is separate from the conversational model, and all HTTP
+# here is async so a slow search never blocks the LiveKit job's event loop
+# (which also pushes TTS audio and reads microphone audio).
 DEFAULT_SEARCH_MODEL = "writer/palmyra-x6"
 
 # Fallback model if X6 (dev endpoint) is unavailable. Palmyra X5 is the
@@ -53,15 +54,15 @@ def _get_litellm_config() -> tuple[str, str]:
     return base_url, os.getenv("LITELLM_MASTER_KEY", "dummy")
 
 
-def _serper_search(query: str, num_results: int = 5) -> dict:
+async def _serper_search(query: str, num_results: int = 5) -> dict:
     """Perform a Google search via the Serper.dev API."""
     api_key = os.getenv("SERPER_API_KEY")
     if not api_key:
         return {"error": "SERPER_API_KEY is not configured in the .env file."}
 
     try:
-        with httpx.Client(timeout=15.0) as client:
-            response = client.post(
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
                 "https://google.serper.dev/search",
                 headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
                 json={"q": query, "num": num_results},
@@ -73,7 +74,7 @@ def _serper_search(query: str, num_results: int = 5) -> dict:
         return {"error": f"Search request failed: {exc}"}
 
 
-def _summarize_with_x6(query: str, search_results: dict) -> str:
+async def _summarize_with_x6(query: str, search_results: dict) -> str:
     """Summarize search results using writer/palmyra-x6 via LiteLLM."""
     base_url, api_key = _get_litellm_config()
 
@@ -119,8 +120,8 @@ def _summarize_with_x6(query: str, search_results: dict) -> str:
     }
 
     try:
-        with httpx.Client(timeout=30.0) as client:
-            response = client.post(
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
                 f"{base_url}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {api_key}",
@@ -141,8 +142,8 @@ def _summarize_with_x6(query: str, search_results: dict) -> str:
         # Fall back to X5 (production) if X6 (dev) fails
         payload["model"] = FALLBACK_SEARCH_MODEL
         try:
-            with httpx.Client(timeout=30.0) as client:
-                response = client.post(
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
                     f"{base_url}/chat/completions",
                     headers={
                         "Authorization": f"Bearer {api_key}",
@@ -175,11 +176,11 @@ async def web_search(
     if not serper_key:
         return "Web search is not configured. Set SERPER_API_KEY in the environment to enable it."
 
-    search_results = _serper_search(query)
+    search_results = await _serper_search(query)
     if "error" in search_results:
         return search_results["error"]
 
-    summary = _summarize_with_x6(query, search_results)
+    summary = await _summarize_with_x6(query, search_results)
 
     # Include source URLs for transparency
     organic = search_results.get("organic", [])

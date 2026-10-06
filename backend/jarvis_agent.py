@@ -70,10 +70,10 @@ def _load_tools() -> tuple[Any, ...]:
             module = importlib.import_module(module_name)
             module_tools = getattr(module, variable_name)
         except ModuleNotFoundError as exc:
-            logger.info("Skipping optional legacy tool module pcts: pcts", module_name, exc)
+            logger.info("Skipping optional legacy tool module %s: %s", module_name, exc)
             continue
         except Exception as exc:
-            logger.warning("Skipping optional tool module pcts: pcts", module_name, exc)
+            logger.warning("Skipping optional tool module %s: %s", module_name, exc)
             continue
 
         if isinstance(module_tools, Iterable):
@@ -103,8 +103,13 @@ class Jarvis(Agent):
         vision_context: Any | None = None,
         db_pool: Any | None = None,
         initial_program: str | None = None,
+        prompt_extras: str = "",
     ):
         self.persona = persona
+        # Per-session text appended after the persona prompt (memory context,
+        # SIP greeting addendum). Kept separate so persona overrides can be
+        # re-applied mid-session without losing it.
+        self._prompt_extras = prompt_extras
         self.llm_model = llm_model
         self.vision_context = vision_context
         self._db_pool = db_pool
@@ -132,8 +137,11 @@ class Jarvis(Agent):
         # keep their original system prompt unchanged.
         mcp_guidance = MCP_SUMMARY_GUIDANCE if mcp_tools else ""
 
-        base_instructions = (
-            f"{persona.system_prompt}\n\n"
+        # Everything after the persona prompt: the shared Tango preamble and
+        # tool guidance. Stored so _compose_instructions can rebuild the full
+        # prompt when Control Mode changes the persona prompt.
+        self._instructions_tail = (
+            "\n\n"
             "You are part of Project Tango, a voice-first AI companion running through "
             "LiveKit WebRTC. Keep spoken answers natural, concise, and useful. When a "
             "tool is unavailable on this Linux deployment, explain that limitation plainly. "
@@ -163,6 +171,7 @@ class Jarvis(Agent):
             + MEDITATION_INSTRUCTIONS
             + TRANSCRIPTION_INSTRUCTIONS
         )
+        base_instructions = self._compose_instructions(persona.system_prompt)
 
         # Build control mode tools if enabled and DB pool is available.
         control_mode_tools: list[Any] = []
@@ -171,7 +180,7 @@ class Jarvis(Agent):
                 agent=self, persona_id=persona.id, pool=db_pool
             )
             logger.info(
-                "Control Mode enabled persona=pcts tools=pctd",
+                "Control Mode enabled persona=%s tools=%d",
                 persona.id,
                 len(control_mode_tools),
             )
@@ -183,7 +192,7 @@ class Jarvis(Agent):
                 agent=self, persona_id=persona.id, pool=db_pool
             )
             logger.info(
-                "Programs enabled persona=pcts tools=pctd",
+                "Programs enabled persona=%s tools=%d",
                 persona.id,
                 len(program_tools),
             )
@@ -201,12 +210,51 @@ class Jarvis(Agent):
             + self._build_transcription_tools(),
         )
 
+    def _compose_instructions(self, persona_prompt: str) -> str:
+        """Full agent instructions for a given persona prompt."""
+        return f"{persona_prompt}{self._prompt_extras}{self._instructions_tail}"
+
+    async def apply_persona_overrides(self, overrides: list[dict[str, str]]) -> str:
+        """Rebuild the persona instructions with *overrides* and apply them.
+
+        The persona prompt is recomposed from scratch (Layer 1 constraints +
+        persona prompt + overrides, as at session start), so overrides are
+        never applied twice. Where the result goes depends on the mode:
+
+        - ``"live"``: normal conversation; instructions updated now.
+        - ``"on_exit"``: Control Mode is active; the live prompt stays the
+          Control Mode prompt and the new persona prompt is what "Exit Control
+          Mode" restores.
+        - ``"after_program"``: a program is active; the new persona prompt is
+          what deactivating the program restores.
+        """
+        from personas import get_persona
+
+        instructions = self._compose_instructions(
+            get_persona(self.persona.id, overrides=overrides).system_prompt
+        )
+        if self._active_program is not None:
+            self._base_instructions = instructions
+            if self._control_mode_active:
+                return "on_exit"
+            return "after_program"
+        if self._control_mode_active:
+            self._control_mode_saved_instructions = instructions
+            return "on_exit"
+        await self.update_instructions(instructions)
+        return "live"
+
     def _build_meditation_tools(self) -> list:
         """Build meditation playback tools if the track is available."""
         if not MEDITATION_AVAILABLE:
             return []
         self._meditation_player = MeditationPlayer()
         return build_meditation_tools(self._meditation_player)
+
+    def attach_background_audio(self, background_audio: Any, session: Any) -> None:
+        """Give the meditation player the session's BackgroundAudioPlayer."""
+        if self._meditation_player is not None:
+            self._meditation_player.attach(background_audio, session)
 
     def _build_transcription_tools(self) -> list:
         """Build transcription recording tools if enabled."""
@@ -248,13 +296,13 @@ class Jarvis(Agent):
                 await self.update_instructions(new_instructions)
                 self._active_program = program["name"]
                 logger.info(
-                    "Program pre-activated persona=pcts program=pcts",
+                    "Program pre-activated persona=%s program=%s",
                     self.persona.id,
                     program["name"],
                 )
             else:
                 logger.warning(
-                    "Program not found for pre-activation persona=pcts program=pcts",
+                    "Program not found for pre-activation persona=%s program=%s",
                     self.persona.id,
                     self._initial_program,
                 )
@@ -324,7 +372,7 @@ class Jarvis(Agent):
                     "Acknowledge this briefly and ask what they would like to change "
                     "about the persona's behavior, tone, or instructions."
                 ]
-                logger.info("Control Mode activated persona=pcts", self.persona.id)
+                logger.info("Control Mode activated persona=%s", self.persona.id)
                 return
 
             if action == "exit" and self._control_mode_active:
@@ -336,7 +384,7 @@ class Jarvis(Agent):
                     "The user has exited Control Mode. "
                     "Acknowledge this briefly and resume normal conversation."
                 ]
-                logger.info("Control Mode deactivated persona=pcts", self.persona.id)
+                logger.info("Control Mode deactivated persona=%s", self.persona.id)
                 return
 
         # --- Program activation/deactivation detection ---
@@ -359,7 +407,7 @@ class Jarvis(Agent):
                         f"{self.persona.display_name}."
                     ]
                     logger.info(
-                        "Program deactivated persona=pcts program=pcts",
+                        "Program deactivated persona=%s program=%s",
                         self.persona.id,
                         deactivated_name,
                     )
@@ -388,7 +436,7 @@ class Jarvis(Agent):
                             f"just confirm the switch naturally."
                         ]
                         logger.info(
-                            "Program activated persona=pcts program=pcts",
+                            "Program activated persona=%s program=%s",
                             self.persona.id,
                             program["name"],
                         )
@@ -402,7 +450,7 @@ class Jarvis(Agent):
                             f"by entering Control Mode."
                         ]
                         logger.info(
-                            "Program not found persona=pcts requested=pcts",
+                            "Program not found persona=%s requested=%s",
                             self.persona.id,
                             program_name,
                         )
@@ -462,7 +510,7 @@ class Jarvis(Agent):
                 if transcript:
                     new_message.content = [
                         "The transcription has been stopped. "
-                        "The transcript has been saved to the database "
+                        "The transcript is being saved to the database "
                         "and emailed to the user. Acknowledge this briefly."
                     ]
                 else:

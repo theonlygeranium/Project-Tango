@@ -99,9 +99,26 @@ class Persona:
     voice_id: str
     llm_model: str
     stt_language: str
+    # ElevenLabs VoiceSettings. Keep "style" at 0.0: ElevenLabs documents that
+    # any non-zero style adds latency and recommends 0 for real-time agents.
     voice_settings: dict[str, float | bool]
     system_prompt: str
     tts_backend: str = "elevenlabs"
+    # ElevenLabs language_code hint (e.g. "fil"). Enforces the language for
+    # pronunciation and text normalisation on Flash v2.5. None = auto-detect.
+    tts_language: str | None = None
+    # Keyboard-typing sound while the agent is thinking. Off for personas
+    # whose design favours calm presence (therapy, meditation).
+    thinking_sound: bool = True
+    # LiveKit endpointing floor (seconds since the user stopped speaking)
+    # before the turn ends. None = SDK default (0.5). Tagalog personas use
+    # 0.7: a 2026-06-25 production review found late Nova-3 finals and split
+    # Taglish phrases at the default (docs/PLAN.md).
+    min_endpointing_delay: float | None = None
+    # Deepgram Nova-3 endpointing (ms of silence before a final transcript)
+    # for Tagalog personas. ADR-003 specifies 300; the plugin default is 25,
+    # which fragments Taglish utterances.
+    stt_endpointing_ms: int | None = None
     # Optional custom opening line spoken on session start.
     greeting: str | None = None
     # Flux end-of-turn detection tuning.
@@ -139,6 +156,7 @@ class Persona:
 TANGO_PERSONAS: dict[str, Persona] = {
     "therapy": Persona(
         id="therapy",
+        thinking_sound=False,
         label="Therapy",
         display_name="Damian",
         role_description="Wellness companion",
@@ -186,7 +204,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_settings={
             "stability": 0.60,
             "similarity_boost": 0.80,
-            "style": 0.15,
+            "style": 0.0,
             "use_speaker_boost": False,
         },
         enabled_mcp_servers=("github", "postgres", "redis"),
@@ -234,7 +252,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_settings={
             "stability": 0.60,
             "similarity_boost": 0.80,
-            "style": 0.15,
+            "style": 0.0,
             "use_speaker_boost": False,
         },
         enabled_mcp_servers=("github", "postgres", "redis"),
@@ -297,7 +315,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_settings={
             "stability": 0.55,
             "similarity_boost": 0.80,
-            "style": 0.20,
+            "style": 0.0,
             "use_speaker_boost": False,
         },
         enabled_mcp_servers=("github", "postgres", "redis"),
@@ -317,7 +335,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_settings={
             "stability": 0.60,
             "similarity_boost": 0.80,
-            "style": 0.15,
+            "style": 0.0,
             "use_speaker_boost": False,
         },
         enabled_mcp_servers=("github", "postgres"),
@@ -348,6 +366,9 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="LF1xMOq6fDVEBEkLP0HO",
         llm_model="groq/llama4-scout",
         stt_language="tl",
+        tts_language="fil",
+        min_endpointing_delay=0.7,
+        stt_endpointing_ms=300,
         eot_threshold=0.7,
         eot_timeout_ms=3000,
         keyterms=(
@@ -358,7 +379,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_settings={
             "stability": 0.55,
             "similarity_boost": 0.80,
-            "style": 0.25,
+            "style": 0.0,
             "use_speaker_boost": False,
         },
         enabled_mcp_servers=("postgres",),
@@ -380,6 +401,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
     ),
     "meditation": Persona(
         id="meditation",
+        thinking_sound=False,
         label="Meditation",
         display_name="Nathaniel",
         role_description="Meditation guide",
@@ -421,6 +443,9 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_id="smYFzUb4yrSqprnml7n5",
         llm_model="groq/llama4-scout",
         stt_language="tl",
+        tts_language="fil",
+        min_endpointing_delay=0.7,
+        stt_endpointing_ms=300,
         eot_threshold=0.7,
         eot_timeout_ms=2500,
         keyterms=(
@@ -433,7 +458,7 @@ TANGO_PERSONAS: dict[str, Persona] = {
         voice_settings={
             "stability": 0.55,
             "similarity_boost": 0.80,
-            "style": 0.25,
+            "style": 0.0,
             "use_speaker_boost": False,
         },
         enabled_mcp_servers=(),

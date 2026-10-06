@@ -1,7 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Room, RoomEvent } from 'livekit-client';
+import {
+  ConnectionError,
+  ConnectionErrorReason,
+  type DisconnectReason,
+  Room,
+  RoomEvent,
+} from 'livekit-client';
 import { motion } from 'motion/react';
 import { RoomAudioRenderer, RoomContext, StartAudio } from '@livekit/components-react';
 import { HistoryPanel } from '@/components/HistoryPanel';
@@ -10,6 +16,7 @@ import { SessionView } from '@/components/session-view';
 import { Welcome } from '@/components/welcome';
 import useConnectionDetails from '@/hooks/useConnectionDetails';
 import type { BackendLlmModel } from '@/lib/auth';
+import { MAX_RECONNECT_ATTEMPTS, shouldAutoReconnect } from '@/lib/disconnect';
 import {
   ADMIN_LLM_MODEL_STORAGE_KEY,
   DEFAULT_LLM_MODEL_SELECTION_ID,
@@ -96,8 +103,15 @@ export function App({
   availableLlmModels,
 }: AppProps) {
   const room = useMemo(() => new Room(), []);
-  const userInitiatedDisconnect = useRef(false);
   const reconnectAttempts = useRef(0);
+  // True while room.connect() is in flight. A failed connect also emits
+  // RoomEvent.Disconnected; the connect error path owns that retry.
+  const connectInFlight = useRef(false);
+  // True between scheduling a retry and starting the next connect. Fetching a
+  // fresh token re-runs the connect effect, whose cleanup calls
+  // room.disconnect() (reported as CLIENT_INITIATED); that is our own
+  // teardown, not a hang-up.
+  const tearingDownForRetry = useRef(false);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [canPlayAudio, setCanPlayAudio] = useState(room.canPlaybackAudio);
   const [selectedPersonaId, setSelectedPersonaId] = useState<PersonaId>(defaultPersonaId);
@@ -105,12 +119,25 @@ export function App({
   const [selectedModels, setSelectedModels] = useState<AdminModelSelections>({});
   const [preferencesReady, setPreferencesReady] = useState(false);
   const selectedModelId = selectedModels[selectedPersonaId] ?? DEFAULT_LLM_MODEL_SELECTION_ID;
+  const onConnectionDetailsError = useCallback((error: Error) => {
+    // Without a token there is nothing to connect or retry; leave the
+    // "connecting" state instead of hanging.
+    reconnectAttempts.current = 0;
+    tearingDownForRetry.current = false;
+    setSessionStarted(false);
+    setSelectedProgram(null);
+    toastAlert({
+      title: 'Could not start a voice session.',
+      description: error.message,
+    });
+  }, []);
   const { connectionDetails, refreshConnectionDetails, clearConnectionDetails } =
     useConnectionDetails(
       selectedPersonaId,
       preferencesReady && sessionStarted,
       isAdmin ? llmModelRequestValue(selectedModelId) : undefined,
-      selectedProgram?.name
+      selectedProgram?.name,
+      onConnectionDetailsError
     );
 
   useEffect(() => {
@@ -141,34 +168,56 @@ export function App({
     }
   }, [isAdmin, preferencesReady, selectedModels]);
 
-  useEffect(() => {
-    const onDisconnected = () => {
-      if (userInitiatedDisconnect.current) {
-        setSessionStarted(false);
-        setCanPlayAudio(room.canPlaybackAudio);
-        setSelectedProgram(null);
-        clearConnectionDetails();
+  const endSession = useCallback(() => {
+    reconnectAttempts.current = 0;
+    tearingDownForRetry.current = false;
+    setSessionStarted(false);
+    setCanPlayAudio(room.canPlaybackAudio);
+    setSelectedProgram(null);
+    clearConnectionDetails();
+  }, [room, clearConnectionDetails]);
+
+  // Retry with a fresh token (new room grant) up to MAX_RECONNECT_ATTEMPTS,
+  // then end the session. Used for unexpected disconnects and for connect or
+  // dispatch failures.
+  const retryOrEndSession = useCallback(
+    (title: string, detail?: string) => {
+      if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttempts.current += 1;
+        tearingDownForRetry.current = true;
+        toastAlert({
+          title: `${title} Reconnecting...`,
+          description: `Attempt ${reconnectAttempts.current} of ${MAX_RECONNECT_ATTEMPTS}${
+            detail ? `: ${detail}` : ''
+          }`,
+        });
+        // Finish leaving the old room before fetching a new token: the connect
+        // effect only connects when room.state is 'disconnected'.
+        void room.disconnect().finally(refreshConnectionDetails);
         return;
       }
-      // Unexpected disconnect — attempt auto-reconnect with a fresh token.
-      if (reconnectAttempts.current < 3) {
-        reconnectAttempts.current += 1;
-        toastAlert({
-          title: 'Connection interrupted. Reconnecting...',
-          description: 'Attempt ' + reconnectAttempts.current + ' of 3',
-        });
-        refreshConnectionDetails();
-      } else {
-        setSessionStarted(false);
-        setCanPlayAudio(room.canPlaybackAudio);
-        setSelectedProgram(null);
-        clearConnectionDetails();
-        reconnectAttempts.current = 0;
-        toastAlert({
-          title: 'Connection lost.',
-          description: 'Please tap Start to reconnect.',
-        });
+      endSession();
+      toastAlert({
+        title: 'Connection lost.',
+        description: 'Please tap Start to reconnect.',
+      });
+    },
+    [room, endSession, refreshConnectionDetails]
+  );
+
+  useEffect(() => {
+    const onDisconnected = (reason?: DisconnectReason) => {
+      if (connectInFlight.current) {
+        return; // the connect error path handles this attempt
       }
+      if (tearingDownForRetry.current) {
+        return; // our own teardown before reconnecting with a fresh token
+      }
+      if (!shouldAutoReconnect(reason)) {
+        endSession();
+        return;
+      }
+      retryOrEndSession('Connection interrupted.');
     };
     const onAudioPlaybackStatusChanged = () => {
       setCanPlayAudio(room.canPlaybackAudio);
@@ -191,27 +240,36 @@ export function App({
       room.off(RoomEvent.MediaDevicesError, onMediaDevicesError);
       room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlaybackStatusChanged);
     };
-  }, [room, clearConnectionDetails, refreshConnectionDetails]);
+  }, [room, endSession, retryOrEndSession]);
 
   useEffect(() => {
     let aborted = false;
     if (sessionStarted && room.state === 'disconnected' && connectionDetails) {
       const connect = async () => {
+        tearingDownForRetry.current = false;
+        connectInFlight.current = true;
         try {
           await room.connect(connectionDetails.serverUrl, connectionDetails.participantToken);
         } catch (error) {
           if (aborted) {
             return;
           }
-
+          if (
+            error instanceof ConnectionError &&
+            error.reason === ConnectionErrorReason.Cancelled
+          ) {
+            // room.disconnect() during connect (hang-up, session timeout).
+            endSession();
+            return;
+          }
           const connectionError = error instanceof Error ? error : new Error(String(error));
-          toastAlert({
-            title: 'Connection failed. Retrying...',
-            description: `${connectionError.name}: ${connectionError.message}`,
-          });
-          refreshConnectionDetails();
-          setSessionStarted(false);
+          retryOrEndSession(
+            'Connection failed.',
+            `${connectionError.name}: ${connectionError.message}`
+          );
           return;
+        } finally {
+          connectInFlight.current = false;
         }
 
         if (aborted) {
@@ -227,23 +285,17 @@ export function App({
           if (!dispatchResponse.ok) {
             throw new Error(`Dispatch failed with HTTP ${dispatchResponse.status}`);
           }
+          reconnectAttempts.current = 0;
         } catch (error) {
           if (aborted) {
             return;
           }
-
           const dispatchError = error instanceof Error ? error : new Error(String(error));
-          toastAlert({
-            title: 'Agent dispatch failed. Retrying...',
-            description: dispatchError.message,
-          });
-          refreshConnectionDetails();
-          setSessionStarted(false);
+          retryOrEndSession('Agent dispatch failed.', dispatchError.message);
           return;
         }
 
         try {
-          reconnectAttempts.current = 0;
           await room.localParticipant.setMicrophoneEnabled(true, undefined, {
             preConnectBuffer: appConfig.isPreConnectBufferEnabled,
           });
@@ -264,7 +316,6 @@ export function App({
     }
     return () => {
       aborted = true;
-      userInitiatedDisconnect.current = true;
       room.disconnect();
     };
   }, [
@@ -272,7 +323,8 @@ export function App({
     sessionStarted,
     connectionDetails,
     appConfig.isPreConnectBufferEnabled,
-    refreshConnectionDetails,
+    endSession,
+    retryOrEndSession,
   ]);
 
   const { startButtonText } = appConfig;

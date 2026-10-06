@@ -42,7 +42,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     label: 'General Info',
     displayName: 'Chris (British)',
     roleDescription: 'General assistant',
-    defaultLlmModel: 'writer/palmyra-x5-voice',
+    defaultLlmModel: 'writer/palmyra-x6',
     initials: 'CH',
     accentClassName:
       'border-emerald-500/70 bg-emerald-500/10 text-emerald-700 dark:border-emerald-300/70 dark:bg-emerald-300/10 dark:text-emerald-100',
@@ -54,7 +54,7 @@ export const TANGO_PERSONAS: TangoPersona[] = [
     displayName: 'Jeremiah',
     roleDescription: 'General assistant',
     defaultLlmModel: 'local/qwen3-fast',
-    ttsBackend: 'f5-tts',
+    ttsBackend: 'elevenlabs',
     initials: 'JE',
     accentClassName:
       'border-amber-500/70 bg-amber-500/10 text-amber-700 dark:border-amber-300/70 dark:bg-amber-300/10 dark:text-amber-100',

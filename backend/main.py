@@ -178,28 +178,121 @@ def _room_name(persona: Persona, requested_room: str | None = None) -> str:
     return f"tango_{persona.id}_{uuid.uuid4().hex[:10]}"
 
 
+TURN_DETECTION_STT = "stt"
+TURN_DETECTION_AUDIO = "audio"
+_TURN_DETECTION_ALIASES = {
+    "stt": TURN_DETECTION_STT,
+    "flux": TURN_DETECTION_STT,
+    "audio": TURN_DETECTION_AUDIO,
+    "turn-detector": TURN_DETECTION_AUDIO,
+    "turn_detector": TURN_DETECTION_AUDIO,
+}
+
+
+def _turn_detection_strategy() -> str:
+    """Turn-boundary source for English (Flux) personas.
+
+    ``stt`` (default): Deepgram Flux's EndOfTurn commits the user turn, so the
+    per-persona eot_threshold / eot_timeout_ms / eager_eot_threshold take
+    effect. Silero VAD still handles barge-in. This is LiveKit's documented
+    configuration for Flux.
+
+    ``audio``: LiveKit Inference's audio TurnDetector owns turn boundaries.
+    LiveKit then ignores Flux end-of-speech events, so the per-persona Flux
+    tuning has no effect. Kept as an operator rollback via
+    TANGO_TURN_DETECTION=audio.
+    """
+    raw_value = os.getenv("TANGO_TURN_DETECTION", "").strip().lower()
+    if not raw_value:
+        return TURN_DETECTION_STT
+    strategy = _TURN_DETECTION_ALIASES.get(raw_value)
+    if strategy is None:
+        logger.warning(
+            "Invalid TANGO_TURN_DETECTION=%r; expected stt or audio. Using stt.",
+            raw_value,
+        )
+        return TURN_DETECTION_STT
+    return strategy
+
+
+def _uses_tagalog_stt(persona: Persona) -> bool:
+    return persona.stt_language in ("tl",)
+
+
 def _turn_handling_for_session(
     persona: Persona,
     llm_model: str,
     *,
     preemptive_generation_enabled: bool = True,
 ) -> dict[str, Any]:
-    from livekit.agents import inference
-    # Use LiveKit's audio TurnDetector for state-of-the-art end-of-turn detection.
-    # The audio turn detector processes user audio directly (intonation, pitch, rhythm)
-    # rather than relying on STT transcript timing, eliminating the VAD/STT race
-    # condition that produced "stt end of speech received while vad is still in a
-    # speech segment" warnings on every utterance.
-    #
-    # Deepgram Flux's eot_threshold and eot_timeout_ms are still passed to STTv2
-    # for STT-internal endpointing, but turn boundary decisions are now owned by
-    # the audio TurnDetector.
     turn_handling: dict[str, Any] = {}
-    turn_handling["turn_detection"] = inference.TurnDetector()
+    if _uses_tagalog_stt(persona):
+        # Nova-3 `tl` has no turn model, and neither Flux nor LiveKit's turn
+        # detector supports Tagalog, so Silero VAD silence ends the turn.
+        # This is what the SDK auto-selected before; it is now explicit.
+        turn_handling["turn_detection"] = "vad"
+    elif _turn_detection_strategy() == TURN_DETECTION_AUDIO:
+        from livekit.agents import inference
+
+        turn_handling["turn_detection"] = inference.TurnDetector()
+    else:
+        turn_handling["turn_detection"] = TURN_DETECTION_STT
+    if persona.min_endpointing_delay is not None:
+        turn_handling["endpointing"] = {"min_delay": persona.min_endpointing_delay}
     turn_handling["preemptive_generation"] = _preemptive_generation_options(
         enabled=preemptive_generation_enabled
     )
     return turn_handling
+
+
+def _build_tagalog_stt(persona: Persona, deepgram: Any) -> Any:
+    """Deepgram Nova-3 `tl` STT for Tagalog personas.
+
+    Keyterms (Taglish words and slang) are sent when the persona defines
+    them. Deepgram documents keyterm prompting for Nova-3 monolingual models
+    but does not list `tl` explicitly, so the keyterm instance is wrapped in
+    LiveKit's stt.FallbackAdapter with a plain Nova-3 `tl` instance behind
+    it: if Deepgram rejects the keyterm request, the session falls back
+    instead of losing speech recognition. TANGO_TAGALOG_KEYTERMS=false
+    sends no keyterms.
+    """
+    stt_kwargs: dict[str, Any] = {
+        "model": "nova-3",
+        "language": "tl",
+        "smart_format": True,
+    }
+    if persona.stt_endpointing_ms is not None:
+        stt_kwargs["endpointing_ms"] = persona.stt_endpointing_ms
+    plain = deepgram.STT(**stt_kwargs)
+
+    if not persona.keyterms or not _env_bool("TANGO_TAGALOG_KEYTERMS", default=True):
+        return plain
+
+    from livekit.agents import stt as lk_stt
+
+    boosted = deepgram.STT(**stt_kwargs, keyterm=list(persona.keyterms))
+    adapter = lk_stt.FallbackAdapter([boosted, plain])
+
+    def on_availability_changed(ev: Any) -> None:
+        engine = getattr(ev, "stt", None)
+        label = "keyterms" if engine is boosted else "plain"
+        logger.log(
+            logging.INFO if getattr(ev, "available", False) else logging.WARNING,
+            "Tagalog STT engine availability persona=%s engine=%s available=%s",
+            persona.id,
+            label,
+            getattr(ev, "available", None),
+        )
+
+    adapter.on("stt_availability_changed", on_availability_changed)
+    return adapter
+
+
+def _turn_detection_label(turn_handling: dict[str, Any]) -> str:
+    detector = turn_handling.get("turn_detection")
+    if isinstance(detector, str):
+        return detector
+    return type(detector).__name__ if detector is not None else "auto"
 
 
 def _preemptive_generation_options(*, enabled: bool) -> dict[str, Any]:
@@ -232,14 +325,18 @@ def _sync_transcription() -> bool:
     return _env_bool("TANGO_SYNC_TRANSCRIPTION", default=False)
 
 
-def _preemptive_generation_enabled(*, vision_enabled: bool) -> bool:
+def _preemptive_generation_enabled() -> bool:
     """Whether speculative LLM generation may start before end-of-turn.
 
-    Disabled while vision is injecting context (must land before the reply).
-    Otherwise follows TANGO_PREEMPTIVE_GENERATION (default true).
+    Follows TANGO_PREEMPTIVE_GENERATION (default true). Vision no longer
+    forces it off: when on_user_turn_completed injects visual context (or
+    Control Mode, programs, or transcription change the turn), LiveKit sees
+    the chat context differ from the preemptive request, cancels that
+    generation, and generates again with the new context. preemptive_tts is
+    always False, so the discarded attempt never reached the speaker. Turns
+    without a visual reference, which in the default "auto" injection mode
+    is most turns, keep the latency benefit.
     """
-    if vision_enabled:
-        return False
     return _env_bool("TANGO_PREEMPTIVE_GENERATION", default=True)
 
 
@@ -530,6 +627,11 @@ def _build_elevenlabs_tts(persona: Persona, elevenlabs: Any) -> Any:
                 persona.id,
             )
 
+    tts_kwargs: dict[str, Any] = {}
+    tts_language = _elevenlabs_language(persona)
+    if tts_language:
+        tts_kwargs["language"] = tts_language
+
     return elevenlabs.TTS(
         model="eleven_flash_v2_5",
         voice_id=persona.voice_id,
@@ -537,7 +639,22 @@ def _build_elevenlabs_tts(persona: Persona, elevenlabs: Any) -> Any:
         base_url=ELEVENLABS_BASE_URL,
         voice_settings=voice_settings,
         auto_mode=True,
+        **tts_kwargs,
     )
+
+
+def _elevenlabs_language(persona: Persona) -> str | None:
+    """ElevenLabs language_code for this persona, or None for auto-detect.
+
+    Flash v2.5 supports Filipino; without a hint it guesses the language per
+    chunk, which gives Taglish an English accent and English number reading.
+    ElevenLabs ignores unsupported codes rather than rejecting the request,
+    so a wrong hint cannot silence the voice. Disable all hints with
+    TANGO_ELEVENLABS_LANGUAGE_HINTS=false.
+    """
+    if not _env_bool("TANGO_ELEVENLABS_LANGUAGE_HINTS", default=True):
+        return None
+    return persona.tts_language or None
 
 
 
@@ -559,116 +676,39 @@ def _build_deepgram_tts(persona: Persona) -> Any:
 
 
 def _build_fallback_tts(primary: Any, fallback: Any, persona: Persona) -> Any:
-    """Wrap a primary TTS engine with a fallback that activates on failure.
+    """Wrap the primary TTS with LiveKit's FallbackAdapter (Deepgram Aura second).
 
-    When the primary TTS (ElevenLabs or F5-TTS) fails -- for example due to
-    billing issues, rate limits, or a stopped sidecar -- the FallbackTTS
-    wrapper transparently retries the same text on the secondary engine
-    (Deepgram Aura). This prevents the "no audio frames were pushed" error
-    that silences all voice agents when a single TTS provider has an outage.
+    When the primary engine (ElevenLabs or F5-TTS) fails, for example on a
+    billing problem, rate limit, or stopped sidecar, the adapter replays the
+    request on the fallback and marks the primary unavailable until a
+    background probe sees it recover. It covers both the streaming path that
+    AgentSession uses for ElevenLabs and the non-streaming F5-TTS path, and
+    resamples when the engines' sample rates differ.
+
+    The previous hand-written wrapper delegated stream() straight to the
+    primary, so the fallback never engaged for ElevenLabs personas.
     """
-    from livekit.agents import APIError, tts as lk_tts
-    from livekit.agents.types import APIConnectOptions, DEFAULT_API_CONNECT_OPTIONS
-    from livekit.agents.utils import shortuuid as gen_shortuuid
+    from livekit.agents import tts as lk_tts
 
-    primary_model = getattr(primary, "model", "primary")
-    primary_provider = getattr(primary, "provider", "unknown")
-    fallback_provider = getattr(fallback, "provider", "unknown")
+    adapter = lk_tts.FallbackAdapter([primary, fallback])
+    primary_label = getattr(primary, "label", type(primary).__name__)
 
-    class FallbackTTS(lk_tts.TTS):
-        def __init__(self) -> None:
-            primary_caps = getattr(primary, "_capabilities", None)
-            super().__init__(
-                capabilities=primary_caps or lk_tts.TTSCapabilities(streaming=True),
-                sample_rate=getattr(primary, "_sample_rate", 24000),
-                num_channels=getattr(primary, "_num_channels", 1),
-            )
-            self._primary = primary
-            self._fallback = fallback
-            self._persona_id = persona.id
-
-        @property
-        def model(self) -> str:
-            return primary_model
-
-        @property
-        def provider(self) -> str:
-            return f"{primary_provider}+{fallback_provider}"
-
-        def synthesize(
-            self,
-            text: str,
-            *,
-            conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS,
-        ) -> lk_tts.ChunkedStream:
-            return FallbackChunkedStream(
-                tts=self, input_text=text, conn_options=conn_options,
+    def on_availability_changed(ev: Any) -> None:
+        engine = getattr(ev, "tts", None)
+        label = getattr(engine, "label", type(engine).__name__)
+        if getattr(ev, "available", False):
+            logger.info("TTS engine available again persona=%s engine=%s", persona.id, label)
+        else:
+            logger.warning(
+                "TTS engine unavailable; failing over persona=%s engine=%s primary=%s",
+                persona.id,
+                label,
+                primary_label,
             )
 
-        def stream(
-            self,
-            *,
-            conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS,
-        ) -> lk_tts.SynthesizeStream:
-            # Delegate streaming directly to the primary TTS engine.
-            # The primary (ElevenLabs) supports streaming natively and has its
-            # own retry logic in SynthesizeStream._main_task. The Deepgram Aura
-            # fallback applies to the non-streaming synthesize() path.
-            return self._primary.stream(conn_options=conn_options)
+    adapter.on("tts_availability_changed", on_availability_changed)
+    return adapter
 
-        async def aclose(self) -> None:
-            for engine in (self._primary, self._fallback):
-                close_fn = getattr(engine, "aclose", None)
-                if close_fn is not None:
-                    with suppress(Exception):
-                        await close_fn()
-
-    class FallbackChunkedStream(lk_tts.ChunkedStream):
-        def __init__(self, *, tts, input_text, conn_options):
-            super().__init__(tts=tts, input_text=input_text, conn_options=conn_options)
-            self._fb_tts = tts
-
-        async def _run(self, output_emitter: lk_tts.AudioEmitter) -> None:
-            primary_stream = self._fb_tts._primary.synthesize(
-                self._input_text, conn_options=self._conn_options
-            )
-            try:
-                output_emitter.initialize(
-                    request_id=gen_shortuuid(),
-                    sample_rate=self._fb_tts._primary.sample_rate,
-                    num_channels=self._fb_tts._primary.num_channels,
-                    mime_type="audio/pcm",
-                )
-                async for ev in primary_stream:
-                    output_emitter.push(ev.frame.data.tobytes())
-                output_emitter.flush()
-                return
-            except APIError as exc:
-                logger.warning(
-                    "Primary TTS failed persona=pctpcts primary=pctpcts error=pctpcts; falling back to pctpcts",
-                    self._fb_tts._persona_id, primary_provider, exc, fallback_provider,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Primary TTS failed persona=pctpcts primary=pctpcts error=pctpcts; falling back to pctpcts",
-                    self._fb_tts._persona_id, primary_provider, exc, fallback_provider,
-                )
-            with suppress(Exception):
-                await primary_stream.aclose()
-            fallback_stream = self._fb_tts._fallback.synthesize(
-                self._input_text, conn_options=self._conn_options
-            )
-            output_emitter.initialize(
-                request_id=gen_shortuuid(),
-                sample_rate=self._fb_tts._fallback.sample_rate,
-                num_channels=self._fb_tts._fallback.num_channels,
-                mime_type="audio/pcm",
-            )
-            async for ev in fallback_stream:
-                output_emitter.push(ev.frame.data.tobytes())
-            output_emitter.flush()
-
-    return FallbackTTS()
 
 def _build_tts(persona: Persona, elevenlabs: Any) -> Any:
     tts_backend = getattr(persona, "tts_backend", "elevenlabs")
@@ -1429,6 +1469,39 @@ def _message_latency_ms(item: Any) -> int | None:
     return None
 
 
+# Per-turn timings LiveKit records on ChatMessage.metrics (seconds). User turns
+# carry the STT / end-of-turn fields, agent turns the LLM / TTS / e2e fields.
+TURN_METRIC_KEYS: tuple[str, ...] = (
+    "transcription_delay",
+    "end_of_turn_delay",
+    "on_user_turn_completed_delay",
+    "llm_node_ttft",
+    "tts_node_ttfb",
+    "e2e_latency",
+    "playback_latency",
+)
+
+
+def _turn_metrics_ms(item: Any) -> dict[str, int]:
+    """Return the known per-turn timings from a ChatMessage, in milliseconds."""
+    metrics = getattr(item, "metrics", {}) or {}
+    if not hasattr(metrics, "get"):
+        return {}
+
+    timings: dict[str, int] = {}
+    for key in TURN_METRIC_KEYS:
+        value = metrics.get(key)
+        if isinstance(value, int | float) and not isinstance(value, bool) and value >= 0:
+            timings[key] = int(value * 1000)
+    return timings
+
+
+def _format_turn_metrics(timings: dict[str, int]) -> str:
+    if not timings:
+        return "none"
+    return " ".join(f"{key}_ms={value}" for key, value in timings.items())
+
+
 def _usage_total_tokens(usage: Any) -> int:
     total = 0
     for model_usage in getattr(usage, "model_usage", []) or []:
@@ -1559,6 +1632,42 @@ async def _account_access_monitor(
             return
 
 
+# Silero VAD settings shared by every session. Tighter than the SDK defaults
+# (0.55 s / 0.5 s): in "stt" turn detection VAD drives barge-in, and in "vad"
+# mode (Tagalog personas) it also ends the turn.
+VAD_MIN_SILENCE_DURATION = 0.3
+VAD_PREFIX_PADDING_DURATION = 0.3
+_PREWARMED_VAD_KEY = "vad"
+
+
+def _load_vad() -> Any:
+    from livekit.plugins import silero
+
+    return silero.VAD.load(
+        min_silence_duration=VAD_MIN_SILENCE_DURATION,
+        prefix_padding_duration=VAD_PREFIX_PADDING_DURATION,
+    )
+
+
+def prewarm(proc: Any) -> None:
+    """Load models once per worker process, before any job is assigned.
+
+    LiveKit keeps idle processes warm (LIVEKIT_NUM_IDLE_PROCESSES), so loading
+    the Silero ONNX model here takes it off the session-start path. This is
+    the pattern LiveKit documents for VAD.
+    """
+    proc.userdata[_PREWARMED_VAD_KEY] = _load_vad()
+
+
+def _session_vad(ctx: Any) -> Any:
+    """The VAD prewarmed for this process, or a fresh load as a fallback."""
+    userdata = getattr(getattr(ctx, "proc", None), "userdata", None)
+    if isinstance(userdata, dict) and userdata.get(_PREWARMED_VAD_KEY) is not None:
+        return userdata[_PREWARMED_VAD_KEY]
+    logger.warning("No prewarmed VAD in this worker process; loading Silero VAD per session")
+    return _load_vad()
+
+
 async def entrypoint(ctx: Any) -> None:
     from jarvis_agent import Jarvis
     from livekit.agents import (
@@ -1569,7 +1678,7 @@ async def entrypoint(ctx: Any) -> None:
         SessionUsageUpdatedEvent,
     )
     from livekit.agents.llm import ChatMessage
-    from livekit.plugins import deepgram, elevenlabs, openai, silero
+    from livekit.plugins import deepgram, elevenlabs, openai
     from vision_context import LiveVideoContext, VisionContextConfig
 
     # Connect the MCP bridge for this worker process if not already connected.
@@ -1670,7 +1779,10 @@ async def entrypoint(ctx: Any) -> None:
             )
             ctx.shutdown("account access revoked")
             return
-    augmented_system_prompt = persona.system_prompt
+    # Per-session text appended after the persona prompt. Passed to the agent
+    # separately so Control Mode can re-apply persona overrides mid-session
+    # without dropping it.
+    prompt_extras = ""
     prior_context = ""
     if account_user_id:
         try:
@@ -1684,24 +1796,16 @@ async def entrypoint(ctx: Any) -> None:
                 persona.id,
             )
     if prior_context:
-        augmented_system_prompt = f"{augmented_system_prompt}{prior_context}"
+        prompt_extras = f"{prompt_extras}{prior_context}"
     if is_sip:
-        augmented_system_prompt = f"{augmented_system_prompt}{SIP_GREETING_ADDENDUM}"
+        prompt_extras = f"{prompt_extras}{SIP_GREETING_ADDENDUM}"
     persona_for_agent = (
-        replace(
-            persona,
-            system_prompt=augmented_system_prompt,
-            greeting=(persona.greeting or _sip_greeting(persona))
-            if is_sip
-            else persona.greeting,
-        )
-        if prior_context or is_sip
+        replace(persona, greeting=persona.greeting or _sip_greeting(persona))
+        if is_sip
         else persona
     )
     vision_config = VisionContextConfig.from_env(LITELLM_BASE_URL, LITELLM_MASTER_KEY)
-    preemptive_generation_enabled = _preemptive_generation_enabled(
-        vision_enabled=vision_config.enabled
-    )
+    preemptive_generation_enabled = _preemptive_generation_enabled()
     turn_handling = _turn_handling_for_session(
         persona,
         llm_model,
@@ -1709,17 +1813,19 @@ async def entrypoint(ctx: Any) -> None:
     )
     max_tool_steps = _max_tool_steps()
     sync_transcription = _sync_transcription()
-    _use_nova3 = persona.stt_language in ("tl",)
-    _flux_model = "flux-general-en" if not _use_nova3 else "nova-3-multi"
+    _use_nova3 = _uses_tagalog_stt(persona)
+    _flux_model = "flux-general-en"
+    _stt_model_label = "nova-3:tl" if _use_nova3 else _flux_model
 
     logger.info(
-        "Starting Tango agent room=%s persona_id=%s model=%s tts_backend=%s is_sip=%s flux_stt=%s eot_threshold=%s eot_timeout_ms=%s eager_eot_threshold=%s preemptive_generation=%s preemptive_tts=False sync_transcription=%s max_tool_steps=%s llm_base_url=%s",
+        "Starting Tango agent room=%s persona_id=%s model=%s tts_backend=%s is_sip=%s stt=%s turn_detection=%s eot_threshold=%s eot_timeout_ms=%s eager_eot_threshold=%s preemptive_generation=%s preemptive_tts=False sync_transcription=%s max_tool_steps=%s llm_base_url=%s",
         room_name,
         persona.id,
         llm_model,
         persona.tts_backend,
         is_sip,
-        _flux_model,
+        _stt_model_label,
+        _turn_detection_label(turn_handling),
         persona.eot_threshold,
         persona.eot_timeout_ms,
         persona.eager_eot_threshold,
@@ -1759,8 +1865,7 @@ async def entrypoint(ctx: Any) -> None:
 
     vision_context = LiveVideoContext(ctx.room, vision_config)
     if _use_nova3:
-        _stt = deepgram.STT(model="nova-3", language="tl", smart_format=True)
-        turn_handling.pop("turn_detection", None)
+        _stt = _build_tagalog_stt(persona, deepgram)
     else:
         stt_kwargs: dict[str, Any] = {
             "model": _flux_model,
@@ -1777,7 +1882,7 @@ async def entrypoint(ctx: Any) -> None:
         _stt = deepgram.STTv2(**stt_kwargs)
 
     session = AgentSession(
-        vad=silero.VAD.load(min_silence_duration=0.3, prefix_padding_duration=0.3),
+        vad=_session_vad(ctx),
         stt=_stt,
         llm=openai.LLM(
             base_url=LITELLM_BASE_URL,
@@ -1804,12 +1909,24 @@ async def entrypoint(ctx: Any) -> None:
     def on_conversation_item_added(ev: ConversationItemAddedEvent) -> None:
         if not isinstance(ev.item, ChatMessage):
             return
-        if getattr(ev.item, "interrupted", False):
-            return
 
         role = getattr(ev.item, "role", None)
         speaker = "agent" if role == "assistant" else role
         if speaker not in {"user", "agent"}:
+            return
+
+        # Log timings for every turn, interrupted ones included: those are the
+        # turns that matter when diagnosing cutouts and barge-in behaviour.
+        interrupted = bool(getattr(ev.item, "interrupted", False))
+        logger.info(
+            "Turn metrics speaker=%s interrupted=%s persona=%s room=%s %s",
+            speaker,
+            interrupted,
+            persona.id,
+            room_name,
+            _format_turn_metrics(_turn_metrics_ms(ev.item)),
+        )
+        if interrupted:
             return
 
         # Record agent turns for transcription
@@ -1838,6 +1955,19 @@ async def entrypoint(ctx: Any) -> None:
                 persona.id,
                 room_name,
             )
+
+    @session.on("error")
+    def on_session_error(ev: Any) -> None:
+        error = getattr(ev, "error", None)
+        source = getattr(ev, "source", None)
+        logger.warning(
+            "Session pipeline error source=%s recoverable=%s persona=%s room=%s error=%s",
+            type(source).__name__ if source is not None else "unknown",
+            getattr(error, "recoverable", "unknown"),
+            persona.id,
+            room_name,
+            getattr(error, "error", error),
+        )
 
     @session.on("session_usage_updated")
     def on_session_usage_updated(ev: SessionUsageUpdatedEvent) -> None:
@@ -1955,6 +2085,7 @@ async def entrypoint(ctx: Any) -> None:
         vision_context=vision_context,
         db_pool=await get_pool(),
         initial_program=participant_context.get("program_name"),
+        prompt_extras=prompt_extras,
     )
 
     # Set user email on the transcription recorder if available
@@ -1981,43 +2112,84 @@ async def entrypoint(ctx: Any) -> None:
         raise
     logger.info("Tango agent session started.")
 
-    # Audible thinking indicator — plays keyboard-typing sound while the agent
-    # is in the "thinking" state (LLM round-trips, tool calls, agent handoffs).
-    # Auto-triggered by LiveKit session lifecycle events; stops when the agent
-    # speaks. Env-gated via TANGO_THINKING_SOUND (default true).
-    if os.getenv("TANGO_THINKING_SOUND", "true").lower() in {"1", "true", "yes"}:
-        try:
-            from livekit.agents import (
-                AudioConfig,
-                BackgroundAudioPlayer,
-                BuiltinAudioClip,
-            )
+    # One BackgroundAudioPlayer per session, on its own "background_audio"
+    # track. It plays the keyboard-typing thinking sound while the agent is in
+    # the "thinking" state (TANGO_THINKING_SOUND, default true) and mixes the
+    # meditation track, ducked under agent speech, when one is requested.
+    background_audio = await _start_background_audio(ctx, session, persona)
+    if background_audio is not None:
+        _tango_agent.attach_background_audio(background_audio, session)
+        ctx.add_shutdown_callback(background_audio.aclose)
 
-            background_audio = BackgroundAudioPlayer(
-                thinking_sound=[
-                    AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.6),
-                    AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.5),
-                ],
-            )
-            await background_audio.start(room=ctx.room, agent_session=session)
-            logger.info("Audible thinking indicator enabled persona=%s", persona.id)
-        except Exception:
-            logger.warning(
-                "Could not start BackgroundAudioPlayer; thinking indicator disabled persona=%s",
-                persona.id,
-                exc_info=True,
-            )
+
+def _thinking_sound_enabled() -> bool:
+    return os.getenv("TANGO_THINKING_SOUND", "true").lower() in {"1", "true", "yes"}
+
+
+async def _start_background_audio(ctx: Any, session: Any, persona: Persona) -> Any | None:
+    """Start the session's BackgroundAudioPlayer, or return None on failure."""
+    try:
+        from livekit.agents import AudioConfig, BackgroundAudioPlayer, BuiltinAudioClip
+
+        thinking_sound = (
+            [
+                AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.6),
+                AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.5),
+            ]
+            if _thinking_sound_enabled() and persona.thinking_sound
+            else None
+        )
+        background_audio = BackgroundAudioPlayer(thinking_sound=thinking_sound)
+        await background_audio.start(room=ctx.room, agent_session=session)
+    except Exception:
+        logger.warning(
+            "Could not start BackgroundAudioPlayer; thinking sound and meditation playback disabled persona=%s",
+            persona.id,
+            exc_info=True,
+        )
+        return None
+    logger.info(
+        "Background audio started persona=%s thinking_sound=%s",
+        persona.id,
+        thinking_sound is not None,
+    )
+    return background_audio
+
+
+def _livekit_package_versions() -> dict[str, str]:
+    """Installed versions of the LiveKit packages, for the startup log line."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    versions: dict[str, str] = {}
+    for package in (
+        "livekit-agents",
+        "livekit-plugins-deepgram",
+        "livekit-plugins-elevenlabs",
+        "livekit-plugins-openai",
+        "livekit-plugins-silero",
+        "livekit",
+    ):
+        try:
+            versions[package] = version(package)
+        except PackageNotFoundError:
+            versions[package] = "missing"
+    return versions
 
 
 if __name__ == "__main__":
     from livekit.agents import WorkerOptions, cli
 
     num_idle_processes = _livekit_num_idle_processes()
-    logger.info("Starting LiveKit worker num_idle_processes=%d", num_idle_processes)
+    logger.info(
+        "Starting LiveKit worker num_idle_processes=%d versions=%s",
+        num_idle_processes,
+        " ".join(f"{name}=={ver}" for name, ver in _livekit_package_versions().items()),
+    )
 
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
+            prewarm_fnc=prewarm,
             agent_name=TANGO_AGENT_NAME,
             num_idle_processes=num_idle_processes,
             shutdown_process_timeout=15.0,

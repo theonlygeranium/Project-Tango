@@ -1,7 +1,11 @@
 # ADR: DeepGram Flux Eager End-of-Turn
 
+**Number:** ADR-024 (formerly ADR-011; renumbered 2026-10-05 because ADR-011 was already `2026-08-18-011-discord-slack-notifications.md`. See `docs/decisions/README.md`.)
+
 **Date:** 2026-08-20
-**Status:** Accepted
+**Status:** Accepted. Not in effect until 2026-10-05: commit `48dd55c` (2026-08-16) had already made the
+audio `TurnDetector` own turn boundaries, so LiveKit ignored Flux end-of-turn events. Restored by
+ADR-023 (`2026-10-05-023-flux-stt-turn-detection.md`).
 **Decided by:** Writer Agent (WRITER Agent platform)
 
 ## Context

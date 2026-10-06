@@ -18,7 +18,7 @@ import uuid as uuid_mod
 import logging
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from typing import Any
@@ -33,6 +33,8 @@ TRANSCRIPTION_ENABLED = os.getenv("TANGO_TRANSCRIPTION_ENABLED", "1") != "0"
 TRANSCRIPTION_EMAIL_FROM = os.getenv(
     "TANGO_TRANSCRIPTION_EMAIL_FROM", "jeff@jgeronimo.com"
 )
+# Upper bound for waiting on transcript save + email during session shutdown.
+FINALIZE_PERSIST_TIMEOUT_SECONDS = 10.0
 
 # ---------------------------------------------------------------------------
 # Voice-command phrase detection
@@ -135,6 +137,9 @@ class TranscriptionRecorder:
         self._stop_time: float | None = None
         self._seq: int = 0
         self._lock = asyncio.Lock()
+        # Save + email run in the background so the agent's spoken
+        # acknowledgement is not delayed by Postgres and sendmail.
+        self._persist_tasks: set[asyncio.Task[None]] = set()
 
     @property
     def is_active(self) -> bool:
@@ -175,9 +180,11 @@ class TranscriptionRecorder:
             ))
 
     async def stop(self) -> str | None:
-        """Stop recording and save + email the transcript.
+        """Stop recording and save + email the transcript in the background.
 
-        Returns the transcript text, or None if nothing was recorded.
+        Returns the transcript text, or None if nothing was recorded. The
+        database write and email run in a background task; use
+        ``wait_for_persistence`` to wait for them (shutdown does).
         """
         async with self._lock:
             if not self._active:
@@ -202,11 +209,38 @@ class TranscriptionRecorder:
                 int(self._stop_time - (self._start_time or self._stop_time)),
             )
 
-        # Save to DB and send email outside the lock
+        # Save to DB and send email outside the lock, without blocking the
+        # caller: stop() runs inside on_user_turn_completed, so awaiting here
+        # delayed the agent's reply by the DB write plus the sendmail call.
+        task = asyncio.create_task(
+            self._persist(transcript_text, transcript_json, turn_count)
+        )
+        self._persist_tasks.add(task)
+        task.add_done_callback(self._persist_tasks.discard)
+
+        return transcript_text
+
+    async def _persist(
+        self, transcript_text: str, transcript_json: str, turn_count: int
+    ) -> None:
+        # Both helpers log and swallow their own errors.
         await self._save_to_db(transcript_text, transcript_json, turn_count)
         await self._send_email(transcript_text)
 
-        return transcript_text
+    async def wait_for_persistence(self, timeout: float | None = None) -> bool:
+        """Wait for background saves/emails. Returns False on timeout."""
+        pending = set(self._persist_tasks)
+        if not pending:
+            return True
+        _done, still_pending = await asyncio.wait(pending, timeout=timeout)
+        if still_pending:
+            logger.warning(
+                "Transcript persistence still running after %.1fs persona=%s",
+                timeout or 0.0,
+                self.persona_id,
+            )
+            return False
+        return True
 
     async def finalize(self) -> None:
         """Finalize transcription on session shutdown (call-drop resilience).
@@ -221,6 +255,10 @@ class TranscriptionRecorder:
                 self.persona_id, len(self._turns),
             )
             await self.stop()
+        # Includes saves started by an earlier "stop transcription" that may
+        # still be running when the call drops. Stays inside LiveKit's
+        # shutdown budget (shutdown_process_timeout=15 s in main.py).
+        await self.wait_for_persistence(timeout=FINALIZE_PERSIST_TIMEOUT_SECONDS)
 
     def _format_transcript(self) -> str:
         """Format turns as a readable transcript with timestamps."""
@@ -364,8 +402,8 @@ TRANSCRIPTION_INSTRUCTIONS = (
     "\n\nTRANSCRIPTION CAPABILITY: You can record and transcribe conversations. "
     "When the user asks to begin transcription or record the conversation, start "
     "recording with the start_transcription tool. When they ask to stop, use the "
-    "stop_transcription tool — the transcript will be automatically saved to the "
-    "database and emailed to them. You can also detect voice commands like "
+    "stop_transcription tool — the transcript is then saved to the database and "
+    "emailed to them in the background. You can also detect voice commands like "
     "'begin transcription' or 'stop recording' automatically."
 )
 
@@ -398,7 +436,7 @@ def build_transcription_tools(recorder: TranscriptionRecorder) -> list:
         transcript = await recorder.stop()
         if transcript:
             return (
-                "Transcription stopped. The transcript has been saved "
+                "Transcription stopped. The transcript is being saved "
                 "to the database and emailed to the user."
             )
         return "No transcription was active."
